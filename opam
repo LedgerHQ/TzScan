@@ -1,0 +1,74 @@
+(**************************************************************)
+(*                                                            *)
+(*      This file is managed by ocp-autoconf                  *)
+(*  Remove it from `manage_files` in 'ocp-autoconf.config'    *)
+(*  if you want to modify it manually (or use 'opam.trailer') *)
+(*                                                            *)
+(**************************************************************)
+
+opam-version: "1.2"
+maintainer: "OCamlPro <contact@ocamlpro.com>"
+authors: [
+  "Cagdas Bozman <cagdas.bozman@ocamlpro.com>"
+  "Michael Laporte <michael.laporte@ocamlpro.com>"
+  "Fabrice Le Fessant <fabrice.le_fessant@ocamlpro.com>"
+]
+homepage: "http://ledgers.ocamlpro.com/"
+dev-repo: "http://gitlab.com/tzscan/tzscan"
+bug-reports: "https://gitlab.com/tzscan/tzscan/issues"
+build: [
+  [     "./configure"
+    "--prefix"
+    "%{prefix}%"
+  ]
+  [ make ]
+]
+install: [
+  [ make "install" ]
+]
+remove: [
+]
+available: [ocaml-version >= "4.06.1"]
+depends: [
+     "base64"
+     "camlp4"
+     "cohttp-lwt" {>= "0.99.0" }
+     "cohttp-lwt-unix"
+     "csv-lwt"
+     "ezjsonm"
+     "geoip"
+     "js_of_ocaml"
+     "js_of_ocaml-camlp4"
+     "js_of_ocaml-lwt"
+     "js_of_ocaml-ppx"
+     "js_of_ocaml-tyxml"
+     "lwt_log"
+     "nocrypto"
+     "ocamlfind"
+     "ocp-build"
+     "ocplib-endian"
+     "ocurl"
+     "omd"
+     "pgocaml"
+     "sodium"
+     "zarith"
+]
+
+(**************************************************************)
+(*                                                            *)
+(* From opam.trailer:                                         *)
+(*                                                            *)
+(**************************************************************)
+
+
+(* Currently, there is no way to tell ocp-autoconf that we want an exact
+version, not a minimal version. *)
+depends: [
+  "cohttp-lwt" {= "0.99.0" }
+]
+
+pin-depends: [
+  [ "pgocaml.2.3+dev" "git+https://github.com/darioteixeira/pgocaml.git" ]
+  [ "ocplib-json-typed.0.6+dev"
+    "git+https://github.com/ocamlpro/ocplib-json-typed.git#428b9b4ac47a79810b65c4aef961d45e6688d13a" ]
+]

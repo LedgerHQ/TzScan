@@ -1,0 +1,110 @@
+(************************************************************************)
+(*                                TzScan                                *)
+(*                                                                      *)
+(*  Copyright 2017-2018 OCamlPro                                        *)
+(*                                                                      *)
+(*  This file is distributed under the terms of the GNU General Public  *)
+(*  License as published by the Free Software Foundation; either        *)
+(*  version 3 of the License, or (at your option) any later version.    *)
+(*                                                                      *)
+(*  TzScan is distributed in the hope that it will be useful,           *)
+(*  but WITHOUT ANY WARRANTY; without even the implied warranty of      *)
+(*  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the       *)
+(*  GNU General Public License for more details.                        *)
+(*                                                                      *)
+(************************************************************************)
+
+OCaml.library("database-interface", ocaml+
+  ocaml + {
+    files = [
+      "db_intf.ml";
+    ];
+    requires = [
+      "data-types-lib";
+      "calendar";
+    ];
+});
+
+if( has_pgocaml ){
+
+OCaml.library("database-update",
+ ocaml+ {
+  files = [
+    "pg_update.ml"
+  ];
+  requires = [ "pgocaml"; "ez-pgocaml" ];
+ });
+
+OCaml.program("tzscan-db-updater",
+ ocaml+ {
+  files = [
+    "updater.ml"
+  ];
+  requires = [
+           "tzscan-config"; "ez-pgocaml";
+           "database-update" ];
+ });
+
+pgocaml_syntax = {
+  pp = pp_pgocaml;
+  more_deps = tzscan_root + "../../db-version.txt" };
+
+OCaml.library("database-utils-lib",
+  ocaml+ {
+    files = [
+      "alias.ml", pgocaml_syntax ;
+      "pg_helper.ml";
+      "monad_lwt.ml";
+    ];
+    requires = [
+      "tzscan-config";
+      "database-update";
+      "data-types-lib";
+      "database-interface";
+      "pgocaml";
+      "calendar";
+      "lwt.unix";
+      "blake2b";
+      "geoip";
+    ];
+});
+
+OCaml.library("database-reader-lib",
+  ocaml+ {
+    files = [
+      "reader.ml", pgocaml_syntax ;
+      "dbr.ml";
+    ];
+    requires = [
+      "database-utils-lib";
+    ];
+});
+
+OCaml.library("database-writer-lib",
+  ocaml+ {
+    files = [
+      "writer.ml", pgocaml_syntax ;
+      "dbw.ml";
+    ];
+    requires = [
+      "database-utils-lib";
+    ];
+});
+
+} else {
+
+OCaml.library("database-lib",
+  ocaml+ {
+    files = [
+      "no_pgocaml/db.ml"
+    ];
+    requires = [
+      (* "database-lib-fake"; *)
+      "data-types-lib";
+      "database-interface";
+      "lwt";
+    ];
+});
+
+
+}

@@ -1,0 +1,33 @@
+{ "network": "Mainnet",
+  "constants":
+    [ [ 0,
+        { "time_between_blocks": [ 60 ],
+          "blocks_per_cycle": 4096,
+          "preserved_cycles": 5,
+          "block_security_deposit": 512000000,
+          "endorsement_security_deposit": 64000000,
+          "endorsers_per_block": 32,
+          "tokens_per_roll": "10000000000",
+          "blocks_per_commitment": 32
+        } ],
+      [ 7,
+        { "time_between_blocks": [ 60 ],
+          "blocks_per_cycle": 4096,
+          "preserved_cycles": 5,
+          "block_reward": 16000000,
+          "block_security_deposit": 512000000,
+          "endorsement_reward": 2000000,
+          "endorsement_security_deposit": 64000000,
+          "endorsers_per_block": 32,
+          "tokens_per_roll": "10000000000",
+          "blocks_per_commitment": 32
+        } ] ],
+  "rampup_cycles": 64,
+  "ico": {
+      "company_tokens": "76431859_801260" ,
+      "foundation_tokens": "76431859_801260" ,
+      "early_tokens": "3_156_502_294100" ,
+      "contributors_tokens": "608_297_709_519372" ,
+      "wallets" : 31524 
+  }
+}

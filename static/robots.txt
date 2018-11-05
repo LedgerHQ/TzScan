@@ -1,0 +1,22 @@
+User-agent: *
+
+Allow: /*
+Crawl-delay: 7
+
+Disallow: /images/
+Disallow: /js/
+Disallow: /css/
+Disallow: /loadingjs/
+Disallow: /bootstrap/
+Disallow: /jquery/
+Disallow: /ammap3/
+Disallow: /amcharts3/
+
+Disallow: /B*
+Disallow: /o*
+Disallow: /TZ*
+Disallow: /tz*
+
+Sitemap: http://tzscan.io/sitemaps/index.xml
+
+

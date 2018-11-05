@@ -1,0 +1,84 @@
+
+
+oflags = [ "-g"; "-w"; "+a-48-4-44"; "-warn-error"; "+a-44"  ];
+nowarnings = [ "-warn-error"; "-a"; "-w"; "-a" ];
+ocaml.asmlink = ["-g"];
+
+ocaml.bytecomp = oflags;
+ocaml.asmcomp = oflags;
+
+if( need_parsexp ){
+  sexplib0 = [ 
+    "%{sexplib_FULL_DST_DIR}%0/sexplib0.cma";
+    "%{parsexp_FULL_DST_DIR}%/parsexp.cma";
+  ];
+} else {
+  sexplib0 = [
+    "%{sexplib_FULL_DST_DIR}%/0/sexplib0.cma"
+  ];
+}
+
+if( with_version = true ){
+      version_fields = [
+         "ocp::commit";
+         "ocp::dates";
+      ];
+   } else {
+     version_fields = [
+         "commit";
+         "en_date";
+     ];
+   } 
+
+OCaml.library("tzscan-config", ocaml + {
+
+  (* needed for `env_strings` to work *)
+  api_host = api_host;
+  api_port = api_port;
+  has_pgocaml = has_pgocaml;
+  version = autoconf.package_version;
+  database = database;
+  commit = "devel";
+  en_date = "in-development";
+  public = tzscan_public;
+
+  files = [
+    "tzscanConfig.ml", { ocp2ml = true;
+                      env_strings = [
+                                  "api_host";
+                                  "api_port";
+                                  "database";
+                                    ] + version_fields;
+                      env_bools = [ "has_pgocaml" ];
+                    }
+  ]});
+
+
+camlp4_js = [
+  "camlp4o"; "%{js_of_ocaml-camlp4_SRC_DIR}%/pa_js.cma"
+];
+
+
+
+pp_pgocaml = [
+  "camlp4o"; "-I"; "%{OCAMLLIB}%";
+  "%{OCAMLLIB}%/unix.cma"; "-I"; "%{OCAMLLIB}%"; "%{OCAMLLIB}%/str.cma"; "%{OCAMLLIB}%/bigarray.cma";
+  "-I"; "%{calendar_FULL_DST_DIR}%";
+  "%{calendar_FULL_DST_DIR}%/calendarLib.cma"; "-I"; "%{re_FULL_DST_DIR}%";
+  "%{re_FULL_DST_DIR}%/re.cma"; "-I"; "%{csv_FULL_DST_DIR}%";
+  "%{csv_FULL_DST_DIR}%/csv.cma";
+
+  "-I"; "%{sexplib_FULL_DST_DIR}%"; "-I"; "%{sexplib_FULL_DST_DIR}%/0"; "-I"; "%{sexplib_FULL_DST_DIR}%/unix" ] 
+  + sexplib0 +
+  [
+  "%{sexplib_FULL_DST_DIR}%/sexplib.cma";
+  "%{sexplib_FULL_DST_DIR}%/unix/sexplib_unix.cma";
+  "-I"; "%{cstruct_FULL_DST_DIR}%"; "%{cstruct_FULL_DST_DIR}%/cstruct.cma";
+  "-I"; "%{hex_FULL_DST_DIR}%"; "%{hex_FULL_DST_DIR}%/hex.cma";
+  "-I"; "%{pgocaml_FULL_DST_DIR}%";
+  "%{pgocaml_FULL_DST_DIR}%/pgocaml.cma"; "-I";
+  "%{pgocaml_FULL_DST_DIR}%"; "%{pgocaml_FULL_DST_DIR}%/pa_pgsql.cma";
+  ];
+
+
+build_common_loaded = true ;

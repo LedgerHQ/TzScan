@@ -1,0 +1,78 @@
+
+Sys = { file_exists = Sys_file_exists };
+
+try {
+  tzscan_root = tzscan_root ;
+} catch ("unknown-variable", x){
+
+  with_version = true;
+  with_pgocaml = true;
+  with_extras = false;
+  has_pgocaml = with_pgocaml;
+  api_port = "";
+  api_host = "";
+  tzscan_public = false;
+  tzscan_root = "";
+}
+
+config_file = tzscan_root + "autoconf/config.ocp2gen";
+
+if( not (Sys.file_exists( dirname + "/" + config_file )) ){
+  print();
+  message("Error: file "+ config_file + " not found.");
+  message("  You must run ./configure first.");
+  print();
+  exit(2);
+}
+
+include tzscan_root + "ocp-autoconf.d/ezpg.ocp2inc";
+print(database);
+
+include config_file;
+ocaml.version = autoconf.package_version;
+
+filename_ocp2 = tzscan_root + "ocp-autoconf.d/config.ocp2inc";
+if( Sys.file_exists(dirname + "/" + filename_ocp2) ){ include filename_ocp2; }
+
+filename_ocp2 = tzscan_root + "ocp-autoconf.d/build.ocp2inc";
+if( Sys.file_exists(dirname + "/" + filename_ocp2) ){ include filename_ocp2; }
+
+try {
+  api_url = api_url;
+  print("Error: use 'api_host=\"HOST\"' instead of 'api_url=http://HOST:PORT'");
+  print("Aborting.");
+  exit(2);
+} catch ("unknown-variable",x){
+
+}
+
+try {
+   build_common_loaded = build_common_loaded ;
+} catch ("unknown-variable",x){
+  include "build.common" ;
+}
+
+
+submodules_dir = "libs/";
+
+(* We have our own version of ocplib-json-typed to avoid having a dev version
+  in our environment. *)
+OCaml.library("ocplib-json-typed",
+        ocaml + {
+          bytecomp = ocaml.bytecomp + nowarnings;
+          asmcomp = ocaml.asmcomp + nowarnings;
+
+          files = [
+          submodules_dir + "ocplib-json-typed/src/json_repr.ml";
+          submodules_dir + "ocplib-json-typed/src/json_query.ml";
+          submodules_dir + "ocplib-json-typed/src/json_schema.ml";
+          submodules_dir + "ocplib-json-typed/src/json_encoding.ml";
+          ];
+          requires = '[
+                   ezjsonm
+                   ocplib-endian
+                   uri
+          ];
+          }
+   );
+

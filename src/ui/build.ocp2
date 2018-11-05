@@ -1,0 +1,102 @@
+(************************************************************************)
+(*                                TzScan                                *)
+(*                                                                      *)
+(*  Copyright 2017-2018 OCamlPro                                        *)
+(*                                                                      *)
+(*  This file is distributed under the terms of the GNU General Public  *)
+(*  License as published by the Free Software Foundation; either        *)
+(*  version 3 of the License, or (at your option) any later version.    *)
+(*                                                                      *)
+(*  TzScan is distributed in the hope that it will be useful,           *)
+(*  but WITHOUT ANY WARRANTY; without even the implied warranty of      *)
+(*  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the       *)
+(*  GNU General Public License for more details.                        *)
+(*                                                                      *)
+(************************************************************************)
+
+List = module("ocp-build:List", "1.0");
+
+ocaml.has_asm = false;
+
+OCaml.library("explorer-lib", ocaml+ {
+  requires = [
+    "data-types-lib";
+    "js_of_ocaml";
+    "js_of_ocaml.tyxml";
+    "js_of_ocaml-lwt";
+    "ocplib-utils-js";
+    "ocplib-odometer";
+    "api-doc";
+    "glossary";
+    "omd";
+    "ocplib-ammap3-js";
+    "tzscan-config";
+    "base58-blockies";
+    "tzscan-misc";
+    "ez-api-js";
+    "tezos-explorer-services";
+  ] ;
+  files = [
+    "panel.mli";
+    ] + List.map(
+            function(file){ return (file, { pp = camlp4_js }); },
+            [
+            "lang.ml";
+            "text.ml";
+            "common.ml";
+            "tez.ml";
+            "glossary_doc.ml";
+            "tabs.ml";
+            "panel.ml";
+            "format_date.ml";
+            "node_state_ui.ml";
+            "health_stats_ui.ml";
+            "context_stats_ui.ml";
+            "api_doc.ml";
+            "home_ui.ml";
+            "search.ml";
+            "blocks_ui.ml";
+            "block_ui.ml";
+            "operation_ui.ml";
+            "operations_ui.ml";
+            "inject_ui.ml";
+            "rolls_distribution_ui.ml";
+            "baking_charts_ui.ml";
+            "baking_ui.ml";
+            "rewards_ui.ml";
+            "dapps.ml";
+            "accounts_ui.ml";
+            "network_stats_ui.ml";
+            "charts_ui.ml";
+            "protocols_ui.ml";
+            "account_ui.ml";
+
+            "api_request.ml";
+            "www_request.ml";
+            "menu.ml";
+            "ui.ml";
+  ]);
+ }
+ );
+ 
+OCaml.program("explorer-main", ocaml+ {
+  requires = [ "explorer-lib" ] ;
+  files = [ "main.ml" ];
+
+  build_rules = [
+    "%{explorer-main_FULL_DST_DIR}%/explorer-main.js", {
+      build_target = true;
+      sources = "%{explorer-main_FULL_DST_DIR}%/explorer-main.byte";
+      commands = [
+          OCaml.system([
+                          "js_of_ocaml";
+                          "+weak.js";
+                          "+nat.js";
+                          "js-external-deps/BigInteger.js";
+                          "js-external-deps/zarith.js";
+                          "%{explorer-main_FULL_DST_DIR}%/explorer-main.byte";
+                        ])
+        ]
+    }
+    ]
+             });

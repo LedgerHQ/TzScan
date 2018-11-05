@@ -1,0 +1,53 @@
+(************************************************************************)
+(*                                TzScan                                *)
+(*                                                                      *)
+(*  Copyright 2017-2018 OCamlPro                                        *)
+(*                                                                      *)
+(*  This file is distributed under the terms of the GNU General Public  *)
+(*  License as published by the Free Software Foundation; either        *)
+(*  version 3 of the License, or (at your option) any later version.    *)
+(*                                                                      *)
+(*  TzScan is distributed in the hope that it will be useful,           *)
+(*  but WITHOUT ANY WARRANTY; without even the implied warranty of      *)
+(*  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the       *)
+(*  GNU General Public License for more details.                        *)
+(*                                                                      *)
+(************************************************************************)
+
+OCaml.library("tzscan-misc", ocaml+ {
+                files = [
+                "misc.ml";
+                ];
+              }
+             );
+
+OCaml.library( "data-types-lib", ocaml+ {
+  files = [
+    "ico_constants.ml";
+    "data_types.ml";
+    "utils.ml";
+    "debug_constants.ml";
+    "micheline_printer.ml";
+    "api_encoding.ml";
+    "config.ml";
+    "data_string.ml";
+    "infos.ml";
+  ];
+  requires = [
+    "ocplib-tezos";
+    "tzscan-misc";
+    "ezjsonm";
+  ];
+  });
+
+OCaml.library("blake2b", ocaml+ {
+  files = [
+    "blake2b.ml"
+  ];
+  requires = [
+    "data-types-lib";
+    "sodium";
+    "ocplib-endian";
+    "nocrypto";
+  ];
+  });

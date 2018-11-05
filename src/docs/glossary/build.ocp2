@@ -1,0 +1,26 @@
+
+OCaml.library("glossary", ocaml + {
+  files =[
+    "glossary.ml", {
+      file2string = [
+      "blocks.md" ;
+      "operations.md" ;
+      "transactions.md" ;
+      "endorsements.md" ;
+      "originations.md" ;
+      "delegations.md" ;
+      "double_baking.md" ;
+      "double_endorsement.md" ;
+      "nonce_revelations.md" ;
+      "accounts.md" ;
+      "alternative_heads.md";
+      "protocols.md" ;
+      "amendments.md" ;
+      "network.md" ;
+      "api.md" ;
+      "baker.md";
+      "inject.md";
+      "balance.md";
+      "staking_balance.md";
+      ]}
+  ]});

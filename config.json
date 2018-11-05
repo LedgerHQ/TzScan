@@ -1,0 +1,9 @@
+[
+    {
+        "name": "betanet-main",
+        "crawler" : [
+            {"url" : "http://localhost", "port" : 18732}
+        ],
+        "api" : []
+    }
+]

@@ -1,0 +1,12 @@
+To visualize the page, you need :
+- http server configuration (example /etc/apache2/sites-available/000-default.conf) :
+  <VirtualHost *:80>
+	ServerAdmin webmaster@localhost
+	DocumentRoot /var/www/html
+        RewriteEngine On
+        RewriteRule ^/([A-Za-z1-9]*)$  "/index.html"
+  </VirtualHost>
+- "make" will copy the static dir content to /var/www/html (need sudo)
+- REST server running ("_obuild/tezos-explorer-api/tezos-explorer-api.asm" - default port is 8080)
+- edit api_request.ml to match the port if rest server not running on port 8080 (TODO : should be a config file)
+- DB should have some datas

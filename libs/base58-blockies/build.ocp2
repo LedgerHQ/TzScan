@@ -1,0 +1,11 @@
+pp_js = { pp = camlp4_js };
+
+OCaml.library("base58-blockies", ocaml+ {
+  files = [
+    "base58Blockies.ml", pp_js;
+  ];
+  requires = [
+    "num";
+    "ocplib-utils-js";
+  ];
+  });

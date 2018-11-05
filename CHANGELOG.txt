@@ -1,0 +1,9 @@
+ChangeLog
+=========
+
+2018-10-23: Initial open-source version
+
+  * Use `config.json` to configure the crawler and the API server
+  * Use `api-config.json` to configure the API server
+  * User `info.json` to configure the Webapp interface
+

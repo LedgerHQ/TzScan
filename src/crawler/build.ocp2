@@ -1,0 +1,60 @@
+(************************************************************************)
+(*                                TzScan                                *)
+(*                                                                      *)
+(*  Copyright 2017-2018 OCamlPro                                        *)
+(*                                                                      *)
+(*  This file is distributed under the terms of the GNU General Public  *)
+(*  License as published by the Free Software Foundation; either        *)
+(*  version 3 of the License, or (at your option) any later version.    *)
+(*                                                                      *)
+(*  TzScan is distributed in the hope that it will be useful,           *)
+(*  but WITHOUT ANY WARRANTY; without even the implied warranty of      *)
+(*  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the       *)
+(*  GNU General Public License for more details.                        *)
+(*                                                                      *)
+(************************************************************************)
+
+OCaml.library("tezos-cache-lib", 
+  ocaml + {
+    files = [
+      "cache.ml";
+      "request.ml";
+    ];
+    requires = [
+      "ocplib-file";
+      "data-types-lib";
+      "ez-api-curl";
+  ];
+}
+);
+
+if ( has_pgocaml ){
+
+OCaml.library("tezos-crawler-lib", 
+  ocaml + {
+    files = [
+      "options.ml";
+      "main_crawler.ml";
+    ];
+    has_byte = false;
+    requires = [
+      "database-writer-lib";
+      "tezos-cache-lib";
+      "calendar";
+  ];
+}
+);
+
+OCaml.program("tzscan-crawler", 
+  ocaml + {
+    files = [
+      "main.ml"
+    ];
+    has_byte = false;
+    requires = [
+      "tezos-crawler-lib";
+  ];
+}
+);
+
+}

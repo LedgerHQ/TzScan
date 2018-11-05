@@ -1,0 +1,12 @@
+OCaml.program("api_check", ocaml + {
+  files = [
+    "../src/api/service.ml";
+    "api_check.ml";
+  ];
+  requires = [
+    "tezos-explorer-services";
+    "ez-api-cohttp";
+    "data-types-lib";
+    "alcotest";
+  ];
+});

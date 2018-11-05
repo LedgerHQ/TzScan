@@ -1,0 +1,184 @@
+<html>
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>TzScan: the Tezos Block Explorer by OCamlPro</title>
+    <meta name="Description" content="TzScan, the Tezos Block Explorer and API">
+    <meta name="author" content="OCamlPro">
+    <meta name="keywords" content="tezos, explorer, block, xtz, search, blockchain, crypto, currency, smart, contract">
+
+    <link rel="stylesheet" type="text/css" href="/bootstrap/css/bootstrap.css" />
+    <link rel="stylesheet" type="text/css" href="/bootstrap/css/bootstrap.css.map" />
+    <script src="/js/fontawesome-all.min.js" type="text/javascript"></script>
+    <script src="/jquery/js/jquery-3.2.1.min.js"></script>
+    <script src="/bootstrap/js/bootstrap.js"></script>
+
+    <link rel="stylesheet" type="text/css" href="/css/scrollbar.css" />
+
+    <link href="https://fonts.googleapis.com/css?family=Anonymous+Pro|Ubuntu+Mono|Oxygen+Mono|Roboto:300,400" rel="stylesheet">
+    <link rel="stylesheet" type="text/css" href="/css/main.css" />
+    <link rel="stylesheet" type="text/css" href="/css/adjustement.css" />
+    <link rel="stylesheet" type="text/css" href="/css/responsive.css" />
+    <link rel="stylesheet" type="text/css" href="/css/odometer-theme-train-station.css" />
+    <link rel="icon" href="/images/favicon.png" />
+    <script language="JavaScript" src="/jquery/scrollbar.js"></script>
+
+    <script src="/js/blockies.min.js" type="text/javascript" async></script>
+    <link href="/amcharts/plugins/export/export.css" rel="stylesheet" type="text/css">
+    <link rel="stylesheet" type="text/css" href="/loadingjs/loading-bar.css"/>
+    <script type="text/javascript" src="/loadingjs/loading-bar.min.js"></script>
+    <script language="JavaScript" src="/explorer-main.js" defer></script>
+    <script src="/js/odometer.min.js" type="text/javascript" defer></script>
+<script>
+  (function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
+  (i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
+  m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m)
+  })(window,document,'script','https://www.google-analytics.com/analytics.js','ga');
+
+  ga('create', 'UA-58278232-8', 'auto');
+  ga('send', 'pageview');
+</script>
+  </head>
+  <body>
+    <div id="menu" role="navigation">
+      <nav class="navbar navbar-default">
+        <div class="container">
+          <!-- Brand and toggle get grouped for better mobile display -->
+          <div class="navbar-header">
+            <a class="navbar-brand" href="/">
+              <img id="logo" src="/images/tzscan-logo.png" />
+            </a>
+            <button type="button" class="navbar-toggle"
+                    data-toggle="collapse"
+                    data-target="#mainNavBar">
+              <span class="sr-only">Toggle navigation</span>
+              <span class="icon-bar"></span>
+              <span class="icon-bar"></span>
+              <span class="icon-bar"></span>
+            </button>
+          </div>
+
+          <!-- Collect the nav links, forms, and other content for toggling -->
+          <div class="collapse navbar-collapse" id="mainNavBar">
+            <form id="search-form" class="navbar-form navbar-right" autocomplete="off">
+              <span id="network-buttons">
+              </span>
+              <div class="form-group autocomplete">
+                <input id="search" type="search" class="form-control search-input"
+                       placeholder="Search by address : Transaction / Block / Account / Level">
+              </div>
+              <button id="search-go" class="btn btn-default">Go</button>
+            </form>
+            <ul class="nav navbar-nav navbar-right" id="top-menu">
+              <li class="active"><a href="/">Home <span class="sr-only">(current)</span></a></li>
+              <li class="dropdown">
+                <a href="#" class="dropdown-toggle" data-toggle="dropdown" role="button" aria-haspopup="true" aria-expanded="false">Blocks <span class="caret"></span></a>
+                <ul class="dropdown-menu">
+                  <li><a href="/blocks">View blocks </a></li>
+                  <li><a href="/heads">View blocks (other branches)</a></li>
+                  <li><a href="/pending-levels">View future levels (current cycle) </a></li>
+                </ul>
+              </li>
+              <li class="dropdown">
+                <a href="#" class="dropdown-toggle" data-toggle="dropdown" role="button" aria-haspopup="true" aria-expanded="false">Operations <span class="caret"></span></a>
+                <ul class="dropdown-menu">
+                  <li><a href="/transactions">View Transactions</a></li>
+                  <li><a href="/pending">View Pending Transactions</a></li>
+                  <li role="separator" class="divider"></li>
+                  <li><a href="/endorsements">View Endorsements</a></li>
+                  <li role="separator" class="divider"></li>
+                  <li><a href="/delegations">View Delegations</a></li>
+                  <li role="separator" class="divider"></li>
+                  <li><a href="/originations">View Originations</a></li>
+                  <li role="separator" class="divider"></li>
+                  <li><a href="/nonces">View Nonces</a></li>
+                </ul>
+              </li>
+              <li class="dropdown">
+                <a href="#" class="dropdown-toggle" data-toggle="dropdown" role="button" aria-haspopup="true" aria-expanded="false">Accounts <span class="caret"></span></a>
+                <ul class="dropdown-menu">
+                  <li><a href="/accounts">View All Accounts </a></li>
+                  <li><a href="/contracts">View All Contracts </a></li>
+                  <li role="separator" class="divider"></li>
+                  <li class="disabled" ><a href="/known-contracts">View Known Contracts </a></li>
+                </ul>
+              </li>
+              <li class="dropdown disabled">
+                <a href="#" class="disabled dropdown-toggle" data-toggle="dropdown" role="button" aria-haspopup="true" aria-expanded="false">Protocols <span class="caret"></span></a>
+                <ul class="dropdown-menu">
+                  <li><a href="/protocols">View All Protocols </a></li>
+                  <li role="separator" class="divider"></li>
+                  <li><a href="/current-protocol">View Current Protocol</a></li>
+                  <li role="separator" class="divider"></li>
+                  <li><a href="/proposals">View Proposals </a></li>
+                </ul>
+              </li>
+              <li class="dropdown">
+                <a href="#" class="dropdown-toggle" data-toggle="dropdown" role="button" aria-haspopup="true" aria-expanded="false">Stats <span class="caret"></span></a>
+                <ul class="dropdown-menu">
+                  <li><a href="/network">Network</a></li>
+                  <li><a href="/health">Health</a></li>
+                </ul>
+              </li>
+              <li class="dropdown">
+                <a href="#" class="dropdown-toggle" data-toggle="dropdown" role="button" aria-haspopup="true" aria-expanded="false">Charts <span class="caret"></span></a>
+                <ul class="dropdown-menu">
+                  <li><a href="/charts_bakers">Bakers</a></li>
+                  <li><a href="/blocksperday">Blocks Per Day</a></li>
+                  <li><a href="/delayperday">Delay Between Blocks</a></li>
+                  <li><a href="/prioperday">Priorities Per Day</a></li>
+                  <li><a href="/bakersperday">Bakers Per Day</a></li>
+                  <li><a href="/opsperday">Operations Per Day</a></li>
+                  <li><a href="/opsperblock">Operations Per Block</a></li>
+                  <li><a href="/feesperday">Fees Per Day</a></li>
+                  <li><a href="/volumeperday">Volume Per Day</a></li>
+                </ul>
+              </li>
+              <li class="dropdown">
+                <a href="#" class="dropdown-toggle" data-toggle="dropdown" role="button" aria-haspopup="true" aria-expanded="false">Community <span class="caret"></span></a>
+                <ul class="dropdown-menu">
+                  <li><a href="/delegation-services">Delegation Services</a></li>
+                  <li><a href="/wallets">Wallets</a></li>
+                  <li><a href="/exchanges">Exchanges</a></li>
+                  <li><a href="/resources">Other Resources</a></li>
+                </ul>
+              </li>
+              <li class="dropdown">
+                <a href="#" class="dropdown-toggle" data-toggle="dropdown" role="button" aria-haspopup="true" aria-expanded="false">Misc <span class="caret"></span></a>
+                <ul class="dropdown-menu">
+                  <li><a href="/news">News</a></li>
+                  <li><a href="/about">About Us</a></li>
+                  <li><a href="/api">API</a></li>
+                  <li><a href="/glossary">Glossary</a></li>
+                </ul>
+              </li>
+            </ul>
+          </div><!-- /.navbar-collapse -->
+        </div><!-- /.container-fluid -->
+      </nav>
+    </div> <!-- menu -->
+
+
+    <div id="main-container" class="container-fluid">
+      <div id="content">
+        <div style="display:none">
+          <h1>TzScan, the Block Explorer for Tezos.</h1>
+          <p>
+            TzScan is a block explorer for Tezos, written by
+            the <a href="http://www.ocamlpro.com">OCamlPro team</a>.
+          </p>
+          <p>
+            Compared to other block explorers, TzScan does not only
+            display the raw content of the blockchain, but tries to
+            interpret this content and show its meaning for the
+            network. Proof-of-stake and delegations become easier to
+            grasp this way. The prototype of Tezos was initially
+            designed and developed at OCamlPro since 2014.
+          </p>
+        </div>
+      </div>
+    </div>
+
+    <footer class="footer"><div id="footer"></div></footer>
+  </body>
+</html>

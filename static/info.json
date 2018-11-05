@@ -1,0 +1,11 @@
+{
+    "languages": [
+        [ "English", "en" ],
+        [ "Français", "fr" ]
+    ],
+    "apis": [ "%%API%%" ],
+    "networks": [
+        [ "Mainnet", "" ],
+        [ "Alphanet", "" ]
+    ]
+}

@@ -1,0 +1,288 @@
+/*
+ * Row with equal height columns
+ * --------------------------------------------------
+ */
+@media (min-width: 768px) {
+    .row-eq-height {
+        display: -webkit-box;
+        display: -webkit-flex;
+        display: -ms-flexbox;
+        display:         flex;
+    }
+}
+
+@media (max-width: 1199px) {
+    .mobile-reverser {
+        display: flex ;
+        flex-direction: column-reverse ;
+    }
+
+    .navbar-header {
+        float: none;
+        height: 125px;
+    }
+    .navbar-left,.navbar-right {
+        float: none !important;
+    }
+    .navbar-toggle {
+        display: block;
+    }
+    .navbar-collapse {
+        border-top: 1px solid transparent;
+        box-shadow: inset 0 1px 0 rgba(255,255,255,0.1);
+    }
+    .navbar-fixed-top {
+        top: 0;
+        border-width: 0 0 1px;
+    }
+    .navbar-collapse.collapse {
+        display: none!important;
+    }
+    .navbar-nav {
+        float: none!important;
+        margin-top: 7.5px;
+    }
+    .navbar-nav>li {
+        float: none;
+    }
+    .navbar-nav>li>a {
+        padding-top: 10px;
+        padding-bottom: 10px;
+    }
+    .navbar .collapse.in{
+        display:block !important;
+    }
+}
+
+/*********************************
+COL-SM-X START HERE :
+  * Breakpoint for front-row
+**********************************/
+@media (max-width : 1199px) {
+    .front-box {
+        padding-right : 0 ;
+        padding-left : 0 ;
+    }
+    .operation-row-itm {
+        text-align: center;
+        padding-top: 10px;
+    }
+
+    .panel .panel-body {
+        padding: 0 ;
+    }
+
+    .block-id {
+        height: 115px;
+    }
+    .block-timestamp {
+        padding-top: 28px;
+    }
+
+    .advanced-balance {
+        margin-left : 0 ;
+        margin-right : 0 ;
+    }
+
+}
+
+/*********************************
+COL-XS-X START HERE :
+  * Breakpoint for HOME
+**********************************/
+@media (max-width: 767px) {
+    .navbar-brand {
+        height: 30px;
+    }
+    #logo {
+        height: 75px;
+    }
+    .footer {
+        height: 307px;
+        text-align: center ;
+    }
+    .footer .footer-sub .row div {
+        border-right : unset ;
+    }
+    .blocks-div {
+        height: auto !important;
+        max-height: auto !important;
+        width: 100% ;
+        text-align: center ;
+    }
+
+    .block-row {
+        width: 100%;
+        margin-left : 0 ;
+        margin-right : 0 ;
+        display: none ;
+    }
+
+    .block-row:nth-child(1),
+    .block-row:nth-child(2),
+    .block-row:nth-child(3),
+    .block-row:nth-child(4),
+    .block-row:nth-child(5) {
+        display: block ;
+    }
+
+    .block-row .block-id {
+        padding : 0;
+        height: 70px;
+    }
+
+    .block-info {
+        border-radius: 0;
+    }
+
+
+    .block-id {
+        height: 70px;
+    }
+
+    .block-timestamp {
+        padding-top: 5px;
+    }
+
+
+    .operations-div {
+        height: auto !important;
+        max-height: auto !important;
+        width: 100% ;
+    }
+
+    .operation-row {
+        width: 100%;
+        margin-left : 0 ;
+        margin-right : 0 ;
+        display: none ;
+    }
+
+    .whole-div-link:nth-child(1) .operation-row,
+    .whole-div-link:nth-child(2) .operation-row,
+    .whole-div-link:nth-child(3) .operation-row,
+    .whole-div-link:nth-child(4) .operation-row,
+    .whole-div-link:nth-child(5) .operation-row {
+        display: block ;
+    }
+
+    /* #marketcap-container table.table tbody tr th, */
+    /* #last-block-container table.table tbody tr th { */
+    /*     padding: 4px */
+    /* } */
+
+    #front-row .table tbody tr th,
+    #front-row .table tbody tr td {
+        padding: 6px;
+    }
+
+    #front-row .table {
+        min-width: 600px;
+    }
+    #front-row .table-responsive {
+        border: 0;
+    }
+
+    #content > .row,
+    .block-id > .row {
+        margin-left : 0 ;
+        margin-right : 0 ;
+    }
+
+    .operation-row-itm {
+        text-align: center ;
+        margin-bottom : 6px ;
+        padding-top: 10px;
+    }
+
+    .endorsements-table {
+        margin: 0 ;
+    }
+
+    .endorsements-table table td div,
+    .endorse-tbl table td div {
+        padding : 4px ;
+    }
+
+    .panel .panel-heading {
+       padding: 8px 8px ;
+    }
+
+    .panel .panel-title {
+        font-size: 13px ;
+    }
+
+    .panel .table-responsive {
+        margin-bottom: 0 ;
+        width: unset ;
+    }
+
+    .liquidity-icon {
+        height: 18px ;
+    }
+
+}
+
+/*********************************
+ * Container behavior for low reso
+ **********************************/
+@media (min-width: 768px) {
+    .container-fluid {
+        margin-left : 5%;
+        margin-right : 5%;
+    }
+}
+@media (min-width: 992px) {
+    .container-fluid {
+        margin-left : 5%;
+        margin-right : 5%;
+    }
+}
+@media (min-width: 1200px) {
+    .container-fluid {
+        margin-left : 5%;
+        margin-right : 5%;
+    }
+}
+
+@media (max-width: 550px) {
+    .stat-item .ldBar {
+        width: 89px !important ;
+        height: 89px !important ;
+    }
+}
+
+@media (max-width: 425px) {
+    .blocks-div table.table {
+        font-size: 14px ;
+    }
+    .odometer {
+        font-size : 40px ;
+    }
+}
+
+/************
+* search bar
+*************/
+@media (max-width: 992px) {
+    .search-input {
+        margin-top: 5px;
+        width: 100%;
+        min-width: 320px;
+    }
+}
+
+@media (max-width: 1500px) {
+    .hidden-xl {
+        display: none !important ;
+    }
+}
+
+/************
+ * Odometer
+ *************/
+@media (min-width: 1200px) and (max-width: 1400px) {
+    .odometer {
+        font-size : 33px !important ;
+    }
+}

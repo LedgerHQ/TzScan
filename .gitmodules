@@ -1,0 +1,18 @@
+[submodule "libs/ez-api"]
+	path = libs/ez-api
+	url = https://github.com/OCamlPro/ez-api
+[submodule "libs/ez-pgocaml"]
+	path = libs/ez-pgocaml
+	url = https://github.com/OCamlPro/ez-pgocaml
+[submodule "libs/ocplib-json-typed"]
+	path = libs/ocplib-json-typed
+	url = https://github.com/OCamlPro/ocplib-json-typed
+[submodule "libs/ocplib-jsutils"]
+	path = libs/ocplib-jsutils
+	url = https://github.com/OCamlPro/ocplib-jsutils
+[submodule "static/amcharts3"]
+	path = static/amcharts3
+	url = https://github.com/amcharts/amcharts3.git
+[submodule "static/ammap3"]
+	path = static/ammap3
+	url = https://github.com/amcharts/ammap3.git

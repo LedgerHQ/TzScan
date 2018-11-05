@@ -1,0 +1,12 @@
+
+(* Currently, there is no way to tell ocp-autoconf that we want an exact
+version, not a minimal version. *)
+depends: [
+  "cohttp-lwt" {= "0.99.0" }
+]
+
+pin-depends: [
+  [ "pgocaml.2.3+dev" "git+https://github.com/darioteixeira/pgocaml.git" ]
+  [ "ocplib-json-typed.0.6+dev"
+    "git+https://github.com/ocamlpro/ocplib-json-typed.git#428b9b4ac47a79810b65c4aef961d45e6688d13a" ]
+]

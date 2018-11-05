@@ -1,0 +1,58 @@
+(************************************************************************)
+(*                                TzScan                                *)
+(*                                                                      *)
+(*  Copyright 2017-2018 OCamlPro                                        *)
+(*                                                                      *)
+(*  This file is distributed under the terms of the GNU General Public  *)
+(*  License as published by the Free Software Foundation; either        *)
+(*  version 3 of the License, or (at your option) any later version.    *)
+(*                                                                      *)
+(*  TzScan is distributed in the hope that it will be useful,           *)
+(*  but WITHOUT ANY WARRANTY; without even the implied warranty of      *)
+(*  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the       *)
+(*  GNU General Public License for more details.                        *)
+(*                                                                      *)
+(************************************************************************)
+
+(* This library will be included both in the api-server and the web-app *)
+OCaml.library("tezos-explorer-services", ocaml+
+  {
+    files = [
+      "service_doc.ml";
+      "service.ml";
+    ];
+    requires = [
+      "database-interface";
+      "ez-api";
+    ];
+  });
+
+OCaml.library("tzscan-api-lib", ocaml+
+  {
+    files = [
+      "stats.ml";
+      "node_request.ml";
+      "handler.ml";
+      "api.ml";
+      "server.ml";
+    ];
+    requires = [
+      "database-reader-lib";
+      "data-types-lib";
+      "tzscan-config";
+      "ez-api-cohttp";
+      "ez-api-server";
+      "tezos-explorer-services";
+      "csv-lwt";
+    ];
+  });
+
+OCaml.program("tzscan-api-server", ocaml+
+  {
+    files = [
+      "main.ml";
+    ];
+    requires = [
+      "tzscan-api-lib";
+    ];
+  });

@@ -1,0 +1,28 @@
+
+OCaml.library("api-doc", ocaml + {
+  files =[
+    "api_documentation.ml",
+    {
+      file2string = [
+        "accounts.md" ;
+        "blocks.md" ;
+        "contracts.md" ;
+        "misc.md" ;
+        "operations.md" ;
+      ]};
+    "api_info.ml", {
+      file2string = [
+        "info-accounts.md";
+        "info-version.md";
+        "info-block.md";
+        "info-head.md";
+        "info-heads.md";
+        "info-genesis.md";
+        "info-blocks.md";
+        "info-block_next.md";
+        "info-block_prev.md";
+        "info-mini_stats.md";
+      ]};
+  ];
+});
+

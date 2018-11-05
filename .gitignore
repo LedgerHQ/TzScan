@@ -1,23 +1,15 @@
-*.annot
-*.cmo
-*.cma
-*.cmi
-*.a
-*.o
-*.cmx
-*.cmxs
-*.cmxa
+_obuild/
+/www/
+*~
+\#*\#
+/checkpoints
+/db-version.txt
+/Makefile.database
+_opam/
+/tzscan-crawler
+/tzscan-api-server
+/ocp-autoconf.d/configure.ac
+/ocp-autoconf.d/config.ocp2inc
+/ocp-autoconf.d/ezpg.ocp2inc
 
-# ocamlbuild working directory
-_build/
-
-# ocamlbuild targets
-*.byte
-*.native
-
-# oasis generated files
-setup.data
-setup.log
-
-# Merlin configuring file for Vim and Emacs
-.merlin
+/static/local
