@@ -85,15 +85,15 @@ let server services =
                         (List.map (fun (port,_) ->
                              string_of_int port) servers));
       let update_table () =
-        Lwt.bind (Dbr.all_aliases ())
-          (fun l ->
-             Alias.reset ();
-             List.iter (fun (hash, alias) -> Alias.change_alias hash alias) l;
-             Lwt.return_unit)
+        Dbr.all_aliases () >>= fun l ->
+        Alias.reset ();
+        List.iter (fun (hash, alias) -> Alias.change_alias hash alias) l;
+        Lwt.return_unit
       in
       let rec update_loop () =
-        Printf.printf "update of alias table\n%!";
+        Printf.printf "Updating alias table [in progress]...\n%!";
         update_table () >>= fun () ->
+        Printf.printf "Updating alias table [OK]...\n%!";
         Lwt_unix.sleep !alias_latency >>= fun () ->
         update_loop () in
       Lwt_list.iter_p (fun x -> x)

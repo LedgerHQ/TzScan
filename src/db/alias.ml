@@ -16,34 +16,16 @@
 
 open Data_types
 
-let alias_table : (string, string) Hashtbl.t = Hashtbl.create 10000
+let alias_table : (string, string) Hashtbl.t = Hashtbl.create 1000
 
-let change_alias = Hashtbl.add alias_table
+let change_alias tz alias = Hashtbl.add alias_table tz alias
 
-let get_alias_tbl = Hashtbl.find_opt alias_table
+let get_alias_tbl tz = Hashtbl.find_opt alias_table tz
 
 let reset () = Hashtbl.reset alias_table
 
-let dbh = PGOCaml.connect ~database:TzscanConfig.database ()
-
-let get_alias_db hash =
-  let query =
-    PGSQL(dbh) "SELECT alias FROM user_alias WHERE tz = $hash" in
-  match query with
-  | [ alias ] -> Some alias
-  | _ -> None
-
-let to_name ?(db=false) ?alias tz =
+let to_name ?alias tz =
   if tz = "" then {tz = ""; alias = None}
   else
-    let alias =
-      if alias = None then
-        begin
-          if db then
-            get_alias_db tz
-          else
-            get_alias_tbl tz
-        end
-      else
-        alias in
-    {tz; alias}
+    let alias = if alias = None then get_alias_tbl tz else alias in
+    { tz ; alias }

@@ -45,6 +45,11 @@ let staking_balance_id hash = Common.make_id "account-staking-balance" hash
 let balance_label_id hash = Common.make_id "account-balance-label" hash
 let advanced_baking_id hash = Common.make_id "account-advanced-balance" hash
 
+let nb_balance_update_id hash =
+  Common.make_id "nb-balance-update" hash
+let bal_from_balance_update_id hash =
+  Common.make_id "bal-from--balance-update" hash
+
 let del_balance_id hash del_hash =
   Common.make_id "del" (Printf.sprintf "%s-%s" hash del_hash)
 
@@ -56,6 +61,8 @@ let originations_view_shown_once = ref false
 let endorsements_view_shown_once = ref false
 let bakings_view_shown_once = ref false
 let rewards_view_shown_once = ref false
+let balance_update_view_shown_once = ref false
+
 
 let level_id op_hash op_block_hash index =
   let id = Printf.sprintf "%s-%s-%i" op_hash op_block_hash index in
@@ -112,6 +119,7 @@ let tz1_details name =
 type filter =
   | Def_Txs | Def_Del | Def_Ori
   | Def_Endt | Def_Bk | Def_Rew | Def_Code
+  | Def_Bal
 
 let string_of_filter = function
     Def_Txs -> "transaction"
@@ -121,6 +129,7 @@ let string_of_filter = function
   | Def_Bk -> "baking"
   | Def_Rew -> "rewards"
   | Def_Code -> "code"
+  | Def_Bal -> "balance"
 
 let filter_of_string = function
     "transaction" -> Def_Txs
@@ -130,6 +139,7 @@ let filter_of_string = function
   | "baking" -> Def_Bk
   | "rewards" -> Def_Rew
   | "code" -> Def_Code
+  | "balance" -> Def_Bal
   | _ -> Def_Txs
 
 let default_filter filters =
@@ -170,14 +180,24 @@ let code_tab = Tabs.make
 let michelson_tab = Tabs.make
     (mk_title Tez.icon s_michelson) [ "code-tab" ]
 
+(*
 let liquidity_tab = Tabs.make
     (mk_title liquidity_icon s_liquidity) [ "code-tab" ]
+*)
 
 let storage_tab = Tabs.make
     (mk_title database_icon s_storage) [ "code-tab" ]
 
 let dapp_tab = Tabs.make
     (mk_title Bootstrap_helpers.Icon.database_icon s_view_dapp) [ "code-tab" ]
+
+let bal_tab = Tabs.make
+    (fun i ->
+       span [ mk_title (fun () -> span [tz_icon ()]) s_balance i; space () ;
+                     sup [ span ~a:[ a_class [ "label" ; "label-danger" ] ] [
+                         pcdata "Beta"
+                       ] ]])
+    [ "account-tab" ]
 
 module AccountOperationsPanel = struct
   let title_span _ = span []
@@ -319,9 +339,15 @@ let make_account_delegations hash dels =
             Common.account_w_blockies src,
             td ~a:[ a_class [ green ] ] [ right_icon () ],
             Common.account_w_blockies del.del_delegate
-          end  in
+          end in
+        let arrow =
+          if del.del_failed then
+            td ~a:[ a_class [ red ] ] [ cross_icon () ]
+          else arrow in
         let tr_class =
-          if op_block_hash = Utils.pending_block_hash
+          if del.del_failed then
+            [ a_class @@ Common.failed_class del.del_failed ]
+          else if op_block_hash = Utils.pending_block_hash
           then [ a_class [ "operation-pending" ] ]
           else if op_block_hash = Utils.orphan_block_hash
           then [ a_class [ "operation-orphan" ] ]
@@ -499,7 +525,7 @@ module BakingsPanel = Panel.MakePageTable(
          th @@ cl_icon bill_icon (t_ s_rewards);
          th @@ cl_icon deposit_icon (t_ s_deposits);
          th @@ cl_icon clock_icon (t_ s_bake_time);
-         th @@ cl_icon spinner_icon (t_ s_status)
+         th @@ cl_icon clock_icon (t_ s_age);
        ]
     let page_size = 10
     let table_class = "bakings-table"
@@ -526,18 +552,21 @@ let make_account_bakings bks =
           if not bk.bk_baked || bk.bk_distance_level <> 0 then
             Common.pcdata_ (), Common.pcdata_ (), Common.pcdata_ ()
           else rewards, deposits, pcdata str_bktime in
-        let div_status, tr_class =
-          if not bk.bk_baked then pcdata_t s_missed, [ a_class ["danger"] ]
+        let tr_class, prio_str =
+          if not bk.bk_baked then
+            [ a_class ["danger"] ],
+            Printf.sprintf "%d (%d)" (Misc.unopt 0 bk.bk_missed_priority) bk.bk_priority
           else if bk.bk_distance_level <> 0 then
-            pcdata_t s_alternative_branch, [ a_class ["bg-block-alt-chain"] ]
-          else pcdata_t s_good, [] in
+            [ a_class ["warning"] ], Printf.sprintf "%d" bk.bk_priority
+          else [], Printf.sprintf "%d" bk.bk_priority
+        in
         tr ~a:tr_class [
           td [ div_level ] ;
-          td [ pcdata @@ string_of_int @@ bk.bk_priority ] ;
+          td [ pcdata prio_str ] ;
           td [ div_rewards ] ;
           td [ div_deposit ] ;
           td [ div_bake_time ] ;
-          td [ div_status ]
+          td [ Format_date.auto_updating_timespan bk.bk_tsp ; pcdata " ago" ]
         ]) bks
 
 module BakingRightsPanel = Panel.MakePageTable(
@@ -577,6 +606,7 @@ let make_account_baking_rights prs =
           td div_reward ;
           td div_deposit ;
           td [ pcdata @@ Format_date.time_before_level ~cst pr.br_depth ] ;
+
         ]) prs
 
 
@@ -595,14 +625,30 @@ module CycleBakingsPanel = Panel.MakePageTable(
         th @@ cl_icon bill_icon (t_ s_rewards);
         th @@ cl_icon deposit_icon (t_ s_tot_deposits);
         th @@ cl_icon clock_icon (t_ s_bake_time);
-        th @@ cl_icon spinner_icon (t_ s_rew_status);
        ]
   end)
+
+let bk_legend () =
+  div ~a:[ a_class [row] ] [
+    div ~a:[ a_class [cxs2] ] [ pcdata "Legend: " ] ;
+    div ~a:[ a_class [cxs5; csm3] ] [
+      div ~a:[ a_class [row] ] [
+        p ~a:[ a_class ["legend-box"; cxs3] ] [ pcdata " " ];
+        span ~a:[ a_class [cxs9] ] [ pcdata ": Good"]; ] ];
+    div ~a:[ a_class [cxs5; csm3] ] [
+      div ~a:[ a_class [row] ] [
+        p ~a:[ a_class ["legend-box"; "bg-danger"; cxs3] ] [ pcdata " " ];
+        span ~a:[ a_class [cxs9] ] [ pcdata ": Missed"]; ] ];
+    div ~a:[ a_class [cxs5; cxsoffset2; csm3; csmoffset0; row] ] [
+      div ~a:[ a_class [row] ] [
+        p ~a:[ a_class ["legend-box"; "bg-warning"; cxs3] ] [ pcdata " " ];
+        span ~a:[ a_class [cxs9] ] [ pcdata ": Alt. chain"]; ] ]
+  ]
 
 let make_baking_history_table xhr_rights xhr_1cycle hash
     (total_bk, cbks_r, cbks) =
   match cbks, cbks_r with
-  | [], [] -> [ tr [ td ~a:[ a_colspan 8 ] [
+  | [], [] -> [ tr [ td ~a:[ a_colspan 7 ] [
       pcdata_t s_no_block_baked_and_no_baking_rights ]]]
   | _ ->
     let future_rows = if cbks_r = [] then [] else
@@ -627,13 +673,12 @@ let make_baking_history_table xhr_rights xhr_1cycle hash
                   td [ pcdata_ () ];
                   td [ Tez.pp_amount rewards ];
                   td [ Tez.pp_amount deposit ];
-                  td [ pcdata_ () ];
                   td [ pcdata_ () ;
                        a ~a:[ a_class ["caret"; "pull-right"]; toggle; href] [] ]];
               tr ~a:[ a_id id_cycle ; a_class ["collapse"];
                       a_onshow (fun _ev ->
                           xhr_rights ?cycle:(Some cbk_r.cr_cycle) hash; true)] [
-                td ~a:[ a_colspan 8 ] [
+                td ~a:[ a_colspan 7 ] [
                   BakingRightsPanel.make ~suf_id ~panel_class:["bakings-div"] ();
                 ]]]) cbks_r in
     let passed_rows = List.flatten @@ List.map (fun cbk ->
@@ -651,11 +696,9 @@ let make_baking_history_table xhr_rights xhr_1cycle hash
         let rewards =
           Int64.add cbk.cbk_tez.tez_fee cbk.cbk_tez.tez_reward in
         let cst = Infos.constants ~cycle in
-        let color, str_status =
-          if cbk.cbk_depth <= cst.preserved_cycles then
-            a_class ["warning"], s_pending
-          else
-            a_class ["success"], s_delivered
+        let color  =
+          if cbk.cbk_depth <= cst.preserved_cycles then a_class ["warning"]
+          else a_class ["success"]
         in [
           tr ~a:[toggle; target; data_href; color]
             [
@@ -666,15 +709,15 @@ let make_baking_history_table xhr_rights xhr_1cycle hash
                      cbk.cbk_count.cnt_steal];
               td [ Tez.pp_amount rewards ] ;
               td [ Tez.pp_amount cbk.cbk_tez.tez_deposit ] ;
-              td [ pcdata bktime_str ] ;
-              td [ pcdata_t str_status;
+              td [ pcdata bktime_str;
                    a ~a:[ a_class ["caret"; "pull-right"]; toggle; href] [] ] ;
             ];
           tr ~a:[ a_id id_cycle; a_class ["collapse"];
                   a_onshow (fun _ev ->
                       xhr_1cycle ?cycle:(Some cbk.cbk_cycle) hash; true) ] [
-            td ~a:[ a_colspan 8 ] [
-               BakingsPanel.make ~suf_id ~panel_class:["bakings-div"] () ]]]
+            td ~a:[ a_colspan 7 ] [
+              BakingsPanel.make ~suf_id ~panel_class:["bakings-div"] ();
+              bk_legend ()]]]
       ) cbks in
     let total_rows = match total_bk with
       | [ total_bk ] ->
@@ -692,8 +735,7 @@ let make_baking_history_table xhr_rights xhr_1cycle hash
                      total_bk.cbk_count.cnt_steal];
               td [ Tez.pp_amount total_rewards ] ;
               td [ Tez.pp_amount total_bk.cbk_tez.tez_deposit ] ;
-              td [ pcdata bktime_str ] ;
-              td [ pcdata_ () ]
+              td [ pcdata bktime_str ]
             ]]
       | _ -> [] in
     future_rows @ total_rows @ passed_rows
@@ -712,7 +754,7 @@ module BakingsEndorsementPanel = Panel.MakePageTable(
          th @@ cl_icon priority_icon (t_ s_priority);
          th @@ cl_icon bill_icon (t_ s_rewards);
          th @@ cl_icon deposit_icon (t_ s_deposits);
-         th @@ cl_icon spinner_icon (t_ s_status)
+         th @@ cl_icon clock_icon (t_ s_age);
        ]
   end)
 
@@ -724,7 +766,7 @@ let make_account_bakings_endorsement ebks =
     List.map (function
         | {ebk_block = Some ebk_block; ebk_level; ebk_cycle = Some ebk_cycle;
            ebk_priority = Some ebk_priority; ebk_dist = Some ebk_dist;
-           ebk_slots = Some ebk_slots; _} ->
+           ebk_slots = Some ebk_slots; ebk_tsp = Some ebk_tsp; _} ->
           let cycle = ebk_cycle in
           let cst = Infos.constants ~cycle in
           let rewards = Tez.pp_amount @@
@@ -738,12 +780,12 @@ let make_account_bakings_endorsement ebks =
           let str_slots = String.concat ", " @@
             List.rev @@ List.map string_of_int ebk_slots in
           let str_level = string_of_int ebk_level in
-          let div_level, div_rewards, div_deposits, div_status, tr_class =
+          let div_level, div_rewards, div_deposits, tr_class =
             if ebk_dist = 0 then
-              Common.make_link str_level, rewards, deposits, pcdata_t s_good, []
+              Common.make_link str_level, rewards, deposits, []
             else
               Common.make_link str_level ~path:ebk_block, pcdata_ (),
-              pcdata_ (), pcdata_t s_alt, [ a_class ["bg-block-alt-chain"] ]
+              pcdata_ (), [ a_class ["warning"] ]
           in
           tr ~a:tr_class [
             td [ div_level ] ;
@@ -751,7 +793,7 @@ let make_account_bakings_endorsement ebks =
             td [ pcdata @@ string_of_int ebk_priority ] ;
             td [ div_rewards ] ;
             td [ div_deposits ] ;
-            td [ div_status ]]
+            td [ Format_date.auto_updating_timespan ebk_tsp ; pcdata " ago" ]]
         | {ebk_level; ebk_lr_nslot; _ } ->
           tr ~a:[ a_class ["danger"] ] [
             td [ Common.make_link @@ string_of_int ebk_level ] ;
@@ -760,7 +802,7 @@ let make_account_bakings_endorsement ebks =
             td [ Common.pcdata_ () ] ;
             td [ Tez.pp_amount 0L ] ;
             td [ Tez.pp_amount 0L ] ;
-            td [ pcdata_t s_missed ] ]
+            td [ Common.pcdata_ () ] ]
       ) ebks
 
 module EndorsementRightsPanel = Panel.MakePageTable(
@@ -813,13 +855,12 @@ module CycleEndorsementsPanel = Panel.MakePageTable(
         th @@ cl_icon priority_icon (t_ s_av_priority);
         th @@ cl_icon bill_icon (t_ s_tot_rewards);
         th @@ cl_icon deposit_icon (t_ s_tot_deposits);
-        th @@ cl_icon spinner_icon (t_ s_rew_status);
        ]
   end)
 
 let make_endorsement_history_table xhr_rights xhr_1cycle hash (total_ed, ceds_r, ceds) =
   match ceds, ceds_r with
-  | [], [] -> [ tr [ td ~a:[ a_colspan 6 ] [
+  | [], [] -> [ tr [ td ~a:[ a_colspan 5 ] [
       pcdata_t s_no_block_endorsed_and_no_endorsement_rights
     ]]]
   | _ ->
@@ -843,13 +884,12 @@ let make_endorsement_history_table xhr_rights xhr_1cycle hash (total_ed, ceds_r,
                   td [ pcdata (string_of_int @@ int_of_float ced_r.cr_priority) ];
                   td [ pcdata_ () ];
                   td [ Tez.pp_amount rewards ];
-                  td [ Tez.pp_amount deposit ];
-                  td [ Common.pcdata_ ();
+                  td [ Tez.pp_amount deposit;
                        a ~a:[ a_class ["caret"; "pull-right"]; toggle; href] []]; ];
               tr ~a:[ a_id id_cycle; a_class ["collapse"];
                       a_onshow (fun _ev ->
                           xhr_rights ?cycle:(Some ced_r.cr_cycle) hash; true) ] [
-                td ~a:[ a_colspan 6 ] [
+                td ~a:[ a_colspan 5 ] [
                   EndorsementRightsPanel.make ~suf_id ~panel_class:["bakings-div"] () ]]]
           ) ceds_r in
     let passed_rows = List.flatten @@ List.map (fun ced ->
@@ -864,11 +904,9 @@ let make_endorsement_history_table xhr_rights xhr_1cycle hash (total_ed, ceds_r,
         let rewards = ced.ced_tez.tez_reward in
         let deposit = ced.ced_tez.tez_deposit in
         let priority_str = Printf.sprintf "%.2f" ced.ced_priority in
-        let color, str_status =
-          if ced.ced_depth <= cst.preserved_cycles then
-            a_class ["warning"], s_pending
-          else
-            a_class ["success"], s_delivered
+        let color =
+          if ced.ced_depth <= cst.preserved_cycles then a_class ["warning"]
+          else a_class ["success"]
         in
         [ tr ~a:[toggle; target; color; data_href] [
               td [ pcdata @@ string_of_int ced.ced_cycle ] ;
@@ -876,25 +914,25 @@ let make_endorsement_history_table xhr_rights xhr_1cycle hash (total_ed, ceds_r,
                      ced.ced_slots.cnt_miss ] ;
               td [ pcdata priority_str ] ;
               td [ Tez.pp_amount rewards ] ;
-              td [ Tez.pp_amount deposit ] ;
-              td [ pcdata_t str_status;
+              td [ Tez.pp_amount deposit;
                    a ~a:[ a_class ["caret"; "pull-right"]; toggle; href] [] ]; ];
           tr ~a:[ a_id id_cycle; a_class ["collapse"];
                   a_onshow (fun _ev ->
                       xhr_1cycle ?cycle:(Some ced.ced_cycle) hash; true) ] [
-            td ~a:[ a_colspan 6 ] [
-              EndorsementsPanel.make ~suf_id ~panel_class:["bakings-div"] () ]]]
+            td ~a:[ a_colspan 5 ] [
+              EndorsementsPanel.make ~suf_id ~panel_class:["bakings-div"] ();
+              bk_legend ()]]]
       ) ceds in
     let total_rows = match total_ed with
       | [ total_ed ] ->
          let priority_str = Printf.sprintf "%.2f" total_ed.ced_priority in
         [ tr ~a: [ a_class ["info"] ] [
               td [ pcdata_t s_total ] ;
-              td [ pcdata @@ Int64.to_string total_ed.ced_slots.cnt_all ] ;
+              td [ pcdata @@ Printf.sprintf "%Ld (%Ld)" total_ed.ced_slots.cnt_all
+                 total_ed.ced_slots.cnt_miss] ;
               td [ pcdata priority_str ] ;
               td [ Tez.pp_amount total_ed.ced_tez.tez_reward ] ;
-              td [ Tez.pp_amount total_ed.ced_tez.tez_deposit ] ;
-              td [ pcdata_ () ]
+              td [ Tez.pp_amount total_ed.ced_tez.tez_deposit ]
             ] ]
       | _ -> [] in
     future_rows @ total_rows @ passed_rows
@@ -1001,8 +1039,7 @@ let make_rewards_history_table xhr_1cycle hash rewards_splits =
         let extra_rw =
           Int64.add ars.ars_gain_from_denounciation ars.ars_rv_rewards in
         let total_rw =
-          Int64.sub
-            (List.fold_left Int64.add 0L [brewards; erewards; extra_rw]) losts in
+          List.fold_left Int64.add 0L [brewards; erewards; ars.ars_fees] in
         let td_extra =
           if extra_rw = 0L then td [ Tez.pp_amount 0L ]
           else (
@@ -1145,7 +1182,7 @@ let make_account_code (code_s, storage_s) =
              Bootstrap_helpers.Attributes.a_role "tablist";
              Bootstrap_helpers.Attributes.a_aria "multiselectable" "true" ] [
       make_storage s_michelson_storage storage_s ~is_in:true "michelson-storage";
-      make_storage s_liquidity_storage (t_ s_liquidity_storage_coming_soon) "liquidity-storage";
+      (*      make_storage s_liquidity_storage (t_ s_liquidity_storage_coming_soon) "liquidity-storage"; *)
     ] in
   let michelson_code =
     div ~a:[  ] [
@@ -1386,12 +1423,14 @@ let update_account_michelson view =
     Manip.appendChild container view
   with _ -> ()
 
+(*
 let update_account_liquidity view =
   try
     let container = find_component liquidity_tab.Tabs.content_id in
     Manip.removeChildren container;
     Manip.appendChild container view
   with _ -> ()
+*)
 
 let update_account_storage view =
   try
@@ -1519,10 +1558,10 @@ let update_account_code name code =
     Tabs.enable code_tab;
     let code_s = Micheline_printer.to_string code in
     let storage_s = Micheline_printer.to_string storage in
-    let michelson_view, liquidity_view, storage_view =
+    let michelson_view, _liquidity_view, storage_view =
       make_account_code (code_s, storage_s) in
     update_account_michelson michelson_view;
-    update_account_liquidity liquidity_view;
+    (*    update_account_liquidity liquidity_view; *)
     update_account_storage storage_view ;
     if Hashtbl.mem Dapps.dapps name.tz then
       Dapps.display dapp_tab.Tabs.content_id name.tz
@@ -1696,6 +1735,108 @@ let update_endorsement_history ~nrows xhr xhr_rights xhr_1cycle hash =
     (make_endorsement_history_table xhr_rights xhr_1cycle hash)
     ~nrows xhr
 
+let update_close_baking_and_endorsement
+    (last_baking, last_endorsement, last_bk_right, last_end_right)
+    (head_cycle, head_level, next_bk_level, next_end_level, head_tsp) xhr =
+  let cst = Infos.constants ~cycle:head_cycle in
+  let last_baking_div = find_component "last-baking-div" in
+  if last_baking = [] && last_endorsement = [] &&
+     last_bk_right = 0 && last_end_right = 0 &&
+     next_bk_level = 0 && next_end_level = 0 then
+    hide last_baking_div
+  else (
+    let last_bk_panel =
+      let color, info = match last_baking with
+        | [ last_baking ] when last_bk_right = last_baking.bk_level
+          -> "last-baking-green", []
+        | [ _ ] -> "last-baking-red",
+                   [ a_title @@ Printf.sprintf "missed bake at level %d" last_bk_right ]
+        | _ -> "", [] in
+      let panel_body_content = match last_baking with
+        | [ last_baking ] -> [
+            div ~a:info [
+              div [ pcdata @@ Printf.sprintf "Cycle %d" last_baking.bk_cycle ];
+              div [ pcdata "Level "; Common.make_link @@ string_of_int last_baking.bk_level ];
+              div [ Format_date.auto_updating_timespan last_baking.bk_tsp; pcdata " ago" ] ]
+          ]
+        | _ -> [ pcdata "No block baked" ] in
+      make_panel
+        ~panel_class:["last-baking-panel"; cxs6; csm3; text_center; color]
+        ~panel_title_content:(div [ pcdata "Last Baking" ])
+        ~panel_body_content
+        () in
+    let last_end_panel =
+      let color, info = match last_endorsement with
+        | [ last_endorsement ] when last_end_right = last_endorsement.ebk_level
+          -> "last-baking-green", []
+        | [ _ ] -> "last-baking-red",
+                   [ a_title @@ Printf.sprintf "missed endorsement at level %d"
+                       last_end_right ]
+        | _ -> "", [] in
+      let panel_body_content = match last_endorsement with
+        | [ last_endorsement ] -> [
+            div ~a:info [
+              div [ pcdata @@ Printf.sprintf "Cycle %d" @@
+                    Misc.unopt 0 last_endorsement.ebk_cycle ];
+              div [ pcdata "Level ";
+                    Common.make_link @@ string_of_int last_endorsement.ebk_level ];
+              div [ Format_date.auto_updating_timespan @@
+                    Misc.unopt "" last_endorsement.ebk_tsp; pcdata " ago" ] ] ]
+        | _ -> [ pcdata "No block endorsed" ] in
+      make_panel
+        ~panel_class:["last-baking-panel"; cxs6; csm3; text_center; color]
+        ~panel_title_content:(div [ pcdata "Last Endorsement" ])
+        ~panel_body_content
+        () in
+    let refresh diff =
+      if diff <= -15. && diff >= -16. then (
+        Misc_js.UpdateOnFocus.clear_timers ();
+        ignore (Dom_html.window##setTimeout( Js.wrap_callback xhr, 1000.)))
+    in
+    let next_bk_panel =
+      let color = if next_bk_level = 0 then "" else "next-baking-blue" in
+      let panel_body_content =
+        let next_tsp_f =
+          Format_date.float_of_iso head_tsp +.
+          float_of_int ((next_bk_level - head_level) * (List.hd cst.time_between_blocks))
+          *. 1000. in
+        if next_bk_level = 0 then [ pcdata "No block to bake" ]
+        else [
+          div [
+            div [ pcdata @@ Printf.sprintf "Cycle %d" @@
+                  Infos.cycle_from_level ~cst next_bk_level ];
+            div [ pcdata @@ Printf.sprintf "Level %d" next_bk_level ];
+            div [ Format_date.auto_updating_timespan_float ~refresh ~future:true next_tsp_f ] ] ] in
+      make_panel
+        ~panel_class:["last-baking-panel"; cxs6; csm3; text_center; color]
+        ~panel_title_content:(div [ pcdata "Next Baking" ])
+        ~panel_body_content
+        () in
+    let next_end_panel =
+      let color = if next_end_level = 0 then "" else "next-baking-blue" in
+      let panel_body_content =
+        let next_tsp_f =
+          Format_date.float_of_iso head_tsp +.
+          float_of_int ((next_end_level - head_level + 1) *
+                        (List.hd cst.time_between_blocks))
+          *. 1000. in
+        if next_end_level = 0 then [ pcdata "No block to endorse" ]
+        else [
+          div [
+            div [ pcdata @@ Printf.sprintf "Cycle %d" @@
+                  Infos.cycle_from_level ~cst next_end_level ];
+            div [ pcdata @@ Printf.sprintf "Level %d" next_end_level ];
+            div [ Format_date.auto_updating_timespan_float ~refresh ~future:true next_tsp_f ] ] ] in
+      make_panel
+        ~panel_class:["last-baking-panel"; cxs6; csm3; text_center; color]
+        ~panel_title_content:(div [ pcdata "Next Endorsement" ])
+        ~panel_body_content
+        () in
+    Manip.removeChildren last_baking_div;
+    Manip.appendChild last_baking_div @@
+    div ~a:[ a_class [row] ] [
+      last_bk_panel; next_bk_panel; last_end_panel; next_end_panel ])
+
 let update_rewards_history ~nrows xhr xhr_1cycle hash =
   if nrows = 0 then Tabs.disable rewards_tab;
   hide @@ find_component "delegator-reward-container";
@@ -1727,29 +1868,36 @@ let update_account_endorsement_rights ?cycle ~nrows xhr =
     ~urlarg_page:"" ~urlarg_size:"" make_account_endorsement_rights ~nrows xhr
 
 let make_account_code_tabs hash =
-  Tabs.(make_tabs ~fills:true ~_class:[ clg9; "code-tabs" ] Pills ([
-      michelson_tab, Active;
-      liquidity_tab, Inactive;
+  let has_dapp = Dapps.is_dapp hash in
+  Tabs.(make_tabs ~fills:true ~_class:[ clg9; "code-tabs" ] Pills (
+      (if has_dapp then [ dapp_tab, Active ] else [] ) @
+      [
+      michelson_tab, (if has_dapp then Inactive else Active);
       storage_tab, Inactive;
-    ] @ (if Dapps.is_dapp hash then [ dapp_tab, Inactive ] else [] )))
+      (*      liquidity_tab, Inactive; *)
+    ]))
 
-let make_michelson () =
-  Tabs.(make_content_panel ~_class:[ "code-panel" ] michelson_tab Active @@
+let make_michelson is_dapp =
+  Tabs.(make_content_panel ~_class:[ "code-panel" ] michelson_tab
+          (if is_dapp then Inactive else Active) @@
         div ~a:[ a_class [ ] ] [  Common.make_fetching () ])
 
+(*
 let make_liquidity () =
   Tabs.(make_content_panel ~_class:[ "code-panel" ] liquidity_tab Inactive @@
         div ~a:[ a_class [ ] ] [  Common.make_fetching () ])
+*)
 
 let make_storage () =
   Tabs.(make_content_panel ~_class:[ "code-panel" ] storage_tab Inactive @@
         div ~a:[ a_class [] ] [  Common.make_fetching () ])
 
 let make_dapp () =
-  Tabs.(make_content_panel ~_class:[ "code-panel" ] dapp_tab Inactive @@
+  Tabs.(make_content_panel ~_class:[ "code-panel" ] dapp_tab Active @@
         div ~a:[ a_class [] ] [  Common.make_fetching () ])
 
 let make_code_panel hash =
+  let is_dapp = Dapps.is_dapp hash in
   div ~a:[ a_class [ panel; panel_primary; "account-div"; row ] ] [
     div ~a:[ a_class [ clg12 ] ] [
       div ~a:[ a_class [ panel_heading] ] [
@@ -1762,15 +1910,14 @@ let make_code_panel hash =
                    Bootstrap_helpers.Attributes.a_role "button";
                    a_target "_blank" ] [ pcdata_t s_open_in_try_liquidity ] ] ]
       ] ;
-      div ~a:[ a_class [ "code-main-panel"; "tab-content" ] ] ([
-        make_michelson ();
-
-        make_liquidity ();
-
+      div ~a:[ a_class [ "code-main-panel"; "tab-content" ] ] (
+        (if is_dapp then [make_dapp ()] else [])
+        @
+        [
+        make_michelson is_dapp;
         make_storage () ;
-
-      ] @ (if Dapps.is_dapp hash then [make_dapp ()] else []))
-
+        (*        make_liquidity (); *)
+      ])
     ]
   ]
 
@@ -1794,13 +1941,66 @@ let make_endorsements_view default =
   Tabs.make_content_panel endt_tab (is_active default Def_Endt) @@
   EndorsementsPanel.make ~footer:true ()
 
+let bakings_legend name =
+  let target =  a_user_data "target" ("#" ^ name) in
+  let href =  a_href ("#" ^ name) in
+  div ~a:[ a_class [row] ] [
+    div ~a:[ a_class [cxs3]; target ] [
+      pcdata "Legend: ";
+      a ~a:[ a_class ["caret"]; toggle; href] []];
+    div ~a:[ a_id name; a_class [cxs9; "collapse"] ] [
+      div ~a:[ a_class [row] ] [
+      div ~a:[ a_class [cxs12; csm6; row] ] [
+        p ~a:[ a_class ["legend-box"; "bg-info"; cxs3] ] [ pcdata " " ];
+        span ~a:[ a_class [cxs9] ] [ pcdata ": Total row"]; ];
+      div ~a:[ a_class [cxs12; csm6; row] ] [
+        p ~a:[ a_class ["legend-box"; "bg-warning"; cxs3] ] [ pcdata " " ];
+        span ~a:[ a_class [cxs9] ] [ pcdata ": Pending reward"]; ];
+      div ~a:[ a_class [cxs12; csm6; row] ] [
+        p ~a:[ a_class ["legend-box"; "bg-success"; cxs3] ] [ pcdata " " ];
+        span ~a:[ a_class [cxs9] ] [ pcdata ": Delivered reward"]; ];
+      div ~a:[ a_class [cxs12; csm6; row] ] [
+        p ~a:[ a_class ["legend-box"; cxs3] ] [ pcdata " " ];
+        span ~a:[ a_class [cxs9] ] [ pcdata ": Future rights"]; ] ] ];
+    hr ()
+  ]
+
 let make_bakings_view hash default =
   Tabs.make_content_panel baking_tab (is_active default Def_Bk) @@
   div  [
+    div ~a:[ a_id "last-baking-div"; a_class [cxs12] ] [];
     Baking_ui.make_page hash ;
     CycleBakingsPanel.make ~panel_class:[row] () ;
-    CycleEndorsementsPanel.make ~panel_class:[row] ()
+    bakings_legend "cycle-baking-legend";
+    CycleEndorsementsPanel.make ~panel_class:[row] ();
+    bakings_legend "cycle-endorsement-legend";
   ]
+
+let rewards_legend =
+  let name = "reward-legend" in
+  let target =  a_user_data "target" ("#" ^ name) in
+  let href =  a_href ("#" ^ name) in
+  div ~a:[ a_class [row] ] [
+    div ~a:[ a_class [cxs3]; target ] [
+      pcdata "Legend: ";
+      a ~a:[ a_class ["caret"]; toggle; href] []];
+    div ~a:[ a_id name; a_class [cxs9; "collapse"] ] [
+      div ~a:[ a_class [row] ] [
+      div ~a:[ a_class [cxs12; csm6; row] ] [
+        p ~a:[ a_class ["legend-box"; "bg-info"; cxs3] ] [ pcdata " " ];
+        span ~a:[ a_class [cxs9] ] [ pcdata ": Current cycle"]; ];
+      div ~a:[ a_class [cxs12; csm6; row] ] [
+        p ~a:[ a_class ["legend-box"; "bg-warning"; cxs3] ] [ pcdata " " ];
+        span ~a:[ a_class [cxs9] ] [ pcdata ": Pending reward"]; ];
+      div ~a:[ a_class [cxs12; csm6; row] ] [
+        p ~a:[ a_class ["legend-box"; "bg-success"; cxs3] ] [ pcdata " " ];
+        span ~a:[ a_class [cxs9] ] [ pcdata ": Delivered reward"]; ];
+      div ~a:[ a_class [cxs12; csm6; row] ] [
+        p ~a:[ a_class ["legend-box"; cxs3] ] [ pcdata " " ];
+        span ~a:[ a_class [cxs9] ] [ pcdata ": Future rights"]; ] ] ];
+    hr ()
+  ]
+
 
 let make_rewards_view _hash default =
   let reward_input =
@@ -1828,11 +2028,22 @@ let make_rewards_view _hash default =
     div ~a:[ a_id "cycle-reward-container" ] [
       CycleRewardsPanel.make ~footer:true () ];
     div ~a:[ a_id "delegator-reward-container" ] [
-      DelegatorPanel.make ~footer:true () ]
+      DelegatorPanel.make ~footer:true () ];
+    rewards_legend
   ]
 
-let make_code_view hash =
-  Tabs.make_content_panel code_tab Tabs.Disabled @@ make_code_panel hash
+let make_code_view hash default =
+  Tabs.make_content_panel code_tab (is_active default Def_Code)
+  @@ make_code_panel hash
+
+let make_balance_view hash default =
+  Tabs.make_content_panel bal_tab (is_active default Def_Bal) @@
+  (div
+     [ Balance_ui.make_snapshot hash;
+       Balance_ui.make_chart hash;
+       Balance_ui.BalancePanel.make ();
+       Balance_ui.BalancePanel.make_legend ()
+  ])
 
 let make_tabs default =
   Tabs.(make_tabs Tabs [
@@ -1842,7 +2053,8 @@ let make_tabs default =
       endt_tab, (is_active default Def_Endt);
       baking_tab, (is_active default Def_Bk);
       rewards_tab, (is_active default Def_Rew);
-      code_tab, Disabled])
+      code_tab, Disabled;
+      bal_tab, (is_active default Def_Bal)])
 
 
 let update_on_show default filter shown_once tab hash update : unit =
@@ -1889,6 +2101,37 @@ let update_rewards default hash update =
   update_on_show
     default Def_Rew rewards_view_shown_once rewards_tab hash update
 
+let update_balance_updates default hash update =
+  let default = default = Def_Bal in
+  update_on_show
+    default
+    Def_Bal
+    balance_update_view_shown_once
+    bal_tab
+    hash
+    update
+
+let update_nb_balance_updates hash total =
+  try
+    let txs_td = find_component @@ nb_balance_update_id hash in
+    Manip.setInnerHtml txs_td (string_of_int total)
+  with Failure _ -> ()
+
+let update_balance_tab () =
+  Tabs.update_tab_title bal_tab None
+
+let update_account_balance_updates ?price_usd hash ~nrows xhr =
+  update_balance_tab ();
+  update_nb_balance_updates hash nrows;
+  Balance_ui.BalancePanel.paginate_fun
+    ~urlarg_page:"" ~urlarg_size:""
+    (Balance_ui.make_balance_updates_table ?price_usd) ~nrows
+    (fun page page_size cb ->
+       xhr page page_size
+         (fun d -> cb d;
+           ignore (Js.Unsafe.eval_string
+                     "jQuery('[data-toggle=\"popover\"]').popover();")))
+
 let amcharts3_ready = Amcharts3.ready "/amcharts3"
 
 let pie_chart_id = "rolls-pie-id"
@@ -1919,7 +2162,8 @@ let make_page hash filters =
   let endorsements = make_endorsements_view default in
   let bakings = make_bakings_view hash default in
   let rewards = make_rewards_view hash default in
-  let code = make_code_view hash in
+  let code = make_code_view hash default in
+  let balance = make_balance_view hash default in
 
   div ~a:[ a_class [ "account-div"; row ] ] [
     div ~a:[ a_class [ "mobile-reverser" ] ] [
@@ -1937,6 +2181,8 @@ let make_page hash filters =
           bakings;
 
           code;
+
+          balance;
 
           rewards
         ]

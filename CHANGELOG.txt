@@ -7,3 +7,4 @@ ChangeLog
   * Use `api-config.json` to configure the API server
   * User `info.json` to configure the Webapp interface
 
+2018-12-10: Support for protocol 003

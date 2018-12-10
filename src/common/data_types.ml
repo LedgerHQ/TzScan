@@ -219,10 +219,12 @@ type baking = {
   bk_level : int;
   bk_cycle : int;
   bk_priority : int;
+  bk_missed_priority : int option;
   bk_distance_level : int;
   bk_fees : int64;
   bk_bktime : int;
   bk_baked : bool;
+  bk_tsp: string
 }
 
 type baking_endorsement = {
@@ -233,7 +235,8 @@ type baking_endorsement = {
   ebk_priority : int option;
   ebk_dist : int option;
   ebk_slots: int list option;
-  ebk_lr_nslot: int
+  ebk_lr_nslot: int;
+  ebk_tsp: string option
 }
 
 type bk_count = {
@@ -322,6 +325,7 @@ type baker_stats = {
   nb_blocks : int ;
   volume_total : int64 ;
   fees_total : int64 ;
+  nb_endorsements : int
 }
 
 type 'a per_day = {
@@ -470,6 +474,9 @@ type service = {
   srv_logo2 : string option; (* file name, related to /images/ *)
   srv_descr : string option;
   srv_sponsored : string option;
+  srv_page : string option;
+  srv_delegations_page : bool ;
+  srv_account_page : bool ;
 }
 
 type crawler_activity = {
@@ -533,14 +540,6 @@ type delegator_reward = {
   dor_status: rewards_status
 }
 
-type rewards_stats = {
-  rstats_staking_balance : int64 ;
-  rstats_delegators_nb : int ;
-  rstats_rewards : int64 ;
-  rstats_pc_blocks : float ;
-  rstats_pc_endorsements : float ;
-}
-
 type snapshot = {
   snap_cycle : int ;
   snap_index : int ;
@@ -569,20 +568,40 @@ type h24_stats = {
 
 type balance_update_info =
   {bu_account : account_hash;
+   bu_block_hash : block_hash;
    bu_diff : int64;
    bu_date : Date.t;
    bu_update_type : string;
+   bu_op_type : string;
    bu_internal : bool;
-   bu_level : int32;
    bu_frozen : bool;
+   bu_level : int32;
    mutable bu_burn : bool
   }
+
+type balance =
+  {
+    b_spendable :  int64;
+    b_frozen :  int64;
+    b_rewards :  int64;
+    b_fees :  int64;
+    b_deposits :  int64;
+  }
+
+type chart_axis_type =
+  | Cat_Tz
+  | Cat_MuTz
+  | Cat_Other
 
 type chart_file = {
   chart_period : string;
   chart_period_kind : string;
   chart_name : string;
+  chart_pretty : string option;
+  chart_unit : chart_axis_type option;
   chart_values : (string * float) array;
+  chart_abstract : string option;
+  chart_axis_title : string option;
 }
 
 type context_top_kind =
@@ -599,11 +618,19 @@ type context_top_kind =
   | TUsed_bytes
 
 (* top accounts at the beginning of this period *)
+type context_top_accounts = {
+  context_top_period : string;
+  context_top_kind : string;
+  context_top_hash : string;
+  context_top_list : (string * int64) list ;
+}
+
+(* top accounts at the beginning of this period *)
 type top_accounts = {
   top_period : string;
   top_kind : string;
   top_hash : string;
-  top_list : (string * int64) list ;
+  top_list : (account_name * int64) list ;
 }
 
 type context_file_with_diff = {
@@ -666,6 +693,7 @@ type api_server_config = {
   conf_constants : ( int * constants ) list ; (* cycle x constants *)
   conf_ico : ico_constants ;
   conf_rampup_cycles : int ;
+  conf_start_reward_cycle : int ;
   conf_has_delegation : bool ;
   conf_has_marketcap : bool ;
 }
@@ -692,4 +720,42 @@ type www_server_info = {
   mutable www_logo : string ;
   mutable www_footer : string ;
   mutable www_networks : ( string * string ) list ; (* name x www_url *)
+}
+
+type gk_coin = {gk_usd: float; gk_btc: float}
+type gk_market_data = {
+  gk_price: gk_coin;
+  gk_market_volume: gk_coin;
+  gk_1h: gk_coin;
+  gk_24h: gk_coin;
+  gk_7d: gk_coin
+}
+type gk_ticker = {
+  gk_last: float;
+  gk_target: string;
+  gk_tsp: string;
+  gk_anomaly: bool;
+  gk_converted_last: gk_coin;
+  gk_volume: float;
+  gk_stale: bool;
+  gk_base: string;
+  gk_converted_volume: gk_coin;
+  gk_market: string
+}
+type gk_shell = {
+  gk_last_updated: string;
+  gk_market_data: gk_market_data;
+  gk_tickers: gk_ticker list
+}
+type ex_ticker = {
+  ex_base: string;
+  ex_target: string;
+  ex_volume: float;
+  ex_conversion: float;
+  ex_price_usd: float
+}
+type exchange_info = {
+  ex_name: string;
+  ex_total_volume: float;
+  ex_tickers: ex_ticker list
 }

@@ -29,6 +29,11 @@ let icon () =
       pcdata sym
   ]
 
+let dollar () =
+  span ~a:[a_class ["tz"]] [
+      entity "#x24"
+  ]
+
 let mu_icon () = entity "#956"
 
 let sep =
@@ -71,7 +76,7 @@ let amount volumeL = (* in mutez *)
     let s = String.sub s 0 n in
     span [ pcdata (s ^ " "); icon () ]
 
-let pp_amount ?(precision=6) ?(width=15) ?order volumeL =
+let pp_amount ?(precision=6) ?(width=15) ?order ?(icon=icon) volumeL =
   if volumeL = 0L then span [ pcdata "0 "; icon ()]
   else
     let sign =
@@ -194,10 +199,14 @@ let with_usd price_usd xtz =
       Js.number_of_float @@
       (Int64.to_float xtz *. price_usd /.
        Int64.to_float tez_units) in
-    [
-      pp_amount xtz ;
-      span ~a:[ a_class [ "usd-price" ] ] [
-        pcdata " ($";
-        pcdata @@ Js.to_string number##toLocaleString() ;
-        pcdata ")" ]
-    ]
+    (* Display USD value only on mainnet *)
+    pp_amount xtz ::
+    match Tezos_constants.net with
+    | Tezos_constants.Betanet ->
+      [
+        span ~a:[ a_class [ "usd-price" ] ] [
+          pcdata " ($";
+          pcdata @@ Js.to_string number##toLocaleString() ;
+          pcdata ")" ]
+      ]
+    | _ -> []

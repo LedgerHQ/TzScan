@@ -21,6 +21,14 @@ module Date = struct
   let format = "%Y-%m-%dT%H:%M:%SZ"
   let to_string (DATE s) = s
   let from_string s = DATE s
+  let pretty_date = function
+      DATE d -> 
+       match String.split_on_char 'T' d with
+         [] -> "",""
+       | hd :: [] -> hd,""
+       | date :: time :: _ -> date,(String.sub time 0 (String.length time - 1))
+      
+    
 end
 
 type block_hash = string
@@ -55,17 +63,24 @@ type chain_status =
 
 
 type block_header = {
+
+  (* SHELL PART: lib_base/block_header.ml *)
   header_level : int ;
   header_proto : int ;
   header_predecessor : block_hash ;
   header_timestamp : Date.t ;
   header_validation_pass : int ;
-  header_operations_hash : string ;
+  header_operations_hash : string ; (* hash (operation list list) *)
   header_fitness : string ;
   header_context : string ;
+
+  (* PROTOCOL PART: lib_protocol/src/block_header_repr.ml *)
+
+  (* CONTENTS *)
   header_priority : int ;
   header_seed_nonce_hash : nonce_hash ;
   header_proof_of_work_nonce : string ;
+
   header_signature : string ;
 }
 
@@ -73,7 +88,10 @@ and block_header_metadata = {
   header_meta_baker : account_hash ;
   header_meta_level : node_level ;
   header_meta_voting_period_kind : voting_period_kind ;
-  header_meta_balance_updates : balance_updates list option
+  header_meta_nonce_hash : string option;
+  header_meta_consumed_gas : Z.t ;
+  header_meta_deactivated : string list ;
+  header_meta_balance_updates : balance_updates list option;
 }
 
 and block_metadata = {
@@ -184,6 +202,7 @@ and op_metadata = {
   meta_op_slots : int list option ;
   meta_op_paid_storage_size_diff : Z.t option ;
   meta_op_big_map_diff : (string * script_expr_t * script_expr_t option) list option ;
+  meta_op_allocated_destination_contract : bool option ;
 }
 
 and node_operation_type =

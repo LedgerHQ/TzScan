@@ -18,6 +18,7 @@ html {
     --main-greener-color: #93ff93;
     --main-red-color: red;
     --main-blue-color: blue;
+    --main-yellow-color: #cecc4d;
     --main-grey-color: #c0c0c0;
     --main-lightgrey-color: lightgray;
     --main-black-color: black;
@@ -435,6 +436,10 @@ a.whole-div-link:-webkit-any-link {
 .grey {
     color: var(--main-grey-color) !important;
     font-weight: bold;
+}
+
+.yellow {
+    color: var(--main-yellow-color) !important;
 }
 
 .right {
@@ -1344,7 +1349,7 @@ td.badge-reveal-activate a {
 }
 
 .odometer {
-  font-size:40px ;
+  font-size:35px ;
 }
 
 .stat-item .ldBar {
@@ -1389,4 +1394,81 @@ td.badge-reveal-activate a {
 
 .btn-network {
     margin-right: 3px;
+}
+
+.bal_snapshot_main_diff {
+    margin-top: 10px;
+    margin-bottom: 10px;
+}
+
+.exchanges-table {
+    font-size: 13px;
+}
+
+.exchanges-table th {
+    color: var(--main-black-color);
+}
+
+.exchanges-table td {
+    overflow: hidden ;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: var(--main-black-color);
+}
+
+.exchanges-logos {
+    padding: 20px ;
+}
+
+.exchange-logo {
+    margin: 10px ;
+}
+
+#last-baking-div {
+    margin-top: 15px;
+}
+
+.last-baking-panel {
+    border-radius: 50%;
+}
+
+.last-baking-green {
+    background-color: var(--liq-edit-green) !important;
+}
+
+.last-baking-red {
+    background-color: var(--liq-edit-red) !important;
+}
+
+.next-baking-blue {
+    background-color: #d9edf7 !important;
+}
+
+.legend-box {
+    width: 20px;
+    height: 20px;
+    border: 1px solid black;
+    white-space: nowrap;
+}
+
+.bal_currency_button {
+    text-align : right ;
+}
+
+
+.bal_currency_merge_button_div {
+    margin-bottom: 10px;
+}
+
+.advertisement {
+    background-color: transparent;
+    border: none;
+    color: #615e5e;
+    padding-top : 0px;
+    padding-bottom : 0px;
+    font-style: italic;
+}
+
+.advertisement img {
+    width : 15px;
 }

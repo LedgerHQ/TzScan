@@ -64,9 +64,6 @@ let get_data_path config =
 
 (* Command-line arguments *)
 let speclist = ref [
-  "--no-alternative-heads",
-  Arg.Clear alternative_heads_flag,
-  " Do not pull for alt-heads";
   "--pending-operations",
   Arg.Set pending_operations_flag,
   " Pull for pending operations (expensive)";

@@ -32,3 +32,5 @@ val rampup : cycle:int -> int64 -> int64
 
 (* `save_api_config filename` save current configuration into `filename` *)
 val save_api_config : string -> unit
+
+val cycle_from_level : cst:Tezos_types.constants -> int -> int

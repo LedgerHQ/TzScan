@@ -1855,7 +1855,7 @@ let downgrade_35_to_34 = [
 ]
 
 let update_34_to_35 dbh version =
-  EzPG.upgrade ~dbh ~version ~downgrade:downgrade_34_to_33 [
+  EzPG.upgrade ~dbh ~version ~downgrade:downgrade_35_to_34 [
     {|CREATE TABLE day_context (
       id bigserial PRIMARY KEY,
       day timestamp NOT NULL UNIQUE);|};
@@ -1932,6 +1932,150 @@ let update_34_to_35 dbh version =
       used_bytes bigint NOT NULL);|};
   ]
 
+let downgrade_36_to_35 =
+    [
+    {| DROP TABLE balance_updates ; |} ;
+    {| DROP TABLE balance_from_balance_updates ; |} ;
+    ]
+
+let update_35_to_36 dbh version =
+  EzPG.upgrade ~dbh ~version ~downgrade:downgrade_36_to_35
+      [
+      {|
+        CREATE TABLE balance_updates(
+          id SERIAL PRIMARY KEY NOT NULL,
+          hash user_hash NOT NULL,
+          block_hash block_hash NOT NULL,
+	  diff bigint NOT NULL,
+	  date timestamp NOT NULL,
+	  update_type VARCHAR NOT NULL,
+          operation_type VARCHAR NOT NULL,
+          internal BOOLEAN NOT NULL,
+          level int NOT NULL,
+          frozen BOOLEAN NOT NULL,
+          burn BOOLEAN NOT NULL,
+          distance_level int NOT NULL DEFAULT -1
+       )|};{|
+        CREATE TABLE balance_from_balance_updates(
+          id SERIAL PRIMARY KEY NOT NULL,
+          hash user_hash NOT NULL,
+          spendable_balance bigint NOT NULL,
+	  frozen bigint NOT NULL,
+          rewards bigint NOT NULL,
+          fees bigint NOT NULL,
+          deposits bigint NOT NULL,
+          cycle int NOT NULL
+            )|};
+      {|
+       CREATE INDEX bal_account ON balance_from_balance_updates (hash);|};
+      {|
+       CREATE INDEX bal_cycle ON balance_from_balance_updates (cycle);|};
+      {|
+       CREATE INDEX bu_level ON balance_updates (level);|};
+      {|
+       CREATE INDEX bu_hash ON balance_updates (hash);|};
+      ]
+
+let downgrade_37_to_36 = [
+  {|DROP TABLE coingecko_exchange;|}
+]
+
+let update_36_to_37 dbh version =
+  EzPG.upgrade ~dbh ~version ~downgrade:downgrade_37_to_36 [
+    {|CREATE TABLE coingecko_exchange (
+      name varchar NOT NULL,
+      base varchar NOT NULL,
+      target varchar NOT NULL,
+      timestamp varchar NOT NULL,
+      volume float NOT NULL,
+      conversion float NOT NULL,
+      price_usd float NOT NULL);|}
+  ]
+
+let downgrade_38_to_37 = [
+  {|CREATE OR REPLACE FUNCTION bk_rewards(base_reward bigint, cycle bigint,
+    cond bool)
+    RETURNS BIGINT AS $$
+    BEGIN
+    RETURN CASE WHEN cycle >= 7 AND cond THEN base_reward ELSE 0 END;
+    END;
+    $$ LANGUAGE plpgsql;|};
+  {|CREATE OR REPLACE FUNCTION end_rewards(base_reward bigint, cycle bigint,
+    nslot int, priority int, cond bool)
+    RETURNS BIGINT AS $$
+    BEGIN
+    RETURN CASE WHEN cycle >= 7 and cond THEN
+    nslot * (base_reward / ( 1 + priority ))
+    ELSE 0 END;
+    END;
+    $$ LANGUAGE plpgsql;|};
+  {|CREATE OR REPLACE FUNCTION deposits(base_deposit bigint, cycle bigint,
+    cycle_threshold bigint, nslot int, cond bool)
+    RETURNS BIGINT AS $$
+    BEGIN
+    RETURN CASE WHEN cycle < cycle_threshold AND cond THEN
+    nslot * cycle * base_deposit / cycle_threshold
+    WHEN cond THEN nslot * base_deposit ELSE 0 END;
+    END;
+    $$ LANGUAGE plpgsql;|};
+  {|CREATE OR REPLACE FUNCTION end_rewards_array(base_reward bigint, cycle bigint,
+    nb_endorsement bigint[])
+    RETURNS BIGINT AS $$
+    DECLARE s BIGINT := 0;
+    BEGIN
+    IF cycle >= 7 THEN
+    FOR i IN 1 .. COALESCE(array_upper(nb_endorsement, 1),0) LOOP
+    s := s + coalesce(nb_endorsement[i], 0) * (base_reward / i);
+    END LOOP;
+    END IF;
+    RETURN s;
+    END;
+    $$ LANGUAGE plpgsql;|};
+]
+
+let update_37_to_38 dbh version =
+  EzPG.upgrade ~dbh ~version ~downgrade:downgrade_38_to_37 [
+    {|CREATE OR REPLACE FUNCTION bk_rewards(base_reward bigint, cycle bigint,
+      start_reward_cycle bigint, cond bool)
+      RETURNS BIGINT AS $$
+      BEGIN
+      RETURN CASE WHEN cycle >= start_reward_cycle AND cond THEN base_reward ELSE 0 END;
+      END;
+      $$ LANGUAGE plpgsql;|};
+    {|CREATE OR REPLACE FUNCTION end_rewards(base_reward bigint, cycle bigint,
+      nslot int, priority int, start_reward_cycle bigint, cond bool)
+      RETURNS BIGINT AS $$
+      BEGIN
+      RETURN CASE WHEN cycle >= start_reward_cycle and cond THEN
+      nslot * (base_reward / ( 1 + priority ))
+      ELSE 0 END;
+      END;
+      $$ LANGUAGE plpgsql;|};
+    {|CREATE OR REPLACE FUNCTION deposits(base_deposit bigint, cycle bigint,
+      cycle_threshold bigint, nslot int, cond bool)
+      RETURNS BIGINT AS $$
+      BEGIN
+      RETURN CASE WHEN cycle < cycle_threshold AND cond THEN
+      nslot * cycle * base_deposit / cycle_threshold
+      WHEN cond THEN nslot * base_deposit ELSE 0 END;
+      END;
+      $$ LANGUAGE plpgsql;|};
+    {|CREATE OR REPLACE FUNCTION end_rewards_array(base_reward bigint, cycle bigint,
+      nb_endorsement bigint[], start_reward_cycle bigint)
+      RETURNS BIGINT AS $$
+      DECLARE s BIGINT := 0;
+      BEGIN
+      IF cycle >= start_reward_cycle THEN
+      FOR i IN 1 .. COALESCE(array_upper(nb_endorsement, 1),0) LOOP
+      s := s + coalesce(nb_endorsement[i], 0) * (base_reward / i);
+      END LOOP;
+      END IF;
+      RETURN s;
+      END;
+      $$ LANGUAGE plpgsql;|};
+  ]
+
+
 let upgrades = [
     0, update_0_to_1;
     1, update_1_to_2;
@@ -1967,10 +2111,16 @@ let upgrades = [
     31, update_31_to_32;
     32, update_32_to_33;
     33, update_33_to_34;
-    34, update_34_to_35
+    34, update_34_to_35;
+    35, update_35_to_36;
+    36, update_36_to_37;
+    37, update_37_to_38
   ]
 
 let downgrades = [
+  38, downgrade_38_to_37;
+  37, downgrade_37_to_36;
+  36, downgrade_36_to_35;
   35, downgrade_35_to_34;
   34, downgrade_34_to_33;
   33, downgrade_33_to_32;

@@ -134,25 +134,13 @@ let menu_blocks =
 let menu_operations =
   let dd = add_dropdown "Operations" in
   add_item dd "/transactions"  "Transactions";
-  add_item dd "/pending-transactions"  "Pending Transactions";
-  add_separator dd;
   add_item dd "/endorsements"  "Endorsements";
-  add_item dd "/pending-endorsements"  "Pending Endorsements";
-  add_separator dd;
   add_item dd "/delegations"  "Delegations";
-  add_item dd "/pending-delegations"  "Pending Delegations";
-  add_separator dd;
   add_item dd "/originations"  "Originations";
-  add_item dd "/pending-originations"  "Pending Originations";
-  add_separator dd;
   add_item dd "/activations"  "Activations";
-  add_item dd "/pending-activations"  "Pending Activations";
   add_separator dd;
   add_item dd "/double-baking"  "Double Baking Evidence";
-  add_item dd "/pending-double-baking"  "Pending Double Baking Evidence";
-  add_separator dd;
   add_item dd "/double-endorsement"  "Double Endorsement Evidence";
-  add_item dd "/pending-double-endorsement"  "Pending Double Endorsement Evidence";
   add_separator dd;
   add_item dd "/nonces"  "Nonces";
   add_separator dd;
@@ -163,6 +151,7 @@ let menu_accounts =
   let dd = add_dropdown "Accounts" in
   add_item dd "/accounts"  "All Accounts";
   add_item dd "/contracts"  "All Contracts";
+  add_item dd "/top"  "Top accounts";
   add_separator dd;
   add_item dd ~disabled:true "/known-contracts" "Known Contracts";
   dd
@@ -178,6 +167,7 @@ let menu_protocols =
 let menu_stats =
   let dd = add_dropdown "Stats" in
   add_item dd "/rolls-distribution"  "Current Rolls Distribution";
+  add_item dd "/context"  "Key numbers";
   add_item dd "/network"  "Network";
   add_item dd "/health"  "Health";
   dd

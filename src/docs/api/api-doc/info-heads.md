@@ -1,37 +1,40 @@
-### Sample result
-
+###Sample result:
 ```json
 [
-  {
-    "hash":"BL6r4HEQVDudB8xRoE1GiVYic4XuvP1G15JABE9THgmPq5c1nhR",
-    "predecessor_hash":"BKzzd4sH34NWRymjEosNNP1jzvQeVAEu9pecjzAsZbiGgoLaZjS",
-    "fitness":"00 000000000007e492",
-    [...]
-  },
-  {
-    "hash":"BMPBybcgWaG4uTkSZ3oycRxMpjYfdyMv2C3sy5r2rHrpawL94vf",
-    "predecessor_hash":"BMPteHPnRxtKXYWxt8A4w9C2JMiMk2gaFwnsjZx93Z8zxq2o2Qk",
-    "fitness":"00 000000000007e454",
-    [...]
-  },
-  {
-    "hash":"BLsywNtXqRZp3cV7F2uEkn7tXjz5g6J39ybrHP5X2DwpFvHf2Pp",
-    "predecessor_hash":"BMPteHPnRxtKXYWxt8A4w9C2JMiMk2gaFwnsjZx93Z8zxq2o2Qk",
-    "fitness":"00 000000000007e45c",
-    [...]
-  },
-  {
-    "hash":"BLGi4wKSL9PEPGwLAK7aKhkKwa3q9dhx4mZh2KLgJbYDW5Efuji",
-    "predecessor_hash":"BLEJsqC5py9NWs6GdoZkzw5MM7DRdyaBMxXyqwtp7gac1owcsDu",
-    "fitness":"00 000000000007e44b",
-    [...]
-  },
-  {
-    "hash":"BMVQ3ujNct6YDhwyuzRGPXCk4ZBpwyB3WtMQFGFrCw5a9KQjAEk",
-    "predecessor_hash":"BMFFDcfeEBNEf1XCgyNUi5XaaQefs2iGMj5DV8rkdsPozXRL5Tj",
-    "fitness":"00 000000000007e597",
-    [... same as /block/<blockhash>?operations=false ... ]
-  },
-  [...]
+    {
+        "operations": [
+            []
+        ],
+        "protocol": {
+            "hash": "PsYLVpVvgbLhAhoqAkMFUo6gudkJ9weNXhUYCiLDzcUpFpkk8Wt",
+            "name": "PsYLVpVvgbLhAhoqAkMFUo6gudkJ9weNXhUYCiLDzcUpFpkk8Wt"
+        },
+        "fitness": "00 0000000000548ab6",
+        "pow_nonce": "aba4ab31dc97ef7f",
+        "validation_pass": 4,
+        "commited_nonce_hash": "",
+        "fees": 0,
+        "nb_operations": 22,
+        "test_protocol": {
+            "hash": "PsYLVpVvgbLhAhoqAkMFUo6gudkJ9weNXhUYCiLDzcUpFpkk8Wt",
+            "name": "PsYLVpVvgbLhAhoqAkMFUo6gudkJ9weNXhUYCiLDzcUpFpkk8Wt"
+        },
+        "network": "NetXdQprcVkpaWU",
+        "proto": 2,
+        "distance_level": -1,
+        "priority": 0,
+        "hash": "BMRhCQ2pVmJbzKCp7idRyc8FJMVGn9LpJZvdHSJeov6pcCb3Db6",
+        "timestamp": "2018-11-12T07:14:14Z",
+        "signature": "sigraswUmuYk4kouvFxNxrGBvvddZFzkQ4mfmb5kRnhe78yAE7y7vpbhLEBEyeZjT2j7jaz77gZV4qVDXtraXgDnA25QAzVr",
+        "volume": 0,
+        "predecessor_hash": "BLUW9KbbpkZhEJfUFgxbBFSZdcs4nxyQdcF5amyaTNHjEejZGkF",
+        "data": "--",
+        "level": 185458,
+        "baker": {
+            "tz": "tz1SYq214SCBy9naR6cvycQsYcUGpBqQAE8d"
+        },
+        "test_network_expiration": "Not running",
+        "test_network": "Not running"
+    }, ...
 ]
 ```

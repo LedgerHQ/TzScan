@@ -255,6 +255,26 @@ let title_nb ?help s nb =
   | None -> span ele
   | Some h -> span (ele @ [ Glossary_doc.help h ])
 
+let find_page ?(urlarg="p") current_page =
+  if urlarg = "" then current_page
+  else
+    match find_url_arg urlarg with
+    | None -> current_page
+    | Some (_, p_str) ->
+      try
+        int_of_string p_str
+      with _ -> 1
+
+let find_size ?(urlarg="r") current_size =
+  if urlarg = "" then current_size
+  else
+    match find_url_arg urlarg with
+    | None -> current_size
+    | Some (_, p_str) ->
+      try
+        int_of_string p_str
+      with _ -> 20
+
 (* Simple table, no pagination *)
 module Make(M: sig
 
@@ -353,26 +373,6 @@ module MakePageGen(M: sig
   let current_size = ref M.page_size
   let min_size, max_size = 5, 50
 
-  let find_page ?(urlarg="p") () =
-    if urlarg = "" then !current_page
-    else
-      match find_url_arg urlarg with
-      | None -> !current_page
-      | Some (_, p_str) ->
-        try
-          int_of_string p_str
-        with _ -> 1
-
-  let find_size ?(urlarg="r") () =
-    if urlarg = "" then !current_size
-    else
-      match find_url_arg urlarg with
-      | None -> !current_size
-      | Some (_, p_str) ->
-        try
-          int_of_string p_str
-        with _ -> 20
-
   let make_common ?(footer=false) ?(suf_id = "") ~before ~after () =
     let panel_footer_content =
       if not footer then None
@@ -424,23 +424,19 @@ module MakePageGen(M: sig
               ]
         ]
 
-
   let paginate ?(page_sizer=true) ?(suf_id = "")
       ?urlarg_page ?urlarg_size ?nrows ?(title_span=M.title_span) updater =
-    begin
-      let div = find_component (title_id ^ suf_id) in
-      Manip.removeChildren div;
-      let span = title_span (match nrows with
-                               | None -> -1
-                               | Some nrows -> nrows) in
-      Manip.appendChild div span;
-    end;
+    let tdiv = find_component (title_id ^ suf_id) in
+    Manip.removeChildren tdiv;
+    let tspan = title_span (match nrows with
+        | None -> -1
+        | Some nrows -> nrows) in
+    Manip.appendChild tdiv tspan;
     let nb_pages page_size =
       match nrows with
       | None -> None
       | Some nb -> Some (max 1 ( (nb-1) / page_size + 1))
     in
-
     (* page is between 0 and nb_pages-1 *)
     let rec update_panel page page_size (rows: M.data) =
       let nb_pages = nb_pages page_size in
@@ -461,7 +457,7 @@ module MakePageGen(M: sig
       let make_paginate ?(prefix="") () =
         match nb_pages with
         | Some (0|1) ->
-           span ~a:[a_class ["hidden"]] []
+          span ~a:[a_class ["hidden"]] []
         | _ ->
           let items = List.map (function
               | Some p, true ->
@@ -542,9 +538,9 @@ module MakePageGen(M: sig
     and do_update page page_size =
       updater page page_size (update_panel page page_size)
     in
-    let r = find_size ?urlarg:urlarg_size () in
+    let r = find_size ?urlarg:urlarg_size !current_size in
     let r = max min_size (min r max_size) in
-    let p = find_page ?urlarg:urlarg_page () - 1 in
+    let p = find_page ?urlarg:urlarg_page !current_page - 1 in
     let p = match nb_pages r with
       | Some nb_pages -> max 0 (min p (nb_pages-1))
       | None -> p
@@ -567,18 +563,12 @@ let table_maker table_class theads
   match data with
   | Loading table_id ->
      div ~a: [ a_class [ btable_responsive ]; a_id table_id] [
-           tablex ~a:[ a_class [ btable; table_class ] ] [
-                    tbody
-                      ( (theads()) :: [
-                         tr [
-                             td [
-                                 Lang.pcdata_t s_fetching_data ] ] ] )]
-         ]
+       tablex ~a:[ a_class [ btable; table_class ] ] [
+         tbody
+           ( (theads()) :: [
+                 tr [ td [ Lang.pcdata_t s_fetching_data ] ] ] )] ]
   | Content (_name, _s_name, s_no_name, rows) -> match rows with
-    | [] ->
-      div ~a:[ a_class [ clg12; cxs12 ] ] [
-        pcdata_t s_no_name
-      ]
+    | [] -> div ~a:[ a_class [ clg12; cxs12 ] ] [ pcdata_t s_no_name ]
     | _ ->
       tablex ~a:[ a_class [ btable; table_class; btable_striped ] ] [
         tbody ( (theads()) :: rows)]
@@ -678,5 +668,170 @@ module MakePageNoTable
     in
     paginate ?page_sizer ?suf_id ?urlarg_page ?urlarg_size ~nrows updater;
     ()
+
+end
+
+let select_rows page page_size l =
+  List.rev @@ snd @@
+  List.fold_left (fun (i, acc) x ->
+      (i + 1, if i >= page * page_size && i < (page + 1) * page_size then x :: acc
+       else acc)) (0,[]) l
+
+module MakePageTableList(
+    M: sig
+      type data
+      val name : string
+      val title_span : int -> [> Html_types.span ] Tyxml_js.Html5.elt
+      val page_size : int
+      val theads : unit -> theads
+      val table_class : string
+
+    end) = struct
+
+  let s_name = ss_ M.name
+  let s_no_name = ss_ ("No " ^ M.name)
+
+  let title_id = Printf.sprintf "%s-title" M.name
+  let loading_id = Printf.sprintf "%s-loading" M.name
+  let table_id = Printf.sprintf "%s-table" M.name
+  let footer_id = Printf.sprintf "%s-footer" M.name
+
+  let current_page = ref 1
+  let current_size = ref M.page_size
+  let min_size, max_size = 5, 50
+  let datas : M.data list ref = ref []
+
+  let make_paginate ?(prefix="") page page_size seps f =
+    let mk_onclick_page page =
+      a_onclick (fun _ -> f page page_size; true) in
+    let nb_pages = max 1 ( ((List.length !datas - 1) / page_size + 1)) in
+    let pages = large_page_range page (Some nb_pages) in
+    if nb_pages <= 1 then span ~a:[a_class ["hidden"]] []
+    else (
+      let items = List.map (function
+          | Some p, true ->
+            li ~a:[a_class ["active"]] [a [ pcdata @@ string_of_int (p+1) ]]
+          | Some p, false ->
+            li [a ~a:[mk_onclick_page p; a_class ["hidden-xs"; "hidden-sm"]]
+                  [ pcdata @@ string_of_int (p+1) ]]
+          | None, _ ->
+            let link, id = PageInput.link_with_input ~prefix "..." in
+            seps := id :: !seps;
+            li ~a:[a_class ["hidden-xs"; "hidden-sm"; ]] [ link ]
+        ) pages in
+      let prev =
+        if page = 0 then li ~a:[a_class ["disabled"]] [a [pcdata "«"]]
+        else li [a ~a:[mk_onclick_page (page-1)] [pcdata "«"]] in
+      let next =
+        if nb_pages = page + 1 then li ~a:[a_class ["disabled"]] [a [pcdata "»"]]
+        else li [a ~a:[mk_onclick_page (page+1)] [pcdata "»"]] in
+      let mobile_select =
+        let link, id = PageInput.link_with_input ~prefix "..." in
+        seps := id :: !seps;
+        li ~a:[a_class ["hidden-lg"; "hidden-xl"; ]] [ link ] in
+      ul ~a:[a_class ["pagination"; "pagination-sm"]]
+        ( prev :: items @ [mobile_select; next] ))
+
+  let make_page_sizer page_sizer page page_size f =
+    let mk_onclick_size new_page_size id _ =
+      let b = find_component id in
+      let elt = Tyxml_js.To_dom.of_select b in
+      elt##innerHTML <- Js.string (Printf.sprintf "%s: %d" (t_ s_rows) page_size);
+      let new_page = page * page_size / new_page_size in
+      f new_page new_page_size in
+    if not page_sizer then span ~a:[a_class ["hidden"]] []
+    else
+      let open Bootstrap_helpers.Menu in
+      let sizes = [ min_size; 10; 20; max_size ] in
+      let id = Common.make_id M.name "size-selector" in
+      let select = List.map (fun p ->
+          Action ([], mk_onclick_size p id, pcdata (string_of_int p)))
+          sizes in
+      bootstrap_dropdown_button
+        ~btn_class:[ btn_default; btn_sm; ]
+        ~ctn_class:["hidden-xs"; "page-size"]
+        id
+        [ pcdata (Printf.sprintf "%s: %d" (t_ s_rows) page_size) ]
+        select
+
+  let make
+      ?(page_sizer=true) ?(suf_id="") ?urlarg_page ?urlarg_size
+      ?(footer=false) ?(panel_class=[]) ?(before=[]) ?(after=[])
+      to_trs l =
+    datas := l;
+    let nb_pages page_size = max 1 ( ((List.length !datas - 1) / page_size + 1)) in
+    let rec update_panel page page_size =
+      let nb_pages = nb_pages page_size in
+      let seps = ref [] in
+      let span_paging_up_top =
+        make_paginate ~prefix:"top-" page page_size seps update_panel in
+      let span_paging_up_bot =
+        make_paginate ~prefix:"bot-" page page_size seps update_panel in
+      let span_sizing = make_page_sizer page_sizer page page_size update_panel in
+      current_page := page+1;
+      current_size := page_size;
+      set_page_in_browser_url ?urlarg:urlarg_page (page+1);
+      set_size_in_browser_url ?urlarg:urlarg_size (!current_size);
+      let loading_div = find_component (loading_id ^ suf_id) in
+      Manip.removeChildren loading_div;
+      Manip.appendChildren loading_div [span_sizing; span_paging_up_top];
+      let rows = select_rows page page_size !datas in
+      let rows = to_trs rows in
+      let container = find_component (table_id ^ suf_id) in
+      let table = table_maker M.table_class M.theads
+          (Content (M.name, s_name, s_no_name, rows)) in
+      Manip.removeChildren container ;
+      Manip.appendChild container table;
+      begin match Manip.by_id (footer_id ^ suf_id) with
+      | Some footer ->
+        Manip.removeChildren footer ;
+        Manip.appendChild footer span_paging_up_bot
+      | _ -> () end;
+      PageInput.init_inputs !seps !current_page (Some nb_pages)
+        (fun p -> update_panel p page_size) in
+
+    let r = find_size ?urlarg:urlarg_size !current_size in
+    let r = max min_size (min r max_size) in
+    let p = find_page ?urlarg:urlarg_page !current_page - 1 in
+    let p = max 0 (min p (nb_pages r - 1)) in
+    let seps = ref [] in
+    let span_paging_up_top =
+      make_paginate ~prefix:"top-" p r seps update_panel in
+    let span_paging_up_bot =
+      make_paginate ~prefix:"bot-" p r seps update_panel in
+    let span_sizing = make_page_sizer page_sizer p r update_panel in
+    let rows = select_rows p r !datas in
+    let rows = to_trs rows in
+    let table = table_maker M.table_class M.theads
+        (Content (M.name, s_name, s_no_name, rows)) in
+    (* PageInput.init_inputs !seps !current_page (Some (nb_pages r))
+     *     (fun p -> update_panel p r); *)
+    let main_panel =
+      let panel_footer_content =
+        if not footer then None
+        else
+          Some [ div [
+              div ~a:[ a_class [ row ] ] [
+                div ~a:[ a_class [clg4; cxs5] ] [];
+                div ~a:[ a_id (footer_id ^ suf_id) ; a_class [ clg8; cxs7; "paginate"] ]
+                  [span_paging_up_bot] ] ] ] in
+      make_panel
+        ~panel_title_content:(
+          div [
+            div ~a:[ a_class [ row ] ] [
+              div ~a:[  a_id (title_id ^ suf_id) ; a_class [ clg4; cxs5 ] ]
+                [ M.title_span (List.length !datas)  ] ;
+              div ~a:[ a_id (loading_id ^ suf_id) ; a_class [ clg8; cxs7; "paginate"] ]
+                [span_sizing; span_paging_up_top]
+            ]
+          ])
+        ~panel_body_content:
+          ([ div
+               (before @ [
+                   div ~a: [ a_class [ btable_responsive ];
+                             a_id (table_id ^ suf_id) ] [ table ] ] @ after) ])
+        ?panel_footer_content ()
+    in
+    div ~a:[ a_class panel_class ] [ main_panel ]
 
 end

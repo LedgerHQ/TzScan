@@ -1187,30 +1187,36 @@ let bakings_from_db_list rows =
   List.fold_left
     (fun acc bk -> match bk with
        | (bk_block_hash, bk_baker_hash, bk_level, bk_cycle, bk_priority,
-          bk_distance_level, bk_fees, Some bk_bktime, Some bk_baked) ->
+          Some bk_missed_priority, bk_distance_level, bk_fees, Some bk_bktime,
+          Some bk_baked, bk_tsp) ->
          let bk_level = Int64.to_int bk_level in
          let bk_cycle = Int64.to_int bk_cycle in
          let bk_priority = Int32.to_int bk_priority in
          let bk_distance_level = Int64.to_int bk_distance_level in
          let bk_baker_hash = Alias.to_name bk_baker_hash in
+         let bk_tsp = string_of_cal bk_tsp in
+         let bk_missed_priority =
+           if bk_baked then Some (Int32.to_int bk_missed_priority)
+           else None in
          {bk_block_hash; bk_baker_hash; bk_level; bk_cycle ; bk_priority;
-          bk_distance_level; bk_fees; bk_bktime = int_of_float bk_bktime;
-          bk_baked} :: acc
+          bk_missed_priority; bk_distance_level; bk_fees;
+          bk_bktime = int_of_float bk_bktime; bk_baked; bk_tsp} :: acc
        | _ -> acc ) [] rows
 
 let bakings_endorsement_from_db_list rows =
   List.rev @@ List.fold_left (fun acc row -> match row with
       | (Some ebk_level, Some ebk_lr_nslot, ebk_block, ebk_source, ebk_cycle,
-         ebk_priority, ebk_dist, ebk_slots) ->
+         ebk_priority, ebk_dist, ebk_slots, ebk_tsp) ->
         let ebk_level = Int64.to_int ebk_level in
         let ebk_cycle = convert_opt Int64.to_int ebk_cycle in
         let ebk_dist = convert_opt Int32.to_int ebk_dist in
         let ebk_source = convert_opt Alias.to_name ebk_source in
         let ebk_priority = convert_opt Int32.to_int ebk_priority in
         let ebk_slots = convert_opt (Misc.unopt_list Int32.to_int) ebk_slots in
+        let ebk_tsp = convert_opt string_of_cal ebk_tsp in
         let ebk_lr_nslot = Int32.to_int ebk_lr_nslot in
         {ebk_block; ebk_source; ebk_level; ebk_cycle; ebk_priority;
-         ebk_dist; ebk_slots; ebk_lr_nslot} :: acc
+         ebk_dist; ebk_slots; ebk_lr_nslot; ebk_tsp} :: acc
       | _ -> acc) [] rows
 
 let cycle_bakings_from_db_list current_cycle rows =

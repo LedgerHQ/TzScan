@@ -116,3 +116,30 @@ let get_alternative_heads_hashes url =
 (* Shortcuts on [head] *)
 let current_level ?(block=head) url = level url block
 let head_block ?(block_hash=head) url = block url block_hash
+          
+let node_balance url block hash =
+  let path =
+    spf
+      "%s/blocks/%s/context/contracts/%s" root block hash in
+  (* debug "[crawler] node_balance %s\n%!" path ; *)
+  EzEncoding.destruct
+    Api_encoding.V1.Account_details.node_encoding @@
+  request ~cachable:(block <> head) url path
+                                    
+let node_contracts url bhash : (string * int64) list =  
+  let contracts = 
+    let path =
+      spf
+        "%s/blocks/%s/context/contracts/" root bhash in
+    EzEncoding.destruct
+      Tezos_encoding.Encoding.Contracts.encoding @@ request ~cachable:(bhash<>head) url path
+  in
+  List.map
+    (fun contract ->
+       let (_,b,_,_,_,_,_) = node_balance url bhash contract in contract,b)
+    contracts
+
+let db_balance url account =
+  let path= spf "/v1/balance_from_balance_updates/%s" account in
+  EzEncoding.destruct (Api_encoding.V1.Balance.encoding) @@
+    request ~cachable:false url path

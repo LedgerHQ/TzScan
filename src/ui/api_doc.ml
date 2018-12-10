@@ -30,24 +30,22 @@ let make_doc ?base_url () =
 
     let documentation =
       (*       Api_documentation.files @ *)
-      (List.map (fun section ->
-           EzAPI.section_name section,
-           EzAPI.md_of_services ~section ?base_url
-             (Api_info.files @ Service_doc.doc)
-         ) (Service.V2.sections
-            @
-            (match find_url_arg "doc" with
-             | None -> []
-             | Some _ -> Service.V2.other_sections)))
+      List.map (fun section ->
+          EzAPI.section_name section,
+          EzAPI.md_of_services ~section ?base_url
+            (Api_info.files @ Service_doc.doc)
+        ) (Service.V2.sections @
+           (match find_url_arg "doc" with
+            | None -> []
+            | Some _ -> Service.V2.other_sections))
     in
-    let left = Dom_html.createDiv Dom_html.window##document in
-    left##className <- Js.string clg9 ;
-    List.iter (fun (file, content) ->
-        let doc_html = Omd.(to_html @@ of_string content) in
-        let doc = Dom_html.createDiv Dom_html.window##document in
-        doc##id <- Js.string @@ Filename.remove_extension file ;
-        doc##innerHTML <- Js.string (doc_html ^ "<hr/>\n");
-        Dom.appendChild left doc) documentation ;
+    let left = div ~a:[ a_class [ clg9 ] ] (
+        List.map
+          (fun (file, content) ->
+             log "%s" (Filename.remove_extension file);
+             let div_section = div ~a:[ a_id (Filename.remove_extension file) ] [] in
+             Manip.setInnerHtml div_section (Omd.(to_html @@ of_string content) ^ "<hr/>\n");
+             div_section) documentation ) in
     let right =
       div ~a:[ a_class [ clg3 ] ] [
         ul ~a:[ a_class [ "list-group" ] ] @@
@@ -77,9 +75,7 @@ let make_doc ?base_url () =
       ]
     in
     let container =
-      div ~a:[ a_id "api-doc"; a_class [ row ] ] [
-        Tyxml_js.Of_dom.of_div left ;
-        right ] in
+      div ~a:[ a_id "api-doc"; a_class [ row ] ] [ left; right ] in
     Common.update_main_content container;
 
     (* Add a button Show/Hide and hide every <pre> longer than 2 lines *)

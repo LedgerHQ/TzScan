@@ -1,27 +1,39 @@
-
-### Sample Result
-
+###Sample result:
 ```json
 {
-   "hash":"BMVCUZCPwFMRD2SJkVMyVsVKW7bmx5PoVoEoN9TS1m9Hu2gdGpW",
-   "predecessor_hash":"BLq6BfiKfjHFCcJwseK4cVe3DVXQtjDRBJu9cF6BMoUMbXPdPj2",
-   "fitness":"00 00000000000785a5",
-   "timestamp":"2018-02-02T10:52:50Z",
-   "validation_pass":1,
-   ""operations":[[{"hash":"opYAPTdbCtwSUtSMnHNPF6ssVRQeV2StADMH2mZjQfKij2JLreC","branch":"","data":""}]],
-   "protocol":{ "name":"ProtoAlpha[...]", "hash":"ProtoALpha[...]"},
-   "test_protocol":{"name":"ProtoALpha[...]", "hash":"ProtoALpha[...]"},
-   "network":"NetXj4yEEKnjaK8",
-   "test_network":"PLACEHOLDER_test_network",
-   "test_network_expiration":"PLACEHOLDER_TEST_NETWORK_EXPIRATION",
-   "baker":"tz1ey28xfyVvtPRPN9d43Wbf1vkPs868CGXM",
-   "nb_operations":5,
-   "priority":0,
-   "level":63522,
-   "commited_nonce_hash":"nceUShE51M5EnRoNVTVkGSKr8Q8Eqk2GJG9bnaAEejmz4TXei2q4S",
-   "pow_nonce":"0aff540bd675d6cb",
-   "proto":1,
-   "data":"--",
-   "signature":"--"
+    "operations": [
+        []
+    ], 
+    "protocol": {
+        "hash": "PsYLVpVvgbLhAhoqAkMFUo6gudkJ9weNXhUYCiLDzcUpFpkk8Wt", 
+        "name": "PsYLVpVvgbLhAhoqAkMFUo6gudkJ9weNXhUYCiLDzcUpFpkk8Wt"
+    }, 
+    "fitness": "00 000000000055fb80", 
+    "pow_nonce": "ef92b20b72347f42", 
+    "validation_pass": 4, 
+    "commited_nonce_hash": "", 
+    "fees": 50, 
+    "nb_operations": 132, 
+    "test_protocol": {
+        "hash": "PsYLVpVvgbLhAhoqAkMFUo6gudkJ9weNXhUYCiLDzcUpFpkk8Wt", 
+        "name": "PsYLVpVvgbLhAhoqAkMFUo6gudkJ9weNXhUYCiLDzcUpFpkk8Wt"
+    }, 
+    "network": "NetXdQprcVkpaWU", 
+    "proto": 2, 
+    "distance_level": 0, 
+    "priority": 1, 
+    "hash": "BKyKuFqvCG7smSmXTewhigcVvHUTvecS8SAjsx7cjDzKe7js3HL", 
+    "timestamp": "2018-11-14T10:42:59Z", 
+    "signature": "sigmyVpxyDuvLXr8pzWcEDoTY6vPueumBNHQ1hEP3W19LyBiu4ZZ4emf7z6jCEbbEqvZBCRCoAa7b21RGuVFcC1MZ7qpAscP", 
+    "volume": "6550149453", 
+    "predecessor_hash": "BKxwxZWf59WiGAZcNe148BuDYcsuNQMhuHWCPBygB7orbLbrtPA", 
+    "data": "--", 
+    "level": 188418, 
+    "baker": {
+        "alias": "Tezos Community", 
+        "tz": "tz1TDSmoZXwVevLTEvKCTHWpomG76oC9S2fJ"
+    }, 
+    "test_network_expiration": "Not running", 
+    "test_network": "Not running"
 }
 ```

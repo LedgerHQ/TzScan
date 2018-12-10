@@ -15,6 +15,7 @@
 (************************************************************************)
 
 open Tezos_types
+open Data_types
 
 let debug fmt = Utils.debug !Debug_constants.debug_writer fmt
 
@@ -745,6 +746,7 @@ let register_block_operation block_hash op =
 
 let register_flat_operation kind op_level op_block_hash network tsp_block op =
   let op_hash = op.node_op_hash in
+  let block_hash = op.node_op_branch in
   List.iter (function
       | NTransaction transaction ->
         Printf.printf "register flat transaction %s\n%!" op_hash;
@@ -801,6 +803,43 @@ let register_flat_operation kind op_level op_block_hash network tsp_block op =
                timestamp_block = $tsp_block WHERE \
                hash = $op_hash"
           | _ -> () end
+      | NEndorsement endorsement ->
+        let src, slots =
+          match endorsement.node_endorse_metadata with
+          | None -> "", []
+          | Some metadata ->
+            begin match metadata.meta_op_delegate with
+             | None -> "" | Some delegate -> delegate
+            end,
+            begin match metadata.meta_op_slots with
+              | None -> [] | Some slots -> slots
+            end in
+        register_tezos_user src;
+        let level = Int64.of_int endorsement.node_endorse_block_level in
+        let slots = List.map (fun s -> Some (Int32.of_int s)) slots in
+        let op_cycle = Int64.of_int @@ Tezos_constants.cycle_from_level op_level in
+        let op_level = Int64.of_int op_level in
+        register_cycle_count_baker op_cycle src;
+        let priority =
+          match PGSQL(dbh) "SELECT priority FROM block WHERE hash = $block_hash" with
+          | [ p ] -> p
+          | _ -> assert false in
+        PGSQL(dbh)
+          "INSERT INTO endorsement_last \
+           (hash, source, block_hash, block_level, slots, priority, \
+           op_block_hash, op_level, op_cycle, distance_level, network, timestamp) \
+           VALUES \
+           ($op_hash, $src, $block_hash, $level, $slots, $priority, \
+           $op_block_hash, $op_level, $op_cycle, -1, $network, $tsp_block) \
+           ON CONFLICT DO NOTHING";
+        PGSQL(dbh)
+          "INSERT INTO endorsement_all \
+           (hash, source, block_hash, block_level, slots, priority, \
+           op_block_hash, op_level, op_cycle, distance_level, network, timestamp) \
+           VALUES \
+           ($op_hash, $src, $block_hash, $level, $slots, $priority, \
+           $op_block_hash, $op_level, $op_cycle, -1, $network, $tsp_block) \
+           ON CONFLICT DO NOTHING"
       | _ -> ()) op.node_op_contents
 
 let register_orphan_op op_hash =
@@ -921,7 +960,7 @@ let register_operations block ops =
   let block_hash = block.node_hash in
   let len = List.length ops in
   List.iteri (fun i op ->
-      debug "[Writer] register_operation %S %d \ %d\n%!" block_hash (i + 1) len ;
+      debug "[Writer] register_operation %S %d / %d\n%!" block_hash (i + 1) len ;
       let op_hash = op.node_op_hash in
       let oporphan =
         PGSQL(dbh)
@@ -950,6 +989,7 @@ let register_operations block ops =
                   match opt with
                   | [] ->
                     pg_lock (fun () ->
+                        (* operations to be linked to a first block *)
                         register_operation timestamp op;
                         register_block_operation block_hash op;
                         register_operation_type
@@ -962,6 +1002,7 @@ let register_operations block ops =
                           op.node_op_hash op.node_op_branch op.node_op_contents )
                   | _ ->
                     pg_lock (fun () ->
+                        (* operations pending to be linked to a first block *)
                         register_block_operation block_hash op;
                         register_flat_operation "update_flat_operation"
                           block.node_header.header_level block_hash
@@ -978,6 +1019,7 @@ let register_operations block ops =
                 end
               | _ ->
                 pg_lock (fun () ->
+                    (* operations to be linked to a new block *)
                     register_block_operation block_hash op;
                     register_flat_operation "new_flat_operation"
                       block.node_header.header_level block_hash
@@ -993,6 +1035,389 @@ let register_operations block ops =
           "UPDATE block_operation SET block_hash = $block_hash \
            WHERE operation_hash = $op_hash AND block_hash = 'Orphan'"
     ) ops
+
+let string_operation (op : node_operation_type option) : string =
+  match op with
+  | None -> "Header"
+  | Some op -> match op with
+      NTransaction _ -> "Transaction"
+    | NOrigination _ -> "Origination"
+    | NReveal _ -> "Reveal"
+    | NDelegation _ -> "Delegation"
+    | NSeed_nonce_revelation _ -> "Seed nonce revelation"
+    | NActivation _ -> "Activation"
+    | NDouble_endorsement_evidence _ -> "Double endorsement evidence"
+    | NDouble_baking_evidence _ -> "Double baking evidence"
+    | NEndorsement _ -> "Endorsement"
+    | NProposals _ -> "Proposals"
+    | NBallot _ -> "Ballot"
+    | NActivate -> "Activate"
+    | NActivate_testnet -> "Activate testnet"
+
+let bu_to_bu_info ?op may_burn bu_internal bu_level bu_date bu bu_block_hash =
+  let bu_op_type = string_operation op in
+  match bu with
+    Contract (bu_account, bu_diff) ->
+    Some
+      {bu_account;
+       bu_block_hash;
+       bu_diff;
+       bu_date;
+       bu_update_type = "Contract";
+       bu_op_type;
+       bu_internal;
+       bu_level;
+       bu_frozen = false;
+       bu_burn=may_burn} (* Contracts in originations/transactions may burn tez *)
+  | Rewards (bu_account,_,bu_diff)->
+    Some
+      {bu_account;
+       bu_block_hash;
+       bu_diff;
+       bu_date;
+       bu_update_type = "Reward";
+       bu_op_type;
+       bu_internal;
+       bu_level;
+       bu_frozen = true;
+       bu_burn=false}
+
+  | Fees (bu_account,_,bu_diff)->
+    Some
+      {bu_account;
+       bu_block_hash;
+       bu_diff;
+       bu_date;
+       bu_update_type = "Fee";
+       bu_op_type;
+       bu_internal;
+       bu_level;
+       bu_frozen = true;
+       bu_burn=false}
+
+  | Deposits (bu_account,_,bu_diff) ->
+    Some
+      {bu_account;
+       bu_block_hash;
+       bu_diff;
+       bu_date;
+       bu_update_type = "Deposit";
+       bu_op_type;
+       bu_internal;
+       bu_level;
+       bu_frozen = true;
+       bu_burn=false}
+
+let get_op_bal_update = function
+  | Some {meta_op_status;meta_op_balance_updates = Some l;_} ->
+    begin match meta_op_status with Some "applied" | None -> l | _ -> [] end
+  | _ -> []
+
+let rec get_man_bal_update ?op header_bu_infos man_mtdt is_orig internal date level block_hash =
+  let b_u = match man_mtdt.manager_meta_balance_updates with
+      Some b_u -> b_u
+    | None -> []
+  in
+  let bu_info_internal : balance_update_info list =
+    List.flatten
+      (List.map
+         (get_balance_update_info ~header_bu_infos date level true block_hash)
+         man_mtdt.manager_meta_internal_operation_results) in
+  let all_bu =
+    b_u
+    @ (get_op_bal_update man_mtdt.manager_meta_operation_result) in
+
+  bu_info_internal @
+  (
+    List.fold_left
+      (fun acc bu ->
+         let bu_info =
+           match op with
+             None -> bu_to_bu_info is_orig internal level date bu block_hash
+           | Some op -> bu_to_bu_info ~op is_orig internal level date bu block_hash in
+
+         match bu_info with
+           None -> acc
+         | Some bu -> bu :: acc) [] all_bu)
+
+and get_balance_update_info
+    ?(header_bu_infos=[])
+    (date : Date.t)
+    (level : int32)
+    (internal:bool)
+    (block_hash : block_hash)
+    (op : node_operation_type) =
+  match op with
+    NTransaction {node_tr_metadata = Some man_mtdt; _ }
+  | NReveal {node_rvl_metadata = Some man_mtdt; _ }
+  | NDelegation {node_del_metadata = Some man_mtdt; _ } ->
+    get_man_bal_update ~op header_bu_infos man_mtdt false internal date level block_hash
+
+  | NOrigination {node_or_metadata = Some man_mtdt; node_or_manager = manager; _} ->
+     (* Burns tez *)
+    let (bu_info : balance_update_info list) =
+      get_man_bal_update ~op header_bu_infos man_mtdt true internal date level block_hash in
+    (* Burned tez appear as contracts. For usual operations, contracts go by pairs
+         (one is debited, the other credited).
+         Burnt tez are the only unpaired contracts.*)
+    let () =
+      List.iter
+        (fun (info : balance_update_info) ->
+           if not info.bu_burn || not (String.equal info.bu_account manager)
+           then () (* It has either been treated, or is not a burn contract *)
+           else
+             let opp_val = Int64.neg info.bu_diff in
+             let is_not_burn : bool =
+               List.exists
+                 (fun (i:balance_update_info) ->
+                    if Int64.equal opp_val i.bu_diff
+                    then let () = i.bu_burn <- false in true
+                    else false
+                 )
+                 bu_info
+             in
+             info.bu_burn <- not is_not_burn
+        )
+        (bu_info@header_bu_infos)
+    in bu_info
+
+  | NSeed_nonce_revelation {node_seed_metadata = op_mtdt ; _ }
+  | NActivation {node_act_metadata = op_mtdt ; _ }
+  | NDouble_endorsement_evidence {node_double_endorsement_metadata = op_mtdt ; _ }
+  | NDouble_baking_evidence {node_double_bh_metadata = op_mtdt ; _ }
+  | NEndorsement {node_endorse_metadata = op_mtdt ; _ }
+  | NProposals {node_prop_metadata = op_mtdt ; _ }
+  | NBallot {node_ballot_metadata = op_mtdt ; _ } ->
+    List.fold_left
+      (fun acc bu ->
+         match bu_to_bu_info ~op false internal level date bu block_hash with
+           None -> acc
+         | Some bu -> bu :: acc)
+      []
+      (get_op_bal_update op_mtdt)
+
+  | _ -> []
+
+let insert_bu_info bu =
+  let (hash : string) = bu.bu_account in
+  let (diff : int64) = bu.bu_diff in
+  let (date : CalendarLib.Calendar.t) = Pg_helper.cal_of_date bu.bu_date in
+  let (update_type : string) = bu.bu_update_type in
+  let (internal : bool) = bu.bu_internal in
+  let (level : int32) = bu.bu_level in
+  let (frozen: bool) = bu.bu_frozen in
+  let (burn : bool) = bu.bu_burn in
+  let (block_hash: block_hash) = bu.bu_block_hash in
+  let (op_type : string) = bu.bu_op_type in
+  PGSQL(dbh)
+    "INSERT INTO balance_updates \
+     (hash, block_hash, diff, date, update_type, operation_type, internal, level, frozen, burn) \
+     VALUES \
+     ($hash, $block_hash, $diff, $date, $update_type, $op_type, $internal, $level, $frozen, $burn)"
+
+let bu_infos_from_block block =
+
+  let date = block.node_header.header_timestamp in
+  let ops = List.flatten block.node_operations in
+  let level = Int32.of_int block.node_header.header_level in
+  let block_hash = block.node_hash in
+  let header_bu_infos =
+    match block.node_metadata.meta_header.header_meta_balance_updates with
+      None -> []
+    | Some l ->
+      List.fold_left
+        (fun acc bu ->
+           match bu_to_bu_info true true level date bu block_hash with
+             None -> acc
+           | Some bu_info -> bu_info :: acc) [] l in
+    List.fold_left
+      (fun acc op ->
+         List.flatten (
+             List.map
+               (get_balance_update_info ~header_bu_infos date level false block_hash)
+               op.node_op_contents) @ acc)
+      header_bu_infos
+      ops
+
+let register_balance_updates_info balance_update_infos =
+  List.iter insert_bu_info balance_update_infos
+
+module StrMap =
+    Map.Make(
+    struct
+      type t = string
+      let compare =
+        String.compare end)
+
+let update_new_cycle cycle =
+  let next_cycle = Int32.add cycle Int32.one in
+  (* New cycle for balance history *)
+
+  let accounts =
+  PGSQL(dbh)
+        "SELECT hash,spendable_balance,frozen,rewards,fees,deposits \
+         FROM balance_from_balance_updates \
+         WHERE cycle=$cycle" in
+  List.iter
+    (fun (hash,sp_bal,frz,rew,fees,deps) ->
+       PGSQL(dbh)
+         "INSERT INTO balance_from_balance_updates \
+         (hash,spendable_balance,frozen,rewards,fees,deposits,cycle) \
+         VALUES \
+         ($hash,$sp_bal,$frz,$rew,$fees,$deps,$next_cycle)")
+    accounts;
+
+  (* There are too much balance updates for the db to be efficient.
+     Every 5 cycle, sanitize the table balance_updates. *)
+
+  if Int32.compare cycle @@ Int32.of_int 6 < 0
+  then () (* Do nothing *)
+  else (* sanitize *)
+    let level_min =
+      Int32.mul
+        (Int32.sub cycle @@ Int32.of_int 6)
+        (Int32.of_int Tezos_constants.Constants.block_per_cycle)
+    in
+    let level_max = Int32.add level_min @@ Int32.of_int Tezos_constants.Constants.block_per_cycle
+    in
+    PGSQL(dbh)
+        "DELETE FROM balance_updates \
+         WHERE level<=$level_max AND level>=$level_min"
+
+let update_balance_from_balance_updates
+      cycle
+      hash
+      total_diff =
+    let old_balances =
+      PGSQL(dbh)
+        "SELECT spendable_balance,frozen,rewards,fees,deposits,cycle \
+         FROM balance_from_balance_updates WHERE hash=$hash \
+         ORDER BY cycle DESC LIMIT 1" in
+
+    match old_balances with
+    | [] ->
+      let next_cycle = Int32.add cycle Int32.one in
+      let s_diff = total_diff.b_spendable
+      and f_diff = total_diff.b_frozen
+      and rew_diff = total_diff.b_rewards
+      and fee_diff = total_diff.b_fees
+      and dep_diff = total_diff.b_deposits in
+
+          PGSQL(dbh)
+            "INSERT INTO balance_from_balance_updates \
+             (hash,spendable_balance,frozen,rewards,fees,deposits,cycle) \
+             VALUES \
+             ($hash,0,0,0,0,0,$cycle)";
+          PGSQL(dbh)
+            "INSERT INTO balance_from_balance_updates \
+             (hash,spendable_balance,frozen,rewards,fees,deposits,cycle) \
+             VALUES \
+             ($hash,$s_diff,$f_diff,$rew_diff, $fee_diff,$dep_diff,$next_cycle)"
+
+    | (sb,frz,rew,fees,deps,last_cycle) :: _ ->
+      let new_spd_bal =
+        Int64.add sb total_diff.b_spendable
+      in
+      let new_frz_bal =
+        Int64.add frz total_diff.b_frozen
+      in
+      let new_rw_bal =
+        Int64.add rew total_diff.b_rewards
+      in
+      let new_fee_bal =
+        Int64.add fees total_diff.b_fees
+      in
+      let new_dep_bal =
+        Int64.add deps total_diff.b_deposits
+      in
+      PGSQL(dbh)
+        "UPDATE balance_from_balance_updates \
+         SET \
+         spendable_balance=$new_spd_bal, \
+         frozen=$new_frz_bal, \
+         rewards=$new_rw_bal, \
+         fees=$new_fee_bal, \
+         deposits=$new_dep_bal \
+         WHERE \
+         hash=$hash AND cycle=$last_cycle"
+
+let register_balance_from_balance_updates level (bu_list : (account_hash * int64 * bool * string) list) =
+  let update_map acc bu  =
+    let hash,diff,frz,update_type = bu in
+    StrMap.update
+      hash
+      (fun old ->
+         let diff_balance =
+           {b_spendable = if frz then Int64.zero else diff;
+            b_frozen = if frz then diff else Int64.zero;
+            b_rewards = if update_type = "Reward" then diff else Int64.zero;
+            b_fees = if update_type = "Fee" then diff else Int64.zero;
+            b_deposits = if update_type = "Deposit" then diff else Int64.zero;
+           }
+         in
+          match old with
+            None -> Some diff_balance
+          | Some bal ->
+
+            let (+) = Int64.add in
+
+            Some (
+              {b_spendable = bal.b_spendable + diff_balance.b_spendable;
+               b_frozen = bal.b_frozen + diff_balance.b_frozen;
+               b_rewards =  bal.b_rewards + diff_balance.b_rewards;
+               b_fees =  bal.b_fees + diff_balance.b_fees;
+               b_deposits =  bal.b_deposits + diff_balance.b_deposits;
+           }))
+      acc
+  in
+  let bal_map =
+    List.fold_left
+      update_map
+      StrMap.empty
+      bu_list
+  in
+  let cycle = Int32.(div level @@ of_int Tezos_constants.Constants.block_per_cycle) in
+
+  StrMap.iter
+    (update_balance_from_balance_updates cycle)
+    bal_map;
+
+  if Int32.(equal (mul cycle @@ of_int Tezos_constants.Constants.block_per_cycle) level)
+  (*i.e. this is a new cycle *)
+  then update_new_cycle cycle
+
+let register_init_balance hash init date level =
+  let bu_info =
+    {
+      bu_account = hash;
+      bu_block_hash = "";
+      bu_diff = init;
+      bu_date = date;
+      bu_update_type = "Initialization";
+      bu_op_type = "";
+      bu_internal = true;
+      bu_level = Int32.of_int level;
+      bu_frozen = false;
+      bu_burn = false}
+  in
+  insert_bu_info bu_info;
+  update_balance_from_balance_updates
+    Int32.zero
+    hash
+    {b_spendable = init;
+     b_frozen = Int64.zero;
+     b_rewards = Int64.zero;
+     b_fees = Int64.zero;
+     b_deposits =Int64.zero}
+
+let register_balances_updates block =
+  let bu_infos = bu_infos_from_block block
+  in
+  register_balance_updates_info bu_infos
+
+
+  (*register_balance_from_balance_updates bu_infos
+    (Int32.of_int block.node_header.header_level) *)
 
 let compute_volume_fees ops =
   List.fold_left (fun (acc_vol, acc_fee) op ->
@@ -1031,7 +1456,9 @@ let register_all block lvl ops =
   pg_lock (fun () ->
       register_header block.node_header;
       register_block block lvl (-1L) operation_count volume fees;
-      register_operations block ops)
+      register_operations block ops;
+      register_balances_updates block
+    )
 
 let update_count_info ?(force=false) hash level info =
   match PGSQL(dbh) "SELECT level FROM count_info WHERE info = $info" with
@@ -1263,13 +1690,67 @@ let update_counts ?(force=false) hash sign =
     update_count_info ~force hash level "highest";
   | _ -> debug "[Writer] [update_counts_main] block not registered"
 
+let reset_balance_from_balance_updates account diff frz up_type level  =
+  debug "[Writer] [reset_balance] %s : undoing %s balance_update : diff = %s"
+    account (if frz then "frozen" else "contract") (Int64.to_string diff);
+  let cycle_in_bfbu =
+    (* We add one because the index of balance_from_balance_updates has an offset of 1 *)
+    Int32.(add (div level (of_int Tezos_constants.Constants.block_per_cycle)) Int32.one) in
+  if not frz then
+    PGSQL(dbh)
+      "UPDATE balance_from_balance_updates \
+       SET spendable_balance=spendable_balance - $diff \
+       WHERE hash=$account AND cycle>=$cycle_in_bfbu"
+  else
+    let () =
+      PGSQL(dbh)
+        "UPDATE balance_from_balance_updates \
+         SET frozen=frozen - $diff \
+         WHERE hash=$account AND cycle>=$cycle_in_bfbu"
+    in
+    match up_type with
+      "Reward" ->
+      PGSQL(dbh)
+        "UPDATE balance_from_balance_updates \
+         SET rewards=rewards - $diff \
+         WHERE hash=$account AND cycle>=$cycle_in_bfbu"
+    | "Fee" ->
+      PGSQL(dbh)
+        "UPDATE balance_from_balance_updates \
+         SET fees=fees - $diff \
+         WHERE hash=$account AND cycle>=$cycle_in_bfbu"
+    | "Deposit" ->
+      PGSQL(dbh)
+        "UPDATE balance_from_balance_updates \
+         SET deposits=deposits - $diff \
+         WHERE hash=$account AND cycle>=$cycle_in_bfbu"
+    | s -> debug "[Writer] [update_balance_updates] %s undefined" s
+
 let update_distance_level_alt level =
   PGSQL(dbh) "UPDATE block SET distance_level = -1 WHERE level > $level" ;
   PGSQL(dbh) "UPDATE endorsement_all SET distance_level = -1 WHERE op_level > $level" ;
   PGSQL(dbh) "UPDATE endorsement_last SET distance_level = -1 WHERE op_level > $level";
   PGSQL(dbh) "UPDATE transaction_all SET distance_level = -1 WHERE op_level > $level" ;
-  PGSQL(dbh) "UPDATE transaction_last SET distance_level = -1 WHERE op_level > $level"
+  PGSQL(dbh) "UPDATE transaction_last SET distance_level = -1 WHERE op_level > $level";
+  let level32= Int64.to_int32 level in
+  let bad_bal_updt =
+    PGSQL(dbh) "SELECT hash,diff,frozen,update_type FROM balance_updates \
+                WHERE level > $level32 AND distance_level = 0" in
+  List.iter
+    (fun (account,diff,frz,up_type) ->
+       reset_balance_from_balance_updates account diff frz up_type level32)
+    bad_bal_updt;
 
+  PGSQL(dbh) "UPDATE balance_updates SET distance_level = -1 WHERE level > $level32"
+
+let update_balances level block_hash =
+  debug "[Writer] [update_balance_updates]";
+  let level = Int32.of_int level in
+  let good_bal_updts =
+    PGSQL(dbh) "SELECT hash,diff,frozen,update_type FROM balance_updates \
+                WHERE block_hash=$block_hash AND level=$level"
+  in
+  register_balance_from_balance_updates level good_bal_updts
 
 let reset_main_chain count start_level level64 =
   debug "[Writer] [reset_main_chain] %d %Ld\n%!" start_level level64 ;
@@ -1327,6 +1808,7 @@ let update_distance_level_main count hash =
   PGSQL(dbh) "UPDATE endorsement_last SET distance_level = 0 WHERE op_block_hash = $hash";
   PGSQL(dbh) "UPDATE transaction_all SET distance_level = 0 WHERE op_block_hash = $hash";
   PGSQL(dbh) "UPDATE transaction_last SET distance_level = 0 WHERE op_block_hash = $hash";
+  PGSQL(dbh) "UPDATE balance_updates SET distance_level = 0 WHERE block_hash = $hash";
   if count then update_counts ~force:true hash 1L
 
 
@@ -1335,20 +1817,24 @@ let register_main_chain count block =
       let hash = block.node_hash in
       let pred_hash = block.node_header.header_predecessor in
       let start_level = block.node_header.header_level in
-      let rec register_aux hash pred_hash level =
-        debug "[Writer] [register_main_chain] %d\n%!" level ;
+      let rec register_aux hash pred_hash curr_level =
+        debug "[Writer] [register_main_chain] %d\n%!" curr_level ;
+
         match  PGSQL(dbh) "SELECT predecessor, level, distance_level \
                            FROM block WHERE hash = $pred_hash" with
         | [ _, level, 0L ] ->
           reset_main_chain count start_level level ;
+          update_balances curr_level hash;
           update_distance_level_main count hash
         | [ pred, level, _ ] ->
           register_aux pred_hash pred @@ Int64.to_int level ;
+          update_balances curr_level hash;
           update_distance_level_main count hash
         | _ ->
           debug "[Writer] [main_chain] Can't recover main chain status for %s\n%!"
             pred_hash in
-      register_aux hash pred_hash start_level)
+      register_aux hash pred_hash start_level;
+    )
 
 let peer_to_string peer =
   match peer with

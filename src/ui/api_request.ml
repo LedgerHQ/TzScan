@@ -50,20 +50,20 @@ let find_level () =
   here. *)
 
 module Api : sig
-   val request0 : 
+  val request0 :
     ?error:EzRequest.error_handler ->
     'a EzAPI.service0 -> string -> ?post:bool ->
     ?headers:(string * string) list ->
     ?params:(EzAPI.param * EzAPI.arg_value) list ->
     ('a -> unit) -> unit
 
-val request1 : ?error:EzRequest.error_handler ->
-('a, 'b) EzAPI.service1 ->
-string ->
-?post:bool ->
-?headers:(string * string) list ->
-?params:(EzAPI.param * EzAPI.arg_value) list ->
-('b -> unit) -> 'a -> unit
+  val request1 : ?error:EzRequest.error_handler ->
+    ('a, 'b) EzAPI.service1 ->
+    string ->
+    ?post:bool ->
+    ?headers:(string * string) list ->
+    ?params:(EzAPI.param * EzAPI.arg_value) list ->
+    ('b -> unit) -> 'a -> unit
 
 end = struct
   let request0 ?error s name ?post ?headers ?params cont =
@@ -76,9 +76,11 @@ let page_params page page_size =
   [Service.param_page, I page;
    Service.param_number, I page_size]
 
+let kind_param kind = Service.param_kind, S kind
+
 let page_request0 ?error service name ?(params=[]) =
   fun page page_size cont ->
-    request0 ?error service name cont ~params:(params @ (page_params page page_size)) 
+    request0 ?error service name cont ~params:(params @ (page_params page page_size))
 
 let page_request1 ?error service name arg ?(params=[]) =
   fun page page_size cont ->
@@ -92,6 +94,15 @@ module Node_state = struct
       update
 
 end
+
+(** Toplevel requests with handler *)
+let blocks ?(params=[]) ?(log_msg="Toplevel.blocks") handler =
+    request0 ~params V1.blocks log_msg (fun blocks -> handler blocks)
+
+let head ?(params=[]) ?(log_msg="Toplevel.head") handler =
+  request0 ~params V1.head log_msg (fun h -> handler h)
+
+(* ******* *)
 
 module Home = struct
 
@@ -107,8 +118,9 @@ module Home = struct
         (fun ops -> Home_ui.update_leftbox_nb_transactions (List.length ops))
         ~params:[ Service.param_type, S "Transaction" ]
     in
-
-    request0 V1.blocks "Home.heads"
+    blocks
+      ~log_msg:"Home.heads"
+      ~params:[ Service.param_number, I 6 ]
       (fun blocks -> Home_ui.update_blocks blocks;
         match blocks with
         | hd :: _tl ->
@@ -118,7 +130,6 @@ module Home = struct
           transactions hd.hash ;
           (level()) hd.hash
         | [] -> assert false)
-      ~params:[ Service.param_number, I 6 ]
 
   let marketcap ()  =
     request0 V1.marketcap "Home.marketcap"
@@ -142,7 +153,8 @@ end
 
 let confirmation update bhash =
   level bhash (fun blevel ->
-      request0 V1.head "Operation+Block.confirmation(head)"
+      head
+        ~log_msg:"Operation+Block.confirmation(head)"
         (fun head -> update bhash blevel (head.level - blevel)))
 
 module Block = struct
@@ -240,24 +252,29 @@ module Operation = struct
            lvl.lvl_level) block_hash
 
   let operation hash args =
+    let block_hash = List.find_opt (fun (k, _v) -> k = "block_hash") args in
+    let params = match block_hash with
+      | None -> []
+      | Some (_k, v) -> [Service.param_block_hash, S v] in
     with_price_usd (fun price_usd ->
-         request1 V1.operation "Operation.operation"
-           (fun op ->
-              match op.op_type with
-              | Sourced Consensus Endorsement endorse ->
-                endorsements op args endorse.endorse_block_hash
-              | _ ->
-                Operation_ui.update_operation_summary
-                       ?price_usd op args ;
-                timestamp op.op_block_hash (Operation_ui.update_timestamp op.op_hash) ;
-                confirmation Operation_ui.update_confirmation op.op_block_hash ;
-                Operation_ui.update_tabs ()
-           )
-           ~error:(fun _status _content ->
-               let content = Search.not_found hash in
-               Common.update_main_content content
-             )
-           hash)
+        request1 V1.operation "Operation.operation"
+          ~params
+          (fun op ->
+             match op.op_type with
+             | Sourced Consensus Endorsement endorse ->
+               endorsements op args endorse.endorse_block_hash
+             | _ ->
+               Operation_ui.update_operation_summary
+                 ?price_usd op args ;
+               timestamp op.op_block_hash (Operation_ui.update_timestamp op.op_hash) ;
+               confirmation Operation_ui.update_confirmation op.op_block_hash ;
+               Operation_ui.update_tabs ()
+          )
+          ~error:(fun _status _content ->
+              let content = Search.not_found hash in
+              Common.update_main_content content
+            )
+          hash)
 
   let request hash args =
     operation hash args
@@ -527,6 +544,17 @@ module Account = struct
       hash
 
   let bakings_tables hash =
+    let rec close_bakings () =
+      request1 V1.last_baking_and_endorsement "Account.last_baking_and_endorsement"
+        (fun last_infos ->
+           request1 V1.next_baking_and_endorsement "Account.next_baking_and_endorsement"
+             (fun next_infos ->
+                Account_ui.update_close_baking_and_endorsement last_infos next_infos
+                  close_bakings)
+             hash)
+        hash in
+    close_bakings ();
+
     request1 V1.nb_bakings_history "Account.number_bakings_history"
       (fun nrows -> let nrows = nrows in
         Account_ui.update_baking_history ~nrows
@@ -560,13 +588,83 @@ module Account = struct
                (page_request1 V1.delegator_rewards "Account.delegator_rewards" hash))
           hash
       | _ -> ()
-  (* ;
-     *
-     * request1 V1.rewards_stats "Account.rewards_stats"
-     *   ~params:[]
-     *   (Rewards_ui.update_rewards_summary hash)
-     *   hash *)
 
+  let balance_history ?price_usd hash =
+    request1
+      V1.balance_history
+      "Balance_update.balance_history"
+      ~params:[]
+      (fun hist ->
+        request0
+          V1.head
+          "Balance_updates.level"
+          (fun head ->
+            let level = head.level in
+            let current_cycle = Infos.cycle_from_level ~cst:(Infos.constants ~cycle:0) level in
+                request1
+                  V1.cycle_all_rights
+                  "Balance_update.cycle_all_rights"
+                  ~params:[Service.param_cycle, I current_cycle]
+                  (fun (baks,ends) ->
+                    request1
+                      V1.cycle_frozen
+                      "Balance_update.cycle_frozen"
+                      ~params:[Service.param_cycle, I (current_cycle - 5)]
+                      (fun upcoming_unfrozen ->
+                         Balance_ui.update_balance_ui
+                           ?price_usd
+                           hash hist current_cycle level baks ends upcoming_unfrozen
+                      )
+                      hash
+                  ) hash
+          )
+      ) hash
+
+  let balance_update_number hash =
+    request1
+      V1.balance_updates_number
+      "Balance_update.balance_update_number"
+      ~params:[]
+      (Account_ui.update_nb_balance_updates hash)
+      hash
+
+  let balance_updates hash =
+
+    request1
+      V1.balance_updates_number
+      "Balance_update.balance_update_number"
+      ~params:[]
+      ~error:(fun _ _ -> balance_history hash)
+      (fun nrows ->
+         request0 V1.marketcap "Home.marketcap"
+           (fun marketcap ->
+              let price_usd = marketcap.price_usd in
+              Account_ui.update_account_balance_updates
+                ~price_usd
+                hash
+                ~nrows
+                (page_request1
+                   V1.balance_updates
+                   "Balance_update.balance_updates"
+                   hash
+                   ~params:[];
+                );
+              balance_history ~price_usd hash
+           )
+           ~error:(fun _ _ ->
+               Account_ui.update_account_balance_updates
+                 hash
+                 ~nrows
+                 (page_request1
+                    V1.balance_updates
+                    "Balance_update.balance_updates"
+                    hash
+                    ~params:[]
+                 );
+               balance_history hash
+             )
+      )
+      hash
 
   let request hash filters =
     account_details hash (fun ?price_usd hash balance delegate ->
@@ -575,6 +673,7 @@ module Account = struct
         originations_number hash;
         endorsements_number hash;
         bakings_status hash;
+        balance_update_number hash;
         (* roll_number hash (bonds_rewards hash balance) ; *)
         bonds_rewards ?price_usd hash balance ;
         baking_required_balance hash balance delegate
@@ -585,6 +684,7 @@ module Account = struct
     Account_ui.update_originations default hash originations ;
     Account_ui.update_endorsements default hash endorsements ;
     Account_ui.update_bakings default hash bakings_tables ;
+    Account_ui.update_balance_updates default hash balance_updates ;
     Account_ui.update_rewards default hash rewards_tables
 end
 
@@ -606,21 +706,18 @@ module Blocks = struct
     request0 V1.nb_cycle_rights "Blocks.nb_pending_priorities" ~params
       (fun nrows -> Blocks_ui.update_baking_rights ~future:false ~nrows
           (page_request0 V1.cycle_rights "Blocks.baking_rights" ~params))
-      
-
-
   let request () =
-    request0 V1.head "Blocks.head"
+    head
+      ~log_msg:"Blocks.head"
       (fun head -> let nrows = head.level+1 in
         request0 V1.snapshot_levels "Blocks.snapshot_levels"
           (fun snapshots ->
              Blocks_ui.update_blocks ~snapshots ~nrows
                (fun page page_size cont ->
-                  request0 V1.blocks "Blocks.blocks"
+                  blocks
+                    ~log_msg:"Blocks.blocks"
                     ~params:(page_params page page_size)
-                    (fun l -> cont l; List.iter Block.block_uncles l)
-                    ))) 
-
+                    (fun l -> cont l; List.iter Block.block_uncles l))))
 end
 
 module Accounts = struct
@@ -652,6 +749,48 @@ module Accounts = struct
 
 end
 
+module Top_accounts = struct
+
+  let request () =
+    Top_accounts_ui.update_cmd (fun selection ->
+        let kind = Top_accounts_ui.selection_to_kind selection in
+        match selection with
+        | "Balances" ->
+          request0
+            V1.nb_cycle
+            "Balance_updates.nb_cycle"
+            (fun last_cycle ->
+               Top_accounts_ui.update_ranking_table
+                 (page_request0
+                    V1.balance_ranking
+                    "Balance_update.balance_ranking"
+                    ~params:[Service.param_cycle, I last_cycle;
+                             Service.param_spendable, S (string_of_bool true)])
+            )
+        | _ ->
+          let param = kind_param kind in
+          request0 V1.nb_tops "Top_accounts.nb_tops"
+            (fun nrows ->
+               request0 V1.context_days "Context.days"
+                 (fun days -> match days with
+                    | hd :: _ ->
+                      request1 V1.context_stats "Context.stats"
+                        (fun context ->
+                           let total =
+                             Top_accounts_ui.selection_to_total context selection in
+                           let level = context.context_level in
+                           Top_accounts_ui.update
+                             nrows
+                             kind
+                             level
+                             total
+                             (page_request0 V1.tops "Top_accounts.tops" ~params:[ param ]))
+                        hd
+                    | _ -> ()))
+            ~params:[ param ])
+
+end
+
 module Heads = struct
 
   let request () =
@@ -667,7 +806,7 @@ module Heads = struct
                   ~params:(page_params page page_size)
                   (fun blocks -> cont blocks;
                     List.iter Block.block_uncles blocks)
-                  )) 
+                  ))
     | Some level ->
       (* we do this to avoid to paginate when showing uncles of a
          given level *)
@@ -760,16 +899,15 @@ module Operations = struct
 
     let request () =
       request0 V1.nb_cycle "Nonces.nb_cycle"
-        (fun nrows ->
-           Operations_ui.Nonces.update_nonces ~nrows
+        (fun nrows ->           Operations_ui.Nonces.update_nonces ~nrows
              (page_request0 V1.nonces "Nonces.nonces"))
-       
+
 
   end
 
   let update_activation_alert () =
     request0 V1.activated_balances "Operations.activated_balances"
-      (fun blc -> Operations_ui.update_activation_alert blc) 
+      (fun blc -> Operations_ui.update_activation_alert blc)
 
 end
 
@@ -785,7 +923,6 @@ module Network = struct
     request0 V1.nb_network_peers "Network.nb" ~params
       (fun nrows -> Network_stats_ui.update_peers ~nrows
           (page_request0 V1.network_stats "Network.stats.network" ~params))
-      
 end
 
 module Charts = struct
@@ -802,39 +939,39 @@ module Charts = struct
                 (fun bakers ->
                    Charts_ui.update_bakers_chart (Array.of_list bakers))
                 ~params
-              )) 
+              ))
 
   let request_blocks_per_day () =
     request0 V1.blocks_per_day "Charts.blocks_per_day"
-      Charts_ui.update_blocks_per_day 
+      Charts_ui.update_blocks_per_day
 
   let request_delay_per_day () =
     request0 V1.blocks_per_day "Charts.blocks_per_day"
-      Charts_ui.update_delay_per_day 
+      Charts_ui.update_delay_per_day
 
   let request_bakers_per_day () =
     request0 V1.bakers_per_day "Charts.bakers_per_day"
-      Charts_ui.update_bakers_per_day 
+      Charts_ui.update_bakers_per_day
 
   let request_priorities_per_day () =
     request0 V1.priorities_per_day "Charts.priorities_per_day"
-      Charts_ui.update_priorities_per_day 
+      Charts_ui.update_priorities_per_day
 
   let request_operations_per_day () =
     request0 V1.operations_per_day "Charts.operations_per_day"
-      Charts_ui.update_operations_per_day 
+      Charts_ui.update_operations_per_day
 
   let request_operations_per_block_per_day () =
     request0 V1.operations_per_block_per_day "Charts.operations_per_block_per_day"
-      Charts_ui.update_operations_per_block_per_day 
+      Charts_ui.update_operations_per_block_per_day
 
   let request_fees_per_day () =
     request0 V1.fees_per_day "Charts.fees_per_day"
-      Charts_ui.update_fees_per_day 
+      Charts_ui.update_fees_per_day
 
   let request_volume_per_day () =
     request0 V1.volume_per_day "Charts.volume_per_day"
-      Charts_ui.update_volume_per_day 
+      Charts_ui.update_volume_per_day
 
   let request_market_prices () =
     request0 V1.market_prices "Charts.market_prices"
@@ -851,7 +988,7 @@ module Server = struct
          Infos.api.api_date <- info.api_date ;
          Format_date.set_server_date info.api_date ;
          redraw ()
-      ) 
+      )
 
 end
 
@@ -865,13 +1002,14 @@ module Rolls_distribution = struct
               let cycle = int_of_string cycle in
               request1 V1.rolls_distribution "Rolls_distribution"
                 (Rolls_distribution_ui.update_rolls_distrib cycle)
-                cycle)) 
+                cycle))
 end
 
 module Health = struct
 
   let stats () =
-    request0 V1.head "Health.head"
+    head
+      ~log_msg:"Health.head"
       (fun head ->
          request1 V1.level "Health.level"
            (fun level -> Health_stats_ui.update_cmd level.lvl_cycle
@@ -880,7 +1018,7 @@ module Health = struct
                   request1 V1.health_stats "Health.stats"
                     (Health_stats_ui.update_health_page cycle)
                     cycle))
-           head.hash) 
+           head.hash)
 
   let request = stats
 end
@@ -895,7 +1033,7 @@ module Context = struct
                request1 V1.context_stats "Context.stats"
                  Context_stats_ui.update_context_page
                  day)
-         | _ -> Context_stats_ui.update_context_empty ()) 
+         | _ -> Context_stats_ui.update_context_empty ())
 
   let request = stats
 end
@@ -953,7 +1091,7 @@ module Protocols = struct
     request0 V1.nb_protocol "Protocol.nb_protocol"
       (fun nrows ->
          Protocols_ui.update ~nrows
-           (page_request0 V1.protocols "Protocol.protocols")) 
+           (page_request0 V1.protocols "Protocol.protocols"))
 end
 
 module CSV = struct

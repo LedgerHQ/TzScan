@@ -407,12 +407,13 @@ let update_block_baker = ref (fun (_block : block) -> ())
 
 let update_block_transactions ~nrows xhr =
   let to_rows operations =
-    List.map (fun (op_hash, _op_block_hash, _src, transaction) ->
+    List.map (fun (op_hash, op_block_hash, _src, transaction) ->
         let td_internal, cls_internal =
           if not transaction.tr_internal then td [ pcdata_t s_no ], []
           else td [ pcdata_t s_yes ], [ "warning" ] in
 
-        let td_op_hash = td [ Common.make_link ~crop_len:10 op_hash ] in
+        let td_op_hash = td [ Common.make_link ~args:["block_hash", op_block_hash]
+                                ~crop_len:10 op_hash ] in
         let td_source =
           Common.account_w_blockies ~crop_len:15 transaction.tr_src in
         let td_failed =
@@ -452,12 +453,13 @@ let update_block_transactions ~nrows xhr =
 
 let update_block_originations ~nrows xhr =
   let to_rows operations =
-    List.map (fun (op_hash, _op_block_hash, src, orig) ->
+    List.map (fun (op_hash, op_block_hash, src, orig) ->
         let td_internal, cls_internal =
           if not orig.or_internal then td [ pcdata_t s_no ], []
           else td [ pcdata_t s_yes ], [ "warning" ] in
         let burn = orig.or_burn in
-        let td_op_hash = td [ Common.make_link ~crop_len:10 op_hash ] in
+        let td_op_hash = td [ Common.make_link ~args:["block_hash", op_block_hash]
+                                ~crop_len:10 op_hash ] in
         let td_new_account = Common.account_w_blockies ~crop_len:15 orig.or_tz1 in
         let td_balance = td [ Tez.pp_amount orig.or_balance ] in
         let td_source = Common.account_w_blockies ~crop_len:15 src in
@@ -486,9 +488,10 @@ let update_block_originations ~nrows xhr =
 
 let update_block_included_endorsements ~nrows xhr =
   let to_rows operations =
-    List.map (fun (op_hash, _op_block_hash, endorse) ->
+    List.map (fun (op_hash, op_block_hash, endorse) ->
         tr [
-          td [ Common.make_link ~crop_len:6 op_hash ] ;
+          td [ Common.make_link ~args:["block_hash", op_block_hash]
+                 ~crop_len:6 op_hash ] ;
           Common.account_w_blockies endorse.endorse_src ;
           td [ pcdata @@
                String.concat ";" @@
@@ -502,7 +505,7 @@ let update_block_included_endorsements ~nrows xhr =
 
 let update_block_delegations ~nrows xhr =
   let to_rows operations =
-    List.map (fun (op_hash, _op_block_hash, src, del) ->
+    List.map (fun (op_hash, op_block_hash, src, del) ->
         let td_internal, cls_internal =
           if not del.del_internal then td [ pcdata_t s_no ], []
           else td [ pcdata_t s_yes ], [ "warning" ] in
@@ -512,7 +515,8 @@ let update_block_delegations ~nrows xhr =
                     [ span ~a:[ a_class [ "fa"; "fa-arrow-down" ] ] [] ]
           | _ -> Common.account_w_blockies ~crop_len:10 del.del_delegate,
                  td ~a:[ a_class [ green ; "center" ] ] [ right_icon () ] in
-        let td_op_hash = td [ Common.make_link ~crop_len:7 op_hash ] in
+        let td_op_hash = td [ Common.make_link ~args:["block_hash", op_block_hash]
+                                ~crop_len:7 op_hash ] in
         let td_source = Common.account_w_blockies ~crop_len:15 src in
         let td_counter =
           td [ pcdata @@ Int32.to_string del.del_counter ] in
@@ -535,9 +539,9 @@ let update_block_delegations ~nrows xhr =
 
 let update_block_nonce_revelations ~nrows xhr =
   let to_rows operations =
-    List.map (fun (op_hash, _op_block_hash, r) ->
+    List.map (fun (op_hash, op_block_hash, r) ->
         tr [
-          td [ Common.make_link op_hash ] ;
+          td [ Common.make_link ~args:["block_hash", op_block_hash] op_hash ] ;
           td [ pcdata @@ string_of_int r.seed_level ] ;
           td [ pcdata @@ r.seed_nonce ]
         ]
@@ -548,9 +552,10 @@ let update_block_nonce_revelations ~nrows xhr =
 
 let update_block_activations ~nrows xhr =
   let to_rows operations =
-    List.map (fun (op_hash, _op_block_hash, act) ->
+    List.map (fun (op_hash, op_block_hash, act) ->
         tr [
-          td [ Common.make_link ~crop_len:10 op_hash ] ;
+          td [ Common.make_link ~args:["block_hash", op_block_hash]
+                 ~crop_len:10 op_hash ] ;
           Common.account_w_blockies act.act_pkh ;
         ]) @@ Common.get_activations operations
   in

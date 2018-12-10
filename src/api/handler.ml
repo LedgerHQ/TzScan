@@ -86,6 +86,14 @@ module V1 = struct
   let tops_kind_params params =
     EzAPI.find_param Service.param_kind params
 
+  let spendable_params params =
+    match EzAPI.find_param Service.param_spendable params with
+    | None -> Some true
+    | Some b_str -> Some (bool_of_string b_str)
+
+  let block_hash_params params =
+    EzAPI.find_param Service.param_block_hash params
+
   (** Block *)
   (* /block/BHASH *)
   let block (params, hash) () =
@@ -265,12 +273,6 @@ module V1 = struct
     let page, page_size = pagination_params params in
     Dbr.delegator_rewards ?page ?page_size hash >>= EzAPIServer.return
 
-  let rewards_stats (params, hash) () =
-    let cycle = cycle_param params in
-    Lwt_io.printf "rewards_split/%s\n%!" hash >>= fun () ->
-    Dbr.rewards_stats hash ?cycle
-    >>= EzAPIServer.return
-
   let account_status (_params, hash) () =
     Lwt_io.printf "account_status/%s\n%!" hash >>= fun () ->
     Dbr.account_status hash >>= EzAPIServer.return
@@ -285,9 +287,10 @@ module V1 = struct
 
   (** Operation *)
   (* /operation/OHASH *)
-  let operation (_params, ohash) () =
+  let operation (params, ohash) () =
     Lwt_io.printf "operation/%s\n%!" ohash >>= fun () ->
-    Dbr.operation ohash >>= function
+    let block_hash = block_hash_params params in
+    Dbr.operation ?block_hash ohash >>= function
     | None -> Lwt.fail EzAPI.ResultNotfound
     | Some op -> EzAPIServer.return op
 
@@ -406,6 +409,12 @@ module V1 = struct
   let cycle_baker_rights (_params, hash) () =
     Lwt_io.printf "Request: 'cycle_baker_rights/%s'\n%!'" hash >>= fun () ->
     Dbr.cycle_baker_rights hash >>= EzAPIServer.return
+
+  let cycle_all_rights (params,hash) () =
+    Lwt_io.printf "Request: 'cycle_all_rights/%s'\n%!" hash >>= fun () ->
+    let cycle = cycle_param params in
+    let prio = number_params params in
+    Dbr.cycle_all_rights ?cycle ?prio hash >>= EzAPIServer.return
 
   (* /number_bakings/HASH *)
   let nb_endorser_rights (params, hash) () =
@@ -844,6 +853,76 @@ module V1 = struct
     let api_server_info = { Infos.api with
                             api_date ; api_versions } in
     EzAPIServer.return api_server_info
+
+(* Balance updates *)
+
+  let balance_updates_number (params,hash) () =
+    Lwt_io.printf "nu_balance_updates/\n%!" >>= fun () ->
+    let from = cycle_param params in
+    Dbr.nb_balance_updates ?from hash >>= EzAPIServer.return
+
+  let balance (_params,hash) () =
+    Lwt_io.printf "balance/\n%!" >>= fun () ->
+    Dbr.balance hash >>= EzAPIServer.return
+
+  let balance_updates (params,hash) () =
+    Lwt_io.printf "balance_updates/\n%!" >>= fun () ->
+    let from = cycle_param params in
+    let page, page_size = pagination_params params in
+    Dbr.balance_updates ?page ?page_size ?from hash >>= EzAPIServer.return
+
+  let active_balance_updates (params,hash) () =
+    Lwt_io.printf "active_balance_updates/\n%!" >>= fun () ->
+    let cycle_opt = cycle_param params in
+    match cycle_opt with
+      Some cycle -> Dbr.active_balance_updates cycle hash >>= EzAPIServer.return
+    | None -> EzAPIServer.return []
+
+  let balance_from_balance_updates (_params,hash) () =
+    Lwt_io.printf "balance_from_balance_updates/\n%!" >>= fun () ->
+    Dbr.balance_from_balance_updates hash >>= EzAPIServer.return
+
+  let balance_history (_params,hash) () =
+    Lwt_io.printf "balance_history/\n%!" >>= fun () ->
+    Dbr.balance_history hash >>= EzAPIServer.return
+
+  let cycle_frozen (params,hash) () =
+     Lwt_io.printf "cycle_frozen/\n%!" >>= fun () ->
+     match cycle_param params with
+       None -> EzAPIServer.return
+                 {b_spendable = Int64.zero;
+                  b_frozen =  Int64.zero;
+                  b_rewards =  Int64.zero;
+                  b_fees =  Int64.zero;
+                  b_deposits =  Int64.zero}
+     | Some cycle ->
+        (Dbr.cycle_frozen cycle hash) >>= EzAPIServer.return
+
+  let balance_number params () =
+    Lwt_io.printf "balance_number/\n%!" >>= fun () ->
+    match cycle_param params with
+      None -> EzAPIServer.return 0
+    | Some cycle ->
+       (Dbr.nb_balance (Int32.of_int cycle)) >>= EzAPIServer.return
+
+  let balance_ranking params () =
+    Lwt_io.printf "balance_ranking/\n%!" >>= fun () ->
+    let page, page_size = pagination_params params in
+    match cycle_param params with
+      None -> EzAPIServer.return []
+    | Some cycle ->
+       match spendable_params params with
+         None ->  EzAPIServer.return []
+       | Some spendable ->
+          Dbr.balance_ranking ?page ?page_size (Int32.of_int cycle) spendable >>= EzAPIServer.return
+
+  let last_baking_and_endorsement (_params, hash) () =
+    Lwt_io.printf "last baking and endorsement of %s\n%!" hash >>= fun () ->
+    Dbr.last_baking_and_endorsement hash >>= EzAPIServer.return
+
+  let next_baking_and_endorsement (_params, hash) () =
+    Lwt_io.printf "next baking and endorsement of %s\n%!" hash >>= fun () ->
+    Dbr.next_baking_and_endorsement hash >>= EzAPIServer.return
 
 end
 

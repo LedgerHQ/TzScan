@@ -45,7 +45,7 @@ On Debian 9:
 sudo apt-get install\
      postgresql libsodium-dev libgeoip1 \
      geoip1-database libcurl4-gnutls-dev \
-     curl zlib1g-dev
+     curl zlib1g-dev libgeoip-dev
 ```
 
 On Ubuntu:
@@ -53,13 +53,15 @@ On Ubuntu:
 sudo apt-get install\
      postgresql libsodium-dev libgeoip1 \
      geoip-database libcurl4-gnutls-dev \
-     curl zlib1g-dev
+     curl zlib1g-dev libgeoip-dev
 ```
 
 #### OCaml dependencies
 
 They can (and should) be installed with opam through
-```opam install``
+```
+opam install
+```
 
 ```
 opam install\

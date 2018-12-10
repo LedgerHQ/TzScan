@@ -14,47 +14,30 @@
 (*                                                                      *)
 (************************************************************************)
 
-open Tezos_types
-open Data_types
+module TEXT : sig
 
-(* DB Internals *)
-val dbh : (string, bool) Hashtbl.t PGOCaml.t PGOCaml.monad
-val pg_lock : (unit -> unit) -> unit
+  val s_day : Lang.text
+  val s_days : Lang.text
 
-(* Writer functions *)
+end
 
-val head : unit -> block option
+val auto_updating_timespan :
+  ?refresh:(float -> unit) -> (* called with the diff at every refresh *)
+  ?future:bool ->
+  string ->
+  [> Html_types.span ] Tyxml_js.Html5.elt
 
-val is_block_registered : block_hash -> bool
+val auto_updating_timespan_float :
+  ?refresh:(float -> unit) -> (* called with the diff at every refresh *)
+  ?future:bool ->
+  float ->
+  [> Html_types.span ] Tyxml_js.Html5.elt
 
-val block_hash : int -> block_hash
+val set_server_date : float -> unit
+val time_before_level : cst:Tezos_types.constants -> int -> string
 
-val register_tezos_user : string -> unit
+val get_now : unit -> float
 
-val register_protocol : string -> unit
+val ago_str : ?future:bool -> float -> string
 
-val register_genesis : node_block -> unit
-
-val register_pending :
-  CalendarLib.Calendar.t -> pending_operation_parsed list -> unit
-
-val register_init_balance :
-    string -> int64 -> Date.t-> int -> unit
-  
-val register_operations :
-  node_block -> node_operation list -> unit
-
-val register_all :
-  node_block -> node_level -> node_operation list -> unit
-
-val register_main_chain : bool -> node_block -> unit
-
-val register_network_stats : network_stats list -> unit
-
-val register_crawler_activity : string -> int -> unit
-
-val update_alias : account_hash -> string option -> unit
-
-val counts_downup : int -> int -> unit
-
-val register_cycle_count_baker : int64 -> string -> unit
+val float_of_iso : string -> float

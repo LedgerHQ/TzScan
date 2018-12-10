@@ -14,47 +14,18 @@
 (*                                                                      *)
 (************************************************************************)
 
-open Tezos_types
-open Data_types
+module UpdateOnFocus : sig
+  (* tell the updaters that the page changed *)
+  val incr_page : unit -> unit
 
-(* DB Internals *)
-val dbh : (string, bool) Hashtbl.t PGOCaml.t PGOCaml.monad
-val pg_lock : (unit -> unit) -> unit
+  val update_every : ?always:bool -> int -> (unit -> unit) -> unit
 
-(* Writer functions *)
+  (* remove all timers *)
+  val clear_timers : unit -> unit
+end
 
-val head : unit -> block option
-
-val is_block_registered : block_hash -> bool
-
-val block_hash : int -> block_hash
-
-val register_tezos_user : string -> unit
-
-val register_protocol : string -> unit
-
-val register_genesis : node_block -> unit
-
-val register_pending :
-  CalendarLib.Calendar.t -> pending_operation_parsed list -> unit
-
-val register_init_balance :
-    string -> int64 -> Date.t-> int -> unit
-  
-val register_operations :
-  node_block -> node_operation list -> unit
-
-val register_all :
-  node_block -> node_level -> node_operation list -> unit
-
-val register_main_chain : bool -> node_block -> unit
-
-val register_network_stats : network_stats list -> unit
-
-val register_crawler_activity : string -> int -> unit
-
-val update_alias : account_hash -> string option -> unit
-
-val counts_downup : int -> int -> unit
-
-val register_cycle_count_baker : int64 -> string -> unit
+val input :
+  ([< Html_types.input_attrib ], [> Html_types.input ])
+    Tyxml_js.Html5.nullary
+val get_input_value : string -> string
+val set_input_value : string -> string -> unit

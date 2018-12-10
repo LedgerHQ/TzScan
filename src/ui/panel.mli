@@ -198,3 +198,28 @@ module MakePageNoTable(M: sig
     unit
 
 end
+
+
+module MakePageTableList(
+    M: sig
+      type data
+      val name : string
+      val title_span : int -> [> Html_types.span ] Tyxml_js.Html5.elt
+      val page_size : int
+      val theads : unit -> theads
+      val table_class : string
+    end) : sig
+
+  val make :
+    ?page_sizer:bool ->
+    ?suf_id:string ->
+    ?urlarg_page:string ->
+    ?urlarg_size:string ->
+    ?footer:bool ->
+    ?panel_class:string list ->
+    ?before:[ `Div | `Table ] Tyxml_js.Html5.elt list ->
+    ?after:[ `Div | `Table ] Tyxml_js.Html5.elt list ->
+    (M.data list ->  Html_types.tr Tyxml_js.Html5.elt list) ->
+    M.data list -> [> Html_types.div ] Tyxml_js.Html5.elt
+
+end

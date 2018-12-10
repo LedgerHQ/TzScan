@@ -256,9 +256,6 @@ COL-XS-X START HERE :
     .blocks-div table.table {
         font-size: 14px ;
     }
-    .odometer {
-        font-size : 40px ;
-    }
 }
 
 /************
@@ -281,8 +278,23 @@ COL-XS-X START HERE :
 /************
  * Odometer
  *************/
-@media (min-width: 1200px) and (max-width: 1400px) {
+@media (min-width: 1200px) and (max-width: 1300px) {
     .odometer {
-        font-size : 33px !important ;
+        font-size : 25px !important ;
+    }
+}
+@media (min-width: 1300px) and (max-width: 1500px) {
+    .odometer {
+        font-size : 28px !important ;
+    }
+}
+@media (max-width: 400px) {
+    .odometer {
+        font-size : 30px !important ;
+    }
+}
+@media (max-width: 1199px) {
+    .hidden-1200 {
+        display: none;
     }
 }

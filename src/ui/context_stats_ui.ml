@@ -39,8 +39,6 @@ let make_panel_info title value value_diff =
         h5 ~a:[ a_class @@ color_class :: [ "text-center" ] ] [
           pcdata @@ Printf.sprintf "%+.1f%%" value_diff ] ;
       ] ;
-      div ~a:[ a_class [ "text-right"; panel_footer; "no-overflow" ] ] [
-        pcdata "view graph" ]
     ]
   ]
 
@@ -63,11 +61,14 @@ let update_cmd days update =
 let update_context_page context =
   let container = find_component context_content_id in
 
-  let title_str = match context.context_level with
+  let title_content = match context.context_level with
     | None ->
-      Printf.sprintf "Context snapshot"
+      span [ pcdata "" ]
     | Some lvl ->
-      Printf.sprintf "Context snapshot at %d" lvl.Tezos_types.lvl_level in
+      span [
+        pcdata "Data collected at " ;
+        Common.make_link @@ string_of_int lvl.Tezos_types.lvl_level ]
+  in
 
   let bakings_str = "Bakings" in
   let rolls_title = pcdata "# rolls" in
@@ -149,7 +150,7 @@ let update_context_page context =
   let used_bytes_diff = context.context_used_bytes_diff in
 
   let summary = div ~a:[ a_class [ "health-summary"; row] ] [
-      h1 [ pcdata title_str ] ;
+      h1 [ title_content ] ;
       h2 [ pcdata bakings_str ] ;
       make_panel_info rolls_title rolls_value rolls_diff ;
       make_panel_info roll_owners_title roll_owners_value roll_owners_diff ;
@@ -182,8 +183,6 @@ let update_context_page context =
 
   Manip.removeChildren container ;
   Manip.appendChild container summary
-  (* Manip.appendChild container progress_bar ;
-   * Manip.appendChild container details *)
 
 let make_page () =
   let div_cmd =

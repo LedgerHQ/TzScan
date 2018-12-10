@@ -28,6 +28,22 @@ OCaml.library("tezos-cache-lib",
 }
 );
 
+OCaml.program("tezos-balance-checker",
+  ocaml+{
+    files = ["request.ml";"balance_checker.ml"];
+    has_byte = false;
+    requires = [
+    	     "data-types-lib";
+	     "tezos-cache-lib";
+	     "database-writer-lib";
+	     "blake2b";
+	     "ez-api-curl";
+	     "database-reader-lib";
+	     "database-writer-lib"
+    ]
+
+});
+
 if ( has_pgocaml ){
 
 OCaml.library("tezos-crawler-lib", 

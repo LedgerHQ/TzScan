@@ -39,6 +39,9 @@ module Encoding : sig
   module Time : sig
     val encoding : string Json_encoding.encoding
   end
+  module Contracts : sig
+    val encoding : string list Json_encoding.encoding
+  end 
   module Network : sig
     val encoding : Tezos_types.network_stats list Json_encoding.encoding
     val versions : Tezos_types.network_version Json_encoding.encoding

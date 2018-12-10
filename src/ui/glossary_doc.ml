@@ -66,7 +66,8 @@ type helpers =
   | HDelegation | HNonce | HAccount | HAlternatives
   | HProtocol | HAmendment
   | HNetwork | HApi | HBaker | HBalance | HSBalance | HInject
-  | HDouble_Baking | HDouble_Endorsement
+  | HDouble_Baking | HDouble_Endorsement | HBalance_Updates
+  | HBalance_Snapshot
 
 let helpers_file = function
   | HBlock ->   "blocks.md"
@@ -88,6 +89,8 @@ let helpers_file = function
   | HSBalance -> "staking_balance.md"
   | HDouble_Baking -> "double_baking.md"
   | HDouble_Endorsement -> "double_endorsement.md"
+  | HBalance_Updates -> "balance_updates.md"
+  | HBalance_Snapshot -> "balance_snapshot.md"
 
 let help t =
   let file = helpers_file t in

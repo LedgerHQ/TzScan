@@ -12,8 +12,8 @@ OCaml.library("api-doc", ocaml + {
       ]};
     "api_info.ml", {
       file2string = [
+      (* info files added here *)
         "info-accounts.md";
-        "info-version.md";
         "info-block.md";
         "info-head.md";
         "info-heads.md";
@@ -21,8 +21,6 @@ OCaml.library("api-doc", ocaml + {
         "info-blocks.md";
         "info-block_next.md";
         "info-block_prev.md";
-        "info-mini_stats.md";
       ]};
   ];
 });
-

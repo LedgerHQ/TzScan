@@ -121,7 +121,8 @@ module type READER = sig
     int Monad.t
 
   (* [operation hash] returns the operation corresponding to [hash] *)
-  val operation : operation_hash -> operation option Monad.t
+  val operation : ?block_hash:block_hash ->
+    operation_hash -> operation option Monad.t
   (* [operations ?filters ?page ?page_size selector].
 
        If [page_size] is not present, it defaults to [max_int].
@@ -155,6 +156,7 @@ module type READER = sig
   val baker_rights : ?cycle:int -> ?page: int -> ?page_size: int ->
     account_hash -> baker_rights list Monad.t
   val cycle_baker_rights : account_hash -> (cycle_rights list) Monad.t
+  val cycle_all_rights : ?cycle:int -> ?prio:int -> account_hash -> (int * int) Monad.t
 
   val nb_endorser_rights : ?cycle:int -> account_hash -> int Monad.t
   val endorser_rights : ?cycle:int -> ?page: int -> ?page_size: int ->
@@ -164,6 +166,10 @@ module type READER = sig
   val nb_cycle_rights : ?future:bool -> ?filter:account_hash -> unit -> int Monad.t
   val cycle_rights : ?future:bool -> ?filter:account_hash ->
     ?page: int -> ?page_size: int -> unit -> rights list Monad.t
+
+  val last_baking_and_endorsement : account_hash ->
+    ( baking list * baking_endorsement list * int * int) Monad.t
+  val next_baking_and_endorsement : account_hash -> (int * int * int * int * string) Monad.t
 
   val required_balance : account_hash ->
     (int *int64 * int64 * int64 * int * int) list Monad.t
@@ -194,7 +200,7 @@ module type READER = sig
   val context_stats : CalendarLib.Calendar.t -> context_file_with_diff option Monad.t
   val h24_stats : unit -> h24_stats Monad.t
   val nb_tops : ?kind:string -> unit -> int Monad.t
-  val tops : ?page:int -> ?page_size:int -> ?kind:string -> unit -> (string * int64) list Monad.t
+  val tops : ?page:int -> ?page_size:int -> ?kind:string -> unit -> top_accounts Monad.t
 
   val account_bonds_rewards : account_hash -> account_bonds_rewards Monad.t
 
@@ -253,11 +259,6 @@ module type READER = sig
   val delegator_rewards : ?page:int -> ?page_size:int ->
     account_hash -> delegator_reward list Monad.t
 
-  val rewards_stats :
-    ?cycle:int ->
-    account_hash ->
-    rewards_stats Monad.t
-
   val search_block : ?limit:int -> string -> string list Monad.t
   val search_operation : ?limit:int -> string -> string list Monad.t
   val search_account : ?limit:int -> string ->
@@ -292,6 +293,32 @@ module type READER = sig
   val protocols : ?page:int -> ?page_size:int -> unit -> proto_details list Monad.t
 
   val market_prices: unit -> (string * (string * float) array) list Monad.t
+
+  val nb_balance_updates :
+    ?from:int -> ?up_to:int -> account_hash -> int Monad.t
+  val balance_updates :
+     ?page:int -> ?page_size:int -> ?from:int -> ?up_to:int -> account_hash -> balance_update_info list Monad.t
+  val cycle_frozen : int -> account_hash -> balance Monad.t
+  val active_balance_updates : int -> account_hash -> balance_update_info list Monad.t
+
+  val balance : account_hash -> Int64.t Monad.t
+
+  val balance_from_balance_updates :
+    account_hash ->
+    balance Monad.t
+
+  val balance_history :
+    account_hash ->
+    (Int32.t * balance)
+      list Monad.t
+
+  val nb_balance : int32 -> int Monad.t
+
+  val balance_ranking :
+    ?page:int -> ?page_size:int -> Int32.t -> bool -> (int * account_name * Int64.t) list Monad.t
+
+  val nb_exchange: unit -> int Monad.t
+  val exchange_info: ?page:int -> ?page_size:int -> unit -> exchange_info list Monad.t
 end
 
 module type READER_GENERIC = functor (M : MONAD) -> READER
@@ -314,6 +341,9 @@ module type WRITER = sig
   val register_pending :
     CalendarLib.Calendar.t -> pending_operation_parsed list -> unit
 
+  val register_init_balance :
+    string -> int64 -> Date.t -> int -> unit
+
   val register_operations :
     node_block -> node_operation list -> unit
 
@@ -326,7 +356,6 @@ module type WRITER = sig
   val register_crawler_activity : string -> int -> unit
 
   val counts_downup : int -> int -> unit
-
 end
 
 module MakeDBReader : functor (DB : READER_GENERIC) -> READER_GENERIC

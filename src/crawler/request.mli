@@ -44,5 +44,8 @@ val get_alternative_heads_hashes : url -> Tezos_types.block_hash list list
 val current_level : ?block:string -> url -> Tezos_types.node_level
 val pending_operations : url -> Tezos_types.pending_operation
 
+val node_contracts : Data_types.url -> string -> (string * int64) list
+val db_balance : Data_types.url -> string -> Data_types.balance
+                 
 
 val request : ?post:bool -> cachable:bool -> Data_types.url -> string -> string

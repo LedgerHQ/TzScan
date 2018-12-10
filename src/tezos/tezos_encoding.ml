@@ -147,12 +147,11 @@ module Base = struct
     let encoding = string
   end
 
-  (*
   module Contracts = struct
     (*    type t = string list *)
     let encoding = list string
   end
-*)
+
 
   module Level = struct
     let encoding =
@@ -264,20 +263,36 @@ module Base = struct
     let block_header_metadata_encoding =
       conv
         (fun { header_meta_baker ; header_meta_level ;
-               header_meta_voting_period_kind  ; header_meta_balance_updates } ->
+               header_meta_voting_period_kind  ;
+               header_meta_nonce_hash ;
+               header_meta_consumed_gas ;
+               header_meta_deactivated ;
+               header_meta_balance_updates } ->
           (header_meta_baker, header_meta_level,
-           header_meta_voting_period_kind, None, None, None, header_meta_balance_updates))
+           header_meta_voting_period_kind,
+           header_meta_nonce_hash,
+           header_meta_consumed_gas,
+           header_meta_deactivated,
+           header_meta_balance_updates))
         (fun (header_meta_baker, header_meta_level,
-              header_meta_voting_period_kind, _, _, _, header_meta_balance_updates) ->
+              header_meta_voting_period_kind,
+              header_meta_nonce_hash,
+              header_meta_consumed_gas,
+              header_meta_deactivated,
+              header_meta_balance_updates) ->
           { header_meta_baker ; header_meta_level ;
-            header_meta_voting_period_kind ;  header_meta_balance_updates })
+            header_meta_voting_period_kind ;
+            header_meta_nonce_hash ;
+            header_meta_consumed_gas ;
+            header_meta_deactivated ;
+            header_meta_balance_updates })
         (obj7
            (req "baker" string)
            (req "level" Level.encoding)
            (req "voting_period_kind" Voting_period_repr.kind_encoding)
-           (opt "nonce_hash" Json_encoding.any_value)
-           (opt "consumed_gas" Json_encoding.any_value)
-           (opt "deactivated" Json_encoding.any_value)
+           (req "nonce_hash" (option string))
+           (req "consumed_gas" z_encoding)
+           (req "deactivated" (list string))
            (opt "balance_updates" Balance_updates.encoding)
         )
   end
@@ -418,18 +433,20 @@ module Base = struct
                meta_op_originated_contracts ; meta_op_consumed_gas ;
                meta_op_storage_size_diff ; meta_op_storage ;
                meta_op_delegate ; meta_op_slots ; meta_op_paid_storage_size_diff ;
-               meta_op_big_map_diff} ->
+               meta_op_big_map_diff ; meta_op_allocated_destination_contract} ->
           (meta_op_status, meta_op_balance_updates,
            meta_op_originated_contracts, meta_op_consumed_gas,
            meta_op_storage_size_diff,
            meta_op_storage, meta_op_delegate, meta_op_slots,
-           meta_op_paid_storage_size_diff, None), meta_op_big_map_diff)
+           meta_op_paid_storage_size_diff, None),
+          (meta_op_big_map_diff, meta_op_allocated_destination_contract))
         (fun ((meta_op_status, meta_op_balance_updates,
                meta_op_originated_contracts, meta_op_consumed_gas,
                meta_op_storage_size_diff,
                meta_op_storage, meta_op_delegate, meta_op_slots,
                meta_op_paid_storage_size_diff,
-               _meta_op_errors), meta_op_big_map_diff ) ->
+               _meta_op_errors),
+              (meta_op_big_map_diff, meta_op_allocated_destination_contract) ) ->
           { meta_op_status ;
             meta_op_balance_updates ;
             meta_op_originated_contracts ;
@@ -439,7 +456,8 @@ module Base = struct
             meta_op_delegate ;
             meta_op_paid_storage_size_diff ;
             meta_op_slots ;
-            meta_op_big_map_diff})
+            meta_op_big_map_diff ;
+            meta_op_allocated_destination_contract})
         (merge_objs
            (obj10
               (opt "status" string)
@@ -452,8 +470,9 @@ module Base = struct
               (opt "slots" (list int))
               (opt "paid_storage_size_diff" z_encoding)
               (opt "errors" (list Json_encoding.any_value)))
-           (obj1
-              (opt "big_map_diff" (list big_map_diff_item_encoding))) (* TODO not registered *)
+           (obj2
+              (opt "big_map_diff" (list big_map_diff_item_encoding))
+              (opt "allocated_destination_contract" bool)) (* TODO not registered *)
         )
 
     let internal_transaction_result_encoding =
@@ -514,12 +533,18 @@ module Base = struct
            let result = match node_or_metadata with
              | None -> None
              | Some meta -> meta.manager_meta_operation_result in
-           (((), node_or_src, ~-1, node_or_manager, node_or_balance,
+           (((), node_or_src, ~-1, Some node_or_manager, Some node_or_manager, node_or_balance,
              Some node_or_spendable, Some node_or_delegatable,
-             node_or_delegate, None, str_script), result))
-         (fun (((), node_or_src, _nonce, node_or_manager, node_or_balance,
-                node_or_spendable, node_or_delegatable, node_or_delegate, script,
-                str_script), result) ->
+             node_or_delegate), (None, str_script, result)))
+         (fun (((), node_or_src, _nonce, node_or_managerPubkey, node_or_manager_pubkey, node_or_balance,
+                node_or_spendable, node_or_delegatable, node_or_delegate), (script, str_script, result)) ->
+           let node_or_manager =
+             match node_or_manager_pubkey with
+             | Some m -> m
+             | None ->
+               match node_or_managerPubkey with
+               | Some m -> m
+               | None -> "No manager public key found" in
            let node_or_spendable = Tezos_utils.unopt node_or_spendable ~default:false in
            let node_or_delegatable = Tezos_utils.unopt node_or_delegatable ~default:false in
            let node_or_script = match script, str_script with
@@ -548,39 +573,24 @@ module Base = struct
              node_or_script ; node_or_spendable ;
              node_or_delegatable ; node_or_balance ;
              node_or_metadata }))
-        (match Tezos_constants.net with
-         | Tezos_constants.Zeronet ->
            (merge_objs
-              (obj10
+              (obj9
                  (req "kind" (constant "origination"))
                  (req "source" string)
                  (req "nonce" int)
-                 (req "manager_pubkey" string)
+                 (* change during proto update, we need to do this to
+                    be able to recrawl the chain from scratch *)
+                 (opt "managerPubkey" string)
+                 (opt "manager_pubkey" string)
                  (req "balance" tez)
                  (opt "spendable" bool)
                  (opt "delegatable" bool)
-                 (opt "delegate" string)
+                 (opt "delegate" string))
+              (obj3
                  (opt "script" Micheline.script_encoding)
                  (* ocp field *)
-                 (opt "str_script" Micheline.script_str_encoding))
-              (obj1
+                 (opt "str_script" Micheline.script_str_encoding)
                  (opt "result" op_metadata_encoding)))
-         | _ ->
-           (merge_objs
-              (obj10
-                 (req "kind" (constant "origination"))
-                 (req "source" string)
-                 (req "nonce" int)
-                 (req "managerPubkey" string)
-                 (req "balance" tez)
-                 (opt "spendable" bool)
-                 (opt "delegatable" bool)
-                 (opt "delegate" string)
-                 (opt "script" Micheline.script_encoding)
-                 (* ocp field *)
-                 (opt "str_script" Micheline.script_str_encoding))
-              (obj1
-                 (opt "result" op_metadata_encoding))))
 
     let internal_delegation_result_encoding =
       (conv
@@ -729,13 +739,21 @@ module Base = struct
                      code.sc_storage) in
            ((node_or_src, node_or_fee, node_or_counter, node_or_gas_limit,
              node_or_storage_limit),
-            ((), node_or_manager, node_or_balance, Some node_or_spendable,
-             Some node_or_delegatable, node_or_delegate, None, str_script,
-             node_or_metadata )))
+            ((), Some node_or_manager, Some node_or_manager, node_or_balance,
+             Some node_or_spendable, Some node_or_delegatable,
+             node_or_delegate, None, str_script, node_or_metadata )))
          (fun ((node_or_src, node_or_fee, node_or_counter, node_or_gas_limit, node_or_storage_limit),
-               ((), node_or_manager, node_or_balance, node_or_spendable,
+               ((), node_or_managerPubkey, node_or_manager_pubkey,
+                node_or_balance, node_or_spendable,
                 node_or_delegatable, node_or_delegate, script, str_script,
                 node_or_metadata)) ->
+           let node_or_manager =
+             match node_or_manager_pubkey with
+             | Some m -> m
+             | None ->
+               match node_or_managerPubkey with
+               | Some m -> m
+               | None -> "No manager public key found" in
            let node_or_spendable = Tezos_utils.unopt node_or_spendable ~default:false in
            let node_or_delegatable = Tezos_utils.unopt node_or_delegatable ~default:false in
            let node_or_script = match script, str_script with
@@ -756,13 +774,14 @@ module Base = struct
              node_or_manager ; node_or_delegate ;
              node_or_script ; node_or_spendable ;
              node_or_delegatable ; node_or_balance ; node_or_metadata }))
-        (match Tezos_constants.net with
-         | Tezos_constants.Zeronet ->
            (merge_objs
               manager_encoding
-              (obj9
+              (obj10
                  (req "kind" (constant "origination"))
-                 (req "manager_pubkey" string)
+                 (* change during proto update, we need to do this to
+                    be able to recrawl the chain from scratch *)
+                 (opt "managerPubkey" string)
+                 (opt "manager_pubkey" string)
                  (req "balance" tez)
                  (opt "spendable" bool)
                  (opt "delegatable" bool)
@@ -771,20 +790,6 @@ module Base = struct
                  (* ocp field *)
                  (opt "str_script" Micheline.script_str_encoding)
                  (opt "metadata" manager_metadata_encoding)))
-         | _ ->
-           (merge_objs
-              manager_encoding
-              (obj9
-                 (req "kind" (constant "origination"))
-                 (req "managerPubkey" string)
-                 (req "balance" tez)
-                 (opt "spendable" bool)
-                 (opt "delegatable" bool)
-                 (opt "delegate" string)
-                 (opt "script" Micheline.script_encoding)
-                 (* ocp field *)
-                 (opt "str_script" Micheline.script_str_encoding)
-                 (opt "metadata" manager_metadata_encoding))))
 
     let delegation_encoding =
       (conv
@@ -1319,6 +1324,9 @@ module Base = struct
                               node_lvl_voting_period_position = 0 ;
                               node_lvl_expected_commitment = false ;
                             } ;
+                            header_meta_nonce_hash = None;
+                            header_meta_consumed_gas = Z.zero;
+                            header_meta_deactivated = [];
                             header_meta_voting_period_kind = NProposal ;
                             header_meta_balance_updates = None
                           }
@@ -1536,7 +1544,7 @@ module Base = struct
       let peer_encoding =
         conv
           (fun _ -> assert false)
-          (fun (peer_id, ((score, trusted, conn_metadata, state, id_point, stat),
+          (fun (peer_id, ((score, trusted, conn_metadata, _, state, id_point, stat),
                           (last_failed_connection, last_rejected_connection,
                            last_established_connection, last_disconnection,
                            last_seen, last_miss))) ->
@@ -1559,10 +1567,11 @@ module Base = struct
           (tup2
              string
              (merge_objs
-                (obj6
+                (obj7
                    (req "score" float)
                    (req "trusted" bool)
                    (opt "conn_metadata" conn_metadata_encoding)
+                   (opt "peer_metadata" Json_encoding.any_value)
                    (req "state" state_encoding)
                    (opt "reachable_at" id_point_encoding)
                    (req "stat" data_stats))

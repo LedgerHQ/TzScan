@@ -67,6 +67,7 @@ let api =
       ] ;
       conf_ico = betanet;
       conf_rampup_cycles = 64;
+      conf_start_reward_cycle = 7;
       conf_has_delegation = false ;
       conf_has_marketcap = false ;
     }
@@ -121,3 +122,6 @@ let rampup ~cycle deposit =
   if cycle >= rampup_cycles then deposit
   else
     Int64.(div (mul deposit (of_int cycle)) (of_int rampup_cycles))
+
+let cycle_from_level ~cst level =
+  (level - 1) / cst.blocks_per_cycle

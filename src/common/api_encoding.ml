@@ -475,23 +475,29 @@ module V1 = struct
     let encoding =
       conv
         (fun {bk_block_hash; bk_baker_hash; bk_level; bk_cycle ; bk_priority ;
-              bk_distance_level; bk_fees; bk_bktime; bk_baked}
+              bk_missed_priority; bk_distance_level; bk_fees; bk_bktime;
+              bk_baked; bk_tsp}
           -> (bk_block_hash, bk_baker_hash, bk_level, bk_cycle, bk_priority,
-              bk_distance_level, bk_fees, bk_bktime, bk_baked))
+              bk_missed_priority, bk_distance_level, bk_fees, bk_bktime,
+              bk_baked, bk_tsp))
         (fun (bk_block_hash, bk_baker_hash, bk_level, bk_cycle, bk_priority,
-              bk_distance_level, bk_fees, bk_bktime, bk_baked)
+              bk_missed_priority, bk_distance_level, bk_fees, bk_bktime,
+              bk_baked, bk_tsp)
           -> {bk_block_hash; bk_baker_hash; bk_level; bk_cycle ; bk_priority;
-              bk_distance_level; bk_fees; bk_bktime; bk_baked})
-        (obj9
+              bk_missed_priority; bk_distance_level; bk_fees; bk_bktime;
+              bk_baked; bk_tsp})
+        (EzEncoding.obj11
            (req "block_hash" string)
            (req "baker_hash" account_name_encoding)
            (req "level" int)
            (req "cycle" int)
            (req "priority" int)
+           (opt "missed_priority" int)
            (req "distance_level" int)
            (req "fees" tez)
            (req "bake_time" int)
-           (req "baked" bool))
+           (req "baked" bool)
+           (req "timestamp" string))
     let bakings = list encoding
 
   end
@@ -499,24 +505,25 @@ module V1 = struct
   module BakeEndorsementOp = struct
 
     let encoding =
-      (conv
-         (fun {ebk_block; ebk_source; ebk_level; ebk_cycle; ebk_priority;
-               ebk_dist; ebk_slots; ebk_lr_nslot}
-           -> (ebk_block, ebk_source, ebk_level, ebk_cycle, ebk_priority,
-               ebk_dist, ebk_slots, ebk_lr_nslot))
-         (fun (ebk_block, ebk_source, ebk_level, ebk_cycle, ebk_priority,
-               ebk_dist, ebk_slots, ebk_lr_nslot)
-           -> {ebk_block; ebk_source; ebk_level; ebk_cycle; ebk_priority;
-               ebk_dist; ebk_slots; ebk_lr_nslot})
-         (obj8
-            (opt "block" string)
-            (opt "source" account_name_encoding)
-            (req "level" int)
-            (opt "cycle" int)
-            (opt "priority" int)
-            (opt "distance_level" int)
-            (opt "slots" (list int))
-            (req "lr_nslot" int)))
+      conv
+        (fun {ebk_block; ebk_source; ebk_level; ebk_cycle; ebk_priority;
+              ebk_dist; ebk_slots; ebk_lr_nslot; ebk_tsp}
+          -> (ebk_block, ebk_source, ebk_level, ebk_cycle, ebk_priority,
+              ebk_dist, ebk_slots, ebk_lr_nslot, ebk_tsp))
+        (fun (ebk_block, ebk_source, ebk_level, ebk_cycle, ebk_priority,
+              ebk_dist, ebk_slots, ebk_lr_nslot, ebk_tsp)
+          -> {ebk_block; ebk_source; ebk_level; ebk_cycle; ebk_priority;
+              ebk_dist; ebk_slots; ebk_lr_nslot; ebk_tsp})
+        (obj9
+           (opt "block" string)
+           (opt "source" account_name_encoding)
+           (req "level" int)
+           (opt "cycle" int)
+           (opt "priority" int)
+           (opt "distance_level" int)
+           (opt "slots" (list int))
+           (req "lr_nslot" int)
+           (opt "timestamp" string))
     let bakings = list encoding
 
   end
@@ -1110,17 +1117,17 @@ module V1 = struct
     type baker = BOk of string list | BError
 
     let encoding =
-      (conv
-         (fun ({ baker_hash; nb_blocks; volume_total; fees_total })
-           -> (baker_hash, nb_blocks, volume_total, fees_total))
-         (fun (baker_hash, nb_blocks, volume_total, fees_total) ->
-            { baker_hash; nb_blocks; volume_total; fees_total }))
-        (obj4
+      conv
+        (fun ({ baker_hash; nb_blocks; volume_total; fees_total; nb_endorsements })
+          -> (baker_hash, nb_blocks, volume_total, fees_total, nb_endorsements ))
+        (fun (baker_hash, nb_blocks, volume_total, fees_total, nb_endorsements) ->
+           { baker_hash; nb_blocks; volume_total; fees_total; nb_endorsements })
+        (obj5
            (req "baker_hash" account_name_encoding)
            (req "nb_block" int)
            (req "volume_total" tez)
-           (req "fees_total" tez))
-
+           (req "fees_total" tez)
+           (req "nb_endorsements" int))
 
     let bakers_encoding = (list encoding)
 
@@ -1278,27 +1285,6 @@ module V1 = struct
 
   module Rolls_distribution = struct
     let encoding = list (tup2 account_name_encoding int)
-  end
-
-  module Rewards_stats = struct
-    let encoding =
-      (conv
-         (fun { rstats_staking_balance ; rstats_delegators_nb ;
-                rstats_rewards ; rstats_pc_blocks ; rstats_pc_endorsements }
-           ->
-             ( rstats_staking_balance, rstats_delegators_nb,
-               rstats_rewards, rstats_pc_blocks, rstats_pc_endorsements ))
-         (fun ( rstats_staking_balance, rstats_delegators_nb,
-                rstats_rewards, rstats_pc_blocks, rstats_pc_endorsements ) ->
-           { rstats_staking_balance ; rstats_delegators_nb ;
-             rstats_rewards ; rstats_pc_blocks ; rstats_pc_endorsements }))
-        (obj5
-           (req "staking_balance" tez)
-           (req "delegators_nb" int)
-           (req "rewards" tez)
-           (req "pc_blocks" float)
-           (req "pc_endorsements" float)
-        )
   end
 
   module Rewards_split = struct
@@ -1492,24 +1478,73 @@ module V1 = struct
   module Balance_update_info = struct
     let bu_encoding =
       conv
-        (fun {bu_account; bu_diff; bu_date; bu_update_type;  bu_internal;
-              bu_level;bu_frozen;bu_burn}
-          -> (bu_account, bu_diff, bu_date, bu_update_type,bu_internal,
-              bu_level,bu_frozen, bu_burn))
-        (fun (bu_account, bu_diff, bu_date, bu_update_type,bu_internal,
-              bu_level,bu_frozen, bu_burn)
-          ->  {bu_account; bu_diff; bu_date; bu_update_type; bu_internal;
-               bu_level; bu_frozen; bu_burn})
-        (obj8
+        (fun {bu_account;
+              bu_block_hash;
+              bu_diff;
+              bu_date;
+              bu_update_type;
+              bu_op_type;
+              bu_internal;
+              bu_frozen;
+              bu_level;
+              bu_burn}
+         -> (bu_account,
+             bu_block_hash,
+             bu_diff,
+             bu_date,
+             bu_update_type,
+             bu_op_type,
+             bu_internal,
+             bu_frozen,
+             bu_level,
+             bu_burn))
+        (fun (bu_account,
+              bu_block_hash,
+              bu_diff,
+              bu_date,
+              bu_update_type,
+              bu_op_type,
+              bu_internal,
+              bu_frozen,
+              bu_level,
+              bu_burn)
+         ->  {bu_account;
+              bu_block_hash;
+              bu_diff;
+              bu_date;
+              bu_update_type;
+              bu_op_type;
+              bu_internal;
+              bu_frozen;
+              bu_level;
+              bu_burn})
+        (obj10
            (req "account" string)
+           (req "block" string)
            (req "diff" int64)
            (req "date" Date_enc.encoding)
            (req "update_type" string)
+           (req "op_type" string)
            (req "internal" bool)
-           (req "level" int32)
            (req "frozen" bool)
+           (req "level" int32)
            (req "burn" bool))
     let encoding = list bu_encoding
+  end
+
+  module Balance = struct
+    let encoding =
+      conv
+        (fun {b_spendable; b_frozen; b_rewards; b_fees; b_deposits} ->
+          (b_spendable, b_frozen, b_rewards, b_fees, b_deposits) )
+        (fun (b_spendable, b_frozen, b_rewards, b_fees, b_deposits) ->
+          {b_spendable; b_frozen; b_rewards; b_fees; b_deposits})
+        (obj5
+           (req "spendable" int64)
+           (req "frozen" int64)
+           (req "rewards" int64)
+           (req "fees" int64)
+           (req "deposits" int64))
   end
 
   module H24_stats = struct
@@ -1607,6 +1642,7 @@ module V1 = struct
             conf_network ;
             conf_constants ;
             conf_rampup_cycles ;
+            conf_start_reward_cycle ;
             conf_ico ;
             conf_has_delegation ;
             conf_has_marketcap
@@ -1616,6 +1652,7 @@ module V1 = struct
               conf_network ,
               conf_constants ,
               conf_rampup_cycles ,
+              conf_start_reward_cycle ,
               conf_ico ,
               conf_has_delegation ,
               conf_has_marketcap
@@ -1626,6 +1663,7 @@ module V1 = struct
             conf_network ,
             conf_constants ,
             conf_rampup_cycles ,
+            conf_start_reward_cycle ,
             conf_ico ,
             conf_has_delegation ,
             conf_has_marketcap
@@ -1635,15 +1673,17 @@ module V1 = struct
               conf_network ;
               conf_constants ;
               conf_rampup_cycles ;
+              conf_start_reward_cycle ;
               conf_ico ;
               conf_has_delegation ;
               conf_has_marketcap
             }
         )
-        (obj6
+        (obj7
            (req "network" string)
            (req "constants" (list (tup2 int Tezos_encoding.constants)))
            (dft "rampup_cycles" int 0)
+           (dft "start_reward_cycle" int 0)
            (req "ico" ico_constants)
            (dft "has_delegation" bool false)
            (dft "has_marketcap" bool false)
@@ -1830,25 +1870,124 @@ module Context_stats = struct
 
 end
 
+module Tops = struct
+
+  let context_top_accounts_encoding =
+    conv
+      (fun
+        { context_top_period ; context_top_kind ;
+          context_top_hash ; context_top_list }
+        ->
+          ( context_top_period , context_top_kind ,
+            context_top_hash , context_top_list )
+      )
+      (fun
+        ( context_top_period , context_top_kind ,
+          context_top_hash , context_top_list )
+        ->
+          { context_top_period ; context_top_kind ; context_top_hash ; context_top_list }
+      )
+      (obj4
+         (req "period" string)
+         (req "kind" string)
+         (req "block" string)
+         (req "list" (list (tup2 string int64)))
+      )
+
+  let top_accounts_encoding =
+    conv
+      (fun
+        { top_period ; top_kind ; top_hash ; top_list }
+        ->
+          ( top_period , top_kind , top_hash , top_list )
+      )
+      (fun
+        ( top_period , top_kind , top_hash , top_list )
+        ->
+          { top_period ; top_kind ; top_hash ; top_list }
+      )
+      (obj4
+         (req "period" string)
+         (req "kind" string)
+         (req "block" string)
+         (req "list" (list (tup2 account_name_encoding int64)))
+      )
+
+end
+
 module WWW = struct
+
+  let name_from_id s =
+    String.mapi
+      (fun i c ->
+         if i = 0 then Char.uppercase_ascii c
+         else if c = '_' then ' '
+         else c)
+      s
+
+  let chart_axis_type_encoding =
+    conv
+      (function
+        | Cat_Tz -> "Tz"
+        | Cat_MuTz -> "MuTz"
+        | Cat_Other -> "Other")
+      (function
+        | "Tz" -> Cat_Tz
+        | "MuTz" -> Cat_MuTz
+        | _ -> Cat_Other)
+      (obj1
+         (req "type" string)
+      )
 
   let chart_encoding =
     conv
       (fun
-        { chart_period ; chart_period_kind ; chart_name ; chart_values }
+        { chart_period ;
+          chart_period_kind ;
+          chart_name;
+          chart_pretty;
+          chart_unit ;
+          chart_values ;
+          chart_abstract ;
+          chart_axis_title }
         ->
-          ( chart_period , chart_period_kind , chart_name , chart_values )
+          ( chart_period ,
+            chart_period_kind ,
+            chart_name ,
+            chart_pretty,
+            chart_unit ,
+            chart_values,
+            chart_abstract,
+            chart_axis_title )
       )
       (fun
-        ( chart_period , chart_period_kind , chart_name , chart_values )
+        ( chart_period ,
+          chart_period_kind ,
+          chart_name ,
+          chart_pretty,
+          chart_unit ,
+          chart_values,
+          chart_abstract,
+          chart_axis_title )
         ->
-          { chart_period ; chart_period_kind ; chart_name ; chart_values }
+          { chart_period ;
+            chart_period_kind ;
+            chart_name;
+            chart_pretty;
+            chart_unit;
+            chart_values;
+            chart_abstract ;
+            chart_axis_title}
       )
-      (obj4
+      (obj8
          (req "last_period" string)
          (req "period_kind" string)
          (req "name" string)
+         (opt "pretty" string)
+         (opt "unit" chart_axis_type_encoding)
          (req "values" (array (tup2 string float)))
+         (opt "abstract" string)
+         (opt "axis_title" string)
       )
 
   let www_server_info =
@@ -1881,4 +2020,174 @@ module WWW = struct
          (dft "networks" (list (tup2 string string)) [])
       )
 
+end
+
+module Coingecko = struct
+  let none = Json_encoding.any_value
+  let rq s = opt s none
+  let coin_encoding =
+    conv
+      (fun {gk_usd; gk_btc}
+        -> ((gk_usd, gk_btc, None, None, None),
+            ((None, None, None, None, None, None, None, None, None, None, None,
+              None, None, None, None, None, None, None, None, None, None, None,
+              None, None),
+             (None, None, None, None, None, None, None, None, None, None, None,
+              None, None, None, None, None, None, None, None, None, None, None,
+              None, None))))
+      (fun ((gk_usd, gk_btc, _, _, _),
+            ((_, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _),
+             (_, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _)))
+           -> {gk_usd; gk_btc})
+      (merge_objs
+         (obj5
+            (req "usd" float)
+            (req "btc" float)
+            (rq "eur") (rq "eth") (rq "jpy"))
+         (merge_objs
+            (EzEncoding.obj24
+               (rq "pkr") (rq "ars") (rq "kwd") (rq "myr") (rq "bhd") (rq "inr")
+               (rq "czk") (rq "brl") (rq "sar") (rq "sek") (rq "sgd") (rq "dkk")
+               (rq "ltc") (rq "aud") (rq "chf") (rq "zar") (rq "xau") (rq "cny")
+               (rq "vef") (rq "bdt") (rq "bnb") (rq "clp") (rq "xrp") (rq "huf"))
+            (EzEncoding.obj24
+               (rq "bmd") (rq "nok") (rq "rub") (rq "mxn") (rq "try") (rq "xdr")
+               (rq "mmk") (rq "pln") (rq "php") (rq "hkd") (rq "xlm") (rq "ils")
+               (rq "bch") (rq "twd") (rq "lkr") (rq "idr") (rq "krw") (rq "thb")
+               (rq "eos") (rq "aed") (rq "gbp") (rq "nzd") (rq "cad") (rq "xag"))))
+  let coin_encoding_string =
+    conv
+      (fun {gk_usd; gk_btc}
+        -> (string_of_float gk_usd, string_of_float gk_btc, None))
+      (fun (gk_usd, gk_btc, _)
+        -> {gk_usd = float_of_string gk_usd; gk_btc = float_of_string gk_btc})
+         (obj3
+            (req "usd" string)
+            (req "btc" string)
+            (rq "eth"))
+
+  let market_data_encoding =
+    conv
+      (fun {gk_price; gk_market_volume; gk_1h; gk_24h; gk_7d}
+        -> ((gk_price, gk_market_volume, gk_1h, gk_24h, gk_7d, None, None, None, None,
+             None, None, None, None, None, None, None, None),
+            (None, None, None, None, None, None, None, None, None, None, None,
+             None, None, None, None, None, None)))
+      (fun ((gk_price, gk_market_volume, gk_1h, gk_24h, gk_7d, _, _, _, _, _, _, _,
+             _, _, _, _, _), (_, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _))
+        -> {gk_price; gk_market_volume; gk_1h; gk_24h; gk_7d})
+    (merge_objs
+       (EzEncoding.obj17
+          (req "current_price" coin_encoding)
+          (req "total_volume" coin_encoding)
+          (req "price_change_percentage_1h_in_currency" coin_encoding)
+          (req "price_change_percentage_24h_in_currency" coin_encoding)
+          (req "price_change_percentage_7d_in_currency" coin_encoding)
+          (opt "roi" none)
+          (opt "last_updated" none)
+          (opt "price_change_24h_in_currency" none)
+          (opt "price_change_percentage_1y_in_currency" none)
+          (opt "high_24h" none)
+          (opt "price_change_percentage_1y" none)
+          (opt "market_cap_rank" none)
+          (opt "price_change_percentage_30d_in_currency" none)
+          (opt "price_change_percentage_200d" none)
+          (opt "price_change_percentage_60d" none)
+          (opt "market_cap_change_percentage_24h" none)
+          (opt "circulating_supply" none))
+       (EzEncoding.obj17
+          (opt "ath_date" none)
+          (opt "price_change_percentage_60d_in_currency" none)
+          (opt "total_supply" none)
+          (opt "price_change_percentage_14d_in_currency" none)
+          (opt "market_cap" none)
+          (opt "price_change_percentage_200d_in_currency" none)
+          (opt "ath_change_percentage" none)
+          (opt "low_24h" none)
+          (opt "market_cap_change_24h" none)
+          (opt "price_change_percentage_30d" none)
+          (opt "price_change_percentage_14d" none)
+          (opt "ath" none)
+          (opt "market_cap_change_percentage_24h_in_currency" none)
+          (opt "market_cap_change_24h_in_currency" none)
+          (opt "price_change_percentage_24h" none)
+          (opt "price_change_24h" none)
+          (opt "price_change_percentage_7d" none)))
+
+  let market_encoding =
+    conv
+      (fun name -> (name, None, None))
+      (fun (name, _, _) -> name)
+      (obj3
+         (req "name" string)
+         (opt "identifier" none)
+         (opt "has_trading_incentive" none))
+  let ticker_encoding =
+    conv
+      (fun {gk_last; gk_target; gk_tsp; gk_anomaly; gk_converted_last; gk_volume;
+            gk_stale; gk_base; gk_converted_volume; gk_market}
+        -> (gk_last, gk_target, gk_tsp, gk_anomaly, gk_converted_last, gk_volume,
+            gk_stale, gk_base, gk_converted_volume, gk_market, None))
+      (fun (gk_last, gk_target, gk_tsp, gk_anomaly, gk_converted_last, gk_volume,
+            gk_stale, gk_base, gk_converted_volume, gk_market, _)
+        -> {gk_last; gk_target; gk_tsp; gk_anomaly; gk_converted_last; gk_volume;
+            gk_stale; gk_base; gk_converted_volume; gk_market})
+      (EzEncoding.obj11
+         (req "last" float)
+         (req "target" string)
+         (req "timestamp" string)
+         (req "is_anomaly" bool)
+         (req "converted_last" coin_encoding_string)
+         (req "volume" float)
+         (req "is_stale" bool)
+         (req "base" string)
+         (req "converted_volume" coin_encoding_string)
+         (req "market" market_encoding)
+         (opt "coin_id" string))
+  let tickers_encoding = list ticker_encoding
+  let encoding =
+    conv
+      (fun gk_tickers -> (gk_tickers, None))
+      (fun (gk_tickers, _) -> gk_tickers)
+      (obj2
+         (req "tickers" tickers_encoding)
+         (opt "name" none))
+  let encoding_full =
+    conv
+      (fun {gk_last_updated; gk_market_data; gk_tickers}
+        -> ((gk_last_updated, gk_market_data, gk_tickers), (None, None, None, None,
+            None, None, None, None, None, None, None, None, None, None, None, None,
+            None, None, None, None, None, None)))
+      (fun ((gk_last_updated, gk_market_data, gk_tickers),(_, _, _, _,
+            _, _, _, _, _, _, _, _, _, _, _, _,
+            _, _, _, _, _, _))
+        -> {gk_last_updated; gk_market_data; gk_tickers})
+      (merge_objs
+         (obj3
+            (req "last_updated" string)
+            (req "market_data" market_data_encoding)
+            (req "tickers" tickers_encoding))
+         (EzEncoding.obj22
+            (opt "links" none)
+            (opt "image" none)
+            (opt "status_updates" none)
+            (opt "liquidity_score" none)
+            (opt "market_cap_rank" none)
+            (opt "id" none)
+            (opt "coingecko_score" none)
+            (opt "developer_data" none)
+            (opt "genesis_date" none)
+            (opt "ico_data" none)
+            (opt "description" none)
+            (opt "localization" none)
+            (opt "public_interest_stats" none)
+            (opt "symbol" none)
+            (opt "public_interest_score" none)
+            (opt "community_score" none)
+            (opt "categories" none)
+            (opt "name" none)
+            (opt "community_data" none)
+            (opt "country_origin" none)
+            (opt "coingecko_rank" none)
+            (opt "developer_score" none)))
 end

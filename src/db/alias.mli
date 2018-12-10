@@ -18,4 +18,4 @@ val change_alias : Tezos_types.account_hash -> string -> unit
 
 val reset : unit -> unit
 
-val to_name : ?db:bool -> ?alias:string -> Tezos_types.account_hash -> Data_types.account_name
+val to_name : ?alias:string -> Tezos_types.account_hash -> Data_types.account_name

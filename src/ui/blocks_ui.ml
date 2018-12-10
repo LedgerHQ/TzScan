@@ -21,11 +21,15 @@ open Js_utils
 open Common
 open Bootstrap_helpers.Icon
 open Bootstrap_helpers.Button
+open Bootstrap_helpers.Color
 open Tezos_types
 open Text
 
 let blocks_id = "blocks"
 let heads_id = "heads"
+
+(* TODO: move this version into a config file *)
+let baker_version = 3
 
 (* Blocks Pages *)
 
@@ -34,6 +38,7 @@ module BlocksTable = struct
   let theads () = tr [
       th @@ cl_icon cube_icon (t_ s_level);
       th @@ cl_icon clock_icon (t_ s_age);
+      th @@ cl_icon priority_icon (t_ s_priority);
       th @@ cl_icon (number_icon cube_icon) (t_ s_nbops);
       th @@ cl_icon Tez.icon (t_ s_volume);
       th @@ cl_icon bill_icon (t_ s_fees);
@@ -41,6 +46,7 @@ module BlocksTable = struct
       th @@ cl_icon uncle_icon (t_ s_uncles);
       th @@ cl_icon cookie_icon (t_ s_baker);
       th @@ cl_icon ruler_icon (t_ s_protocol);
+      th @@ cl_icon priority_icon (t_ s_baker_version);
     ]
 
   let page_size = 20
@@ -70,19 +76,6 @@ module UnclesPanel = struct
   include Panel.MakePageTable
             (struct
               include BlocksTable
-
-              let theads () = tr [
-                  th @@ cl_icon cube_icon (t_ s_hash);
-                  th @@ cl_icon clock_icon (t_ s_age);
-                  th @@ cl_icon (number_icon cube_icon) (t_ s_nbops);
-                  th @@ cl_icon Tez.icon (t_ s_volume);
-                  th @@ cl_icon bill_icon (t_ s_fees);
-                  th @@ cl_icon balance_icon (t_ s_fitness);
-                  th @@ cl_icon priority_icon (t_ s_priority);
-                  th @@ cl_icon cookie_icon (t_ s_baker);
-                  th @@ cl_icon ruler_icon (t_ s_protocol);
-                ]
-
               let title_span _nb = span [ ] (* redefined *)
             end)
 end
@@ -93,6 +86,19 @@ let to_rows ?(snapshots=[]) ?(uncles=false) blocks =
       let td_timestamp = td [ ] in
       Manip.appendChild td_timestamp
         (Format_date.auto_updating_timespan timestamp_str);
+      let td_priority = td [ pcdata @@ string_of_int block.priority ] in
+      let td_baker_version =
+        let version = "0x" ^ String.sub block.pow_nonce 0 8  in
+        if int_of_string version = baker_version then
+          td ~a:[ a_title @@ Printf.sprintf "%S: up to date" block.pow_nonce ] [
+            span ~a:[ a_class [ green ] ] [ check_icon () ]
+          ]
+        else
+          td ~a:[ a_title (Printf.sprintf "%S: not running the \
+                                           latest version of the baker."
+                             block.pow_nonce) ] [
+            span ~a:[ a_class [ "yellow" ] ] [ exclamation_icon ()  ]
+          ] in
       let is_snapshot = List.mem block.level snapshots in
       let camera = if is_snapshot then [space_icon (); camera_icon ()] else [] in
       let cls =
@@ -111,20 +117,22 @@ let to_rows ?(snapshots=[]) ?(uncles=false) blocks =
       tr ~a:cls
          [
           td (Common.make_link h_link ~path:link :: camera) ;
-          td_timestamp;
+          td_timestamp ;
+          td_priority ;
           td [ pcdata @@ string_of_int block.nb_operations ] ;
           td [Tez.pp_amount ~width:6 block.volume] ;
           td [Tez.pp_amount block.fees] ;
           td [ pcdata @@ string_of_int @@ Common.get_fitness block.fitness ] ;
           begin
             if uncles then
-              td [ pcdata @@ string_of_int block.priority ]
+              td [ Common.pcdata_ () ]
             else
               td ~a:[ a_id @@ Common.block_uncles_id block.hash ]
                  [ Common.pcdata_ () ]
           end;
           Common.account_w_blockies ~aclass:["no-overflow"] block.baker;
           td [ pcdata block.protocol.proto_name ] ;
+          td_baker_version ;
     ]) blocks
 
 let update_blocks ?(snapshots=[]) ?(alt=false) ?level ?nrows xhr =

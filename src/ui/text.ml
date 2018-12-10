@@ -16,9 +16,13 @@
 
 open Lang
 
+include Format_date.TEXT
+
 let s_transactions = ss_ "Transactions"
 let s_accounts = ss_ "Accounts"
+let s_top_accounts = ss_ "Top Accounts"
 let s_contracts = ss_ "Contracts"
+
 
 let s_delegations = ss_ "Delegations"
 let s_originations = ss_ "Originations"
@@ -27,16 +31,6 @@ let s_revelations = ss_ "Revelations"
 let s_activations = ss_ "Activations"
 let s_reveals = ss_ "Reveals"
 
-let s_year = ss_ "year"
-let s_years = ss_ "years"
-let s_month = ss_ "month"
-let s_months = ss_ "months"
-let s_day = ss_ "day"
-let s_days = ss_ "days"
-let s_hour = ss_ "hour"
-let s_hours = ss_ "hours"
-let s_min = ss_ "min"
-let s_mins = ss_ "mins"
 let s_alternative_heads = ss_ "Alternative Heads"
 let s_snapshot_blocks = ss_ "Snapshot Blocks"
 let s_protocols = ss_ "Protocols"
@@ -341,6 +335,33 @@ let s_extras = ss_ "Extras"
 let s_flags = ss_ "Flags"
 let s_options = ss_ "Options"
 
+let s_balance_ranking = ss_ "Balance ranking"
+let s_icon_bake = ss_ "#x1f35e"
+let s_balance_updates_last = ss_ "Balance updates (last 5 cycles)"
+let s_diff = ss_ "Diff"
+let s_type_of_update = ss_ "Type of update"
+let s_frozen = ss_ "Frozen"
+let s_frozen_balance_updates = ss_ "Frozen balance updates"
+let s_bakes = ss_ "Bakes"
+let s_reward_estimation = ss_ "Rewards estimation"
+let s_fees_estimation = ss_ "Fees estimation"
+let s_deposit_estimation = ss_ "Deposits estimation"
+let s_frozen_balance_estimation = ss_ "Frozen balance estimation"
+let s_balance_estimation = ss_ "Balance estimation"
+let s_rewards_frozen = ss_ "Rewards (frozen)"
+let s_fees_frozen = ss_ "Fees (frozen)"
+let s_deposits_frozen = ss_ "Deposits (frozen)"
+let s_frozen_balance = ss_ "Frozen balance"
+let s_now = ss_ "Now"
+let s_ranking = ss_ "Ranking"
+let s_merged_charts = ss_ "Merged charts"
+let s_splitted_charts = ss_ "Splitted charts"
+let s_currency = ss_ "Currency"
+let s_balance_evolution = ss_ "Balance evolution (in Tz)"
+let s_estimated_at_the_end_of_cycle = ss_ "Estimated at the end of cycle"
+
+let s_version = ss_ "Version"
+let s_baker_version = ss_ "Baker Version"
 
 let t_subst t f =
   let b = Buffer.create 100 in
@@ -352,3 +373,29 @@ let s_subst_evaluated_balance = ss_
  "The evaluated balance is snapshotted during \
   the current cycle and will be used in $cycles cycles. \
   This is equal to $rolls rolls."
+
+let s_balances = ss_ "Balances"
+let s_frozen_balances = ss_ "Frozen balances"
+let s_frozen_deposits = ss_ "Frozen deposits"
+let s_frozen_rewards = ss_ "Frozen rewards"
+let s_paid_bytes = ss_ "Paid bytes"
+let s_staking_balances = ss_ "Staking balances"
+let s_total_balances = ss_ "Total balances"
+let s_total_delegated = ss_ "Total delegated"
+let s_total_delegators = ss_ "Total delegators"
+let s_total_frozen_fees = ss_ "Total frozen fees"
+let s_used_bytes = ss_ "Used bytes"
+
+let s_top_balances = ss_ "Top Balances"
+let s_top_frozen_balances = ss_ "Top Frozen balances"
+let s_top_frozen_deposits = ss_ "Top Frozen deposits"
+let s_top_frozen_rewards = ss_ "Top Frozen rewards"
+let s_top_paid_bytes = ss_ "Top Paid bytes"
+let s_top_staking_balances = ss_ "Top Staking balances"
+let s_top_total_balances = ss_ "Top Total balances"
+let s_top_total_delegated = ss_ "Top Total delegated"
+let s_top_total_delegators = ss_ "Top Total delegators"
+let s_top_total_frozen_fees = ss_ "Top Total frozen fees"
+let s_top_used_bytes = ss_ "Top Used bytes"
+
+let s_exchanges = ss_ "Exchanges"

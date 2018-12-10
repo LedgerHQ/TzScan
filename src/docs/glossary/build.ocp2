@@ -22,5 +22,7 @@ OCaml.library("glossary", ocaml + {
       "inject.md";
       "balance.md";
       "staking_balance.md";
+      "balance_updates.md";
+      "balance_snapshot.md"
       ]}
   ]});

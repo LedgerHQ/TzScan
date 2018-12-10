@@ -44,13 +44,25 @@ module Reader_generic (M : Db_intf.MONAD) = struct
 
   let (>>>) f g = f g
 
-  let of_count_opt = function
-    | [ Some count ] -> return (Int64.to_int count)
-    | _ -> return 0
+  let of_count_pair =
+    let opt_check = function
+        Some count -> Int64.to_int count
+      | None -> 0 in
+    function
+    | [ a,b ] -> return (opt_check a, opt_check b)
+    | _ -> return (0,0)
 
-   let of_count = function
-    | [ count ] -> return (Int64.to_int count)
-    | _ -> return 0
+  let of_dbf f = function
+    | [ c ] -> return (f c)
+    | _ -> return (f 0L)
+  let of_db_optf f = function
+    | [ Some c ] -> return (f c)
+    | _ -> return (f 0L)
+  let of_db = of_dbf (fun x -> x)
+  let of_db_opt = of_db_optf (fun x -> x)
+  let of_count_opt = of_db_optf Int64.to_int
+  let of_count = of_dbf Int64.to_int
+
 
   let test_opt f = function
     | None -> None, true
@@ -314,11 +326,7 @@ module Reader_generic (M : Db_intf.MONAD) = struct
     with_dbh >>> fun dbh ->
     match filters with
     | [] ->
-      PGSQL(dbh) "SELECT operation_count from block WHERE hash = $hash" >>=
-      begin function
-        | [ count ] -> return @@ Int64.to_int count
-        | _ -> return 0
-      end
+      PGSQL(dbh) "SELECT operation_count from block WHERE hash = $hash" >>= of_count
     | [ "Nonce" ] ->
       PGSQL(dbh)
         "SELECT COUNT(*) FROM operation AS o \
@@ -540,14 +548,14 @@ module Reader_generic (M : Db_intf.MONAD) = struct
     | Empty -> nb_operation_empty false filters
     | Pending -> nb_operation_empty true filters
 
-  let transaction_operations op_hash =
+  let transaction_operations op_hash block_hash =
     with_dbh >>> fun dbh ->
     PGSQL(dbh)
       "SELECT hash, source, destination, fee, counter, \
        amount, parameters, gas_limit, storage_limit, failed, internal, burn_tez, \
        op_level, timestamp_op \
-       FROM transaction_all WHERE hash = $op_hash" >>= fun rows ->
-    return @@ Pg_helper.transaction_from_db rows
+       FROM transaction_all WHERE hash = $op_hash AND op_block_hash = $block_hash"
+    >>= fun rows -> return @@ Pg_helper.transaction_from_db rows
 
   let origination_operations op_hash =
     with_dbh >>> fun dbh ->
@@ -625,7 +633,7 @@ module Reader_generic (M : Db_intf.MONAD) = struct
     >>= fun dee_ops ->
     return @@ Some (Anonymous (act_ops @ nonce_ops @ dbe_ops @ dee_ops))
 
-  let manager_operation op_hash op_manager_types =
+  let manager_operation op_hash op_manager_types block_hash =
     let op_manager_types =
       List.fold_left (fun acc op_type -> match op_type with
           | None -> acc
@@ -637,7 +645,7 @@ module Reader_generic (M : Db_intf.MONAD) = struct
       return None
     else
       (if transaction then
-         transaction_operations op_hash
+         transaction_operations op_hash block_hash
        else return ("", []))
       >>= fun (tr_src, tr_ops) ->
       (if origination then
@@ -668,7 +676,8 @@ module Reader_generic (M : Db_intf.MONAD) = struct
            (Manager
               ("manager", Alias.to_name source, ops)))
 
-  let operation op_hash =
+  let operation ?block_hash op_hash =
+    let block_hash, no_block_hash = test_opt (fun x -> x) block_hash in
     with_dbh >>> fun dbh ->
     PGSQL(dbh)
       "SELECT o.hash, COALESCE(bo.block_hash,'prevalidation') AS block_hash, \
@@ -677,7 +686,9 @@ module Reader_generic (M : Db_intf.MONAD) = struct
        FROM operation AS o \
        LEFT JOIN block_operation AS bo ON o.hash = bo.operation_hash \
        LEFT JOIN block AS bl ON bl.hash = bo.block_hash \
-       WHERE o.hash = $op_hash ORDER BY bl.distance_level DESC LIMIT 1"
+       WHERE o.hash = $op_hash AND \
+       (($no_block_hash AND bl.distance_level = 0) OR \
+       (NOT $no_block_hash AND bl.hash = $?block_hash)) LIMIT 1"
     >>= fun rows -> match rows with
     | [ _, Some op_bhash, Some op_nhash,"Anonymous", _, Some anon_types ] ->
       begin
@@ -696,7 +707,9 @@ module Reader_generic (M : Db_intf.MONAD) = struct
         PGSQL(dbh)
           "SELECT source, block_level, block_hash, slots, op_level, priority, \
            timestamp FROM endorsement_all \
-           WHERE hash = $op_hash" >>= function
+           WHERE hash = $op_hash AND \
+           (($no_block_hash AND distance_level = 0) OR \
+           (NOT $no_block_hash AND op_block_hash = $?block_hash)) LIMIT 1" >>= function
         | [ endorse_src, endorse_block_level, endorse_block_hash,
             endorse_slot, endorse_op_level, endorse_priority, endorse_timestamp ] ->
           let endorse_block_level = Int64.to_int endorse_block_level in
@@ -723,7 +736,7 @@ module Reader_generic (M : Db_intf.MONAD) = struct
       return None
     | [ _, Some op_bhash, Some op_nhash, "Manager", Some mana_types, _ ] ->
       begin
-        manager_operation op_hash mana_types >>= function
+        manager_operation op_hash mana_types op_bhash >>= function
         | None -> return None
         | Some op_type ->
           return @@
@@ -755,7 +768,7 @@ module Reader_generic (M : Db_intf.MONAD) = struct
          FROM op_join AS opj \
          LEFT JOIN seed_nonce_revelation AS s \
          ON opj.operation_hash = s.hash \
-         ORDER BY s.hash LIMIT $limit OFFSET $offset" >>= fun rows ->
+         ORDER BY s.level LIMIT $limit OFFSET $offset" >>= fun rows ->
       let grouped =
         List.fold_left
           (fun acc (oph, op_bhash, op_nhash, _, _, level, nonce) ->
@@ -797,7 +810,7 @@ module Reader_generic (M : Db_intf.MONAD) = struct
          FROM op_join AS opj \
          LEFT JOIN activation AS a \
          ON opj.operation_hash = a.hash \
-         ORDER BY a.hash LIMIT $limit OFFSET $offset" >>= fun rows ->
+         ORDER BY a.hash, a.secret LIMIT $limit OFFSET $offset" >>= fun rows ->
       let grouped =
         List.fold_left
           (fun acc (oph, op_bhash, op_nhash, _, _, pkh, secret) ->
@@ -864,7 +877,7 @@ module Reader_generic (M : Db_intf.MONAD) = struct
          amount, parameters, gas_limit, storage_limit, failed, internal, burn_tez, \
          op_level, timestamp_block \
          FROM transaction_all WHERE op_block_hash = $block_hash \
-         ORDER BY amount, hash LIMIT $limit OFFSET $offset"
+         ORDER BY amount DESC, hash, counter LIMIT $limit OFFSET $offset"
       >>= fun rows ->
       let grouped =
         List.fold_left
@@ -1154,94 +1167,6 @@ module Reader_generic (M : Db_intf.MONAD) = struct
       >>= fun rows ->
       return @@ Pg_helper.operation_from_db_list rows
 
-  let operations_from_account filters page page_size hash =
-    with_dbh >>> fun dbh ->
-    debug "[Reader] [operations_from_account %s %d %d\n%!" hash page page_size ;
-    let page_size64 = Int64.of_int page_size in
-    let offset = Int64.of_int(page * page_size) in
-    let (_seed, activation, transaction, origination,
-         delegation, endorsement, _, _, _, _, reveal) =
-      Pg_helper.filters_flag filters in
-    let seed = false in
-    PGSQL(dbh)
-      "nullable-results"
-      "WITH op AS (\
-       (SELECT o.hash, 'prevalidation' AS block_hash, \
-       'prevalidation' AS network_hash, o.op_type, -1::bigint, \
-       s.*, \
-       f.*, \
-       t.*, \
-       ori.*, \
-       d.*, \
-       e.*, \
-       r.* \
-       FROM operation AS o \
-       LEFT JOIN block_operation AS bo ON (o.hash = bo.operation_hash) \
-       LEFT JOIN seed_nonce_revelation AS s ON (o.hash = s.hash) \
-       LEFT JOIN activation AS f ON (o.hash = f.hash) \
-       LEFT JOIN transaction AS t ON (o.hash = t.hash) \
-       LEFT JOIN origination AS ori ON (o.hash = ori.hash) \
-       LEFT JOIN delegation AS d ON (o.hash = d.hash) \
-       LEFT JOIN endorsement AS e ON o.hash = e.hash \
-       LEFT JOIN reveal AS r ON (o.hash = r.hash) \
-       WHERE bo.block_hash IS NULL AND \
-       (($seed AND array_position(o.op_anon_type, 'Nonce', 1) > 0) OR \
-       ($activation AND array_position(o.op_anon_type, 'Activation', 1) > 0 \
-       AND f.pkh = $hash) OR \
-       ($transaction AND array_position(o.op_manager_type, 'Transaction', 1) > 0 \
-       AND (t.source = $hash OR t.destination = $hash)) OR \
-       ($origination AND array_position(o.op_manager_type, 'Origination', 1) > 0 \
-       AND ori.source = $hash) OR \
-       ($delegation AND array_position(o.op_manager_type, 'Delegation', 1) > 0 \
-       AND (d.source = $hash OR d.delegate = $hash)) OR \
-       ($endorsement AND o.op_type = 'Endrosement' \
-       AND e.source = $hash) OR \
-       ($reveal AND array_position(o.op_manager_type, 'Reveal', 1) > 0 \
-       AND r.source = $hash))) \
-       UNION ALL \
-       (SELECT o.hash, bo.block_hash, bl.network, o.op_type, bl.level,  \
-       s.*, \
-       f.*, \
-       t.*, \
-       ori.*, \
-       d.*, \
-       e.*, \
-       r.* \
-       FROM block_operation AS bo \
-       INNER JOIN operation AS o ON o.hash = bo.operation_hash \
-       INNER JOIN block AS bl ON (bl.hash = bo.block_hash) \
-       LEFT JOIN seed_nonce_revelation AS s ON \
-       (o.hash = s.hash) \
-       LEFT JOIN activation AS f ON \
-       (o.hash = f.hash) \
-       LEFT JOIN transaction AS t ON \
-       (o.hash = t.hash) \
-       LEFT JOIN origination AS ori ON \
-       (o.hash = ori.hash) \
-       LEFT JOIN delegation AS d ON \
-       (o.hash = d.hash) \
-       LEFT JOIN endorsement AS e \
-       ON o.hash = e.hash \
-       LEFT JOIN reveal AS r ON \
-       (o.hash = r.hash) \
-       WHERE bl.distance_level = 0 AND \
-       (($seed AND array_position(o.op_anon_type, 'Nonce', 1) > 0) OR \
-       ($activation AND  array_position(o.op_anon_type, 'Activation', 1) > 0 \
-       AND f.pkh = $hash) OR \
-       ($transaction AND  array_position(o.op_manager_type, 'Transaction', 1) > 0 \
-       AND (t.source = $hash OR t.destination = $hash)) OR \
-       ($delegation AND  array_position(o.op_manager_type, 'Delegation', 1) > 0 \
-       AND (d.source = $hash OR d.delegate = $hash)) OR \
-       ($origination AND  array_position(o.op_manager_type, 'Origination', 1) > 0 \
-       AND ori.source =$hash) OR \
-       ($endorsement AND o.op_type = 'Endorsement' \
-       AND e.source = $hash) OR \
-       ($reveal AND  array_position(o.op_manager_type, 'Reveal', 1) > 0 \
-       AND r.source = $hash)) \
-       ORDER BY bl.level DESC)) \
-       SELECT * FROM op LIMIT $page_size64 OFFSET $offset" >>= fun rows ->
-    return @@ Pg_helper.operation_from_db_list rows
-
   let transaction_from_account page page_size hash =
     with_dbh >>> fun dbh ->
     let page_size64 = Int64.of_int page_size in
@@ -1250,9 +1175,9 @@ module Reader_generic (M : Db_intf.MONAD) = struct
       "SELECT hash, op_block_hash, network, source, destination, fee, counter, \
        amount, parameters, gas_limit, storage_limit, failed, internal, \
        burn_tez, op_level, timestamp_block \
-       FROM transaction_all WHERE source = $hash OR destination = $hash \
+       FROM transaction_all WHERE (source = $hash OR destination = $hash) \
        AND distance_level = 0 \
-       ORDER BY op_level DESC LIMIT $page_size64 OFFSET $offset"
+       ORDER BY op_level DESC, hash, counter LIMIT $page_size64 OFFSET $offset"
     >>= fun rows ->
     return @@ List.rev @@ Pg_helper.transaction_from_db_list rows
 
@@ -1391,48 +1316,6 @@ module Reader_generic (M : Db_intf.MONAD) = struct
     >>= fun rows ->
     return @@ List.rev @@ Pg_helper.origination_from_db_list rows
 
-  let operations_from_pending filters page page_size =
-    with_dbh >>> fun dbh ->
-    let page_size64 = Int64.of_int page_size in
-    let offset = Int64.of_int(page * page_size) in
-    let (seed, activation, transaction, origination,
-         delegation, endorsement, _, _, _, _, reveal) =
-      Pg_helper.filters_flag filters in
-    PGSQL(dbh)
-      "nullable-results"
-      "WITH op_join AS \
-       (SELECT o.hash, o.op_type \
-       FROM operation AS o \
-       LEFT JOIN block_operation AS bo ON (o.hash = bo.operation_hash) \
-       WHERE bo.block_hash IS NULL AND \
-       (($seed AND array_position(o.op_anon_type, 'Nonce', 1) > 0) OR \
-       ($activation AND array_position(o.op_anon_type, 'Activation', 1) > 0) OR \
-       ($transaction AND array_position(o.op_manager_type, 'Transaction', 1) > 0) OR \
-       ($origination AND array_position(o.op_manager_type, 'Origination', 1) > 0) OR \
-       ($delegation AND array_position(o.op_manager_type, 'Delegation', 1) > 0) OR \
-       ($endorsement AND o.op_type = 'Endorsement') OR \
-       ($reveal AND array_position(o.op_manager_type, 'Reveal', 1) > 0)) \
-       LIMIT $page_size64 OFFSET $offset) \
-       SELECT opj.hash, 'prevalidation' :: text, 'prevalidation' :: text, \
-       opj.op_type, -1::bigint, \
-       s.*, \
-       f.*, \
-       t.*, \
-       ori.*, \
-       d.*, \
-       e.*, \
-       r.* \
-       FROM op_join AS opj \
-       LEFT JOIN seed_nonce_revelation AS s ON ($seed AND opj.hash = s.hash) \
-       LEFT JOIN activation AS f ON ($activation AND opj.hash = f.hash) \
-       LEFT JOIN transaction AS t ON ($transaction AND opj.hash = t.hash) \
-       LEFT JOIN origination AS ori ON ($origination AND opj.hash = ori.hash) \
-       LEFT JOIN delegation AS d ON ($delegation AND opj.hash = d.hash) \
-       LEFT JOIN endorsement AS e ON ($endorsement AND opj.hash = e.hash) \
-       LEFT JOIN reveal AS r ON ($reveal AND opj.hash = r.hash)"
-    >>= fun rows ->
-    return @@ Pg_helper.operation_from_db_list rows
-
   let transaction_from_recent page page_size =
     with_dbh >>> fun dbh ->
     let page_size64 = Int64.of_int page_size in
@@ -1444,14 +1327,14 @@ module Reader_generic (M : Db_intf.MONAD) = struct
            amount, parameters, gas_limit, storage_limit, failed, internal, burn_tez, \
            op_level, timestamp_block \
            FROM transaction_last WHERE distance_level = 0 \
-           ORDER BY op_level DESC LIMIT $page_size64 OFFSET $offset"
+           ORDER BY op_level DESC, hash, counter LIMIT $page_size64 OFFSET $offset"
       else
         PGSQL(dbh)
           "SELECT hash, op_block_hash, network, source, destination, fee, counter, \
            amount, parameters, gas_limit, storage_limit, failed, internal, burn_tez, \
            op_level, timestamp_block \
            FROM transaction_all WHERE distance_level = 0 \
-           ORDER BY op_level DESC LIMIT $page_size64 OFFSET $offset"
+           ORDER BY op_level DESC, hash, counter LIMIT $page_size64 OFFSET $offset"
     end
     >>= fun rows ->
     debug "[Reader] ROWS %d\n%!" (List.length rows);
@@ -1503,23 +1386,44 @@ module Reader_generic (M : Db_intf.MONAD) = struct
     >>= fun rows ->
     return @@ List.rev @@ Pg_helper.reveal_from_db_list rows
 
+  let activation_from_recent page page_size =
+    with_dbh >>> fun dbh ->
+    let page_size64 = Int64.of_int page_size in
+    let offset = Int64.of_int(page * page_size) in
+    PGSQL(dbh)
+      "WITH ops AS \
+       (WITH op AS (SELECT * FROM activation) \
+       SELECT op.hash, COALESCE(bo.block_hash,'prevalidation') AS block_hash, \
+       COALESCE(bl.network,'prevalidation') AS network_hash, bl.level, \
+       op.pkh, op.secret \
+       FROM op \
+       LEFT JOIN block_operation AS bo ON op.hash = bo.operation_hash \
+       LEFT JOIN block AS bl ON (bl.hash = bo.block_hash) \
+       WHERE bl.distance_level = 0 OR bl.distance_level IS NULL) \
+       SELECT ops.hash, ops.block_hash, ops.network_hash, \
+       ops.pkh, ops.secret \
+       FROM ops \
+       ORDER BY ops.level DESC, ops.hash NULLS FIRST LIMIT $page_size64 OFFSET $offset"
+    >>= fun rows ->
+    return @@ List.rev @@ Pg_helper.activation_from_db_list rows
+
   let endorsement_from_recent page page_size =
     with_dbh >>> fun dbh ->
     let limit = Int64.of_int page_size in
     let offset = Int64.of_int(page * page_size) in
     begin
-      if Int64.add offset limit > Pg_update.Constants.last_transactions then
+      if Int64.add offset limit > Pg_update.Constants.last_endorsements then
         PGSQL(dbh)
           "SELECT hash, op_block_hash, network, source, block_hash, slots, \
            block_level, op_level, priority, timestamp \
            FROM endorsement_all where distance_level = 0 \
-           ORDER BY block_level DESC LIMIT $limit OFFSET $offset"
+           ORDER BY block_level DESC, slots DESC LIMIT $limit OFFSET $offset"
       else
         PGSQL(dbh)
           "SELECT hash, op_block_hash, network, source, block_hash, slots, \
            block_level, op_level, priority, timestamp \
            FROM endorsement_last where distance_level = 0 \
-           ORDER BY block_level DESC LIMIT $limit OFFSET $offset"
+           ORDER BY block_level DESC, slots DESC LIMIT $limit OFFSET $offset"
     end
     >>= fun rows ->
     return @@ Pg_helper.endorsement_from_db_list rows
@@ -1554,48 +1458,6 @@ module Reader_generic (M : Db_intf.MONAD) = struct
     >>= fun rows ->
     return @@ List.rev @@ Pg_helper.origination_from_db_list rows
 
-  let operations_from_recent filters page page_size =
-    with_dbh >>> fun dbh ->
-    let page_size64 = Int64.of_int page_size in
-    let offset = Int64.of_int(page * page_size) in
-    let (seed, activation, transaction, origination,
-         delegation, endorsement, _, _, _, _, reveal) =
-      Pg_helper.filters_flag filters in
-    PGSQL(dbh)
-      "nullable-results"
-      "WITH op_join AS (SELECT bo.operation_hash, bo.block_hash, bl.network, \
-       o.op_type, bl.level \
-       FROM block_operation AS bo \
-       INNER JOIN block AS bl ON (bl.hash = bo.block_hash AND bl.distance_level = 0) \
-       INNER JOIN operation AS o ON (o.hash = bo.operation_hash) \
-       WHERE \
-       (($seed AND array_position(o.op_anon_type, 'Nonce', 1) > 0) OR \
-       ($activation AND array_position(o.op_anon_type, 'Activation', 1) > 0) OR \
-       ($transaction AND array_position(o.op_manager_type, 'Transaction', 1) > 0) OR \
-       ($origination AND array_position(o.op_manager_type, 'Origination', 1) > 0) OR \
-       ($delegation AND array_position(o.op_manager_type, 'Delegation', 1) > 0) OR \
-       ($endorsement AND o.op_type = 'Endorsement') OR \
-       ($reveal AND array_position(o.op_manager_type, 'Reveal', 1) > 0)) \
-       ORDER BY bl.level DESC, bo.operation_hash LIMIT $page_size64 OFFSET $offset) \
-       SELECT opj.operation_hash, opj.block_hash, opj.network, opj.op_type, opj.level, \
-       s.*, \
-       f.*, \
-       t.*, \
-       ori.*, \
-       d.*, \
-       e.*, \
-       r.* \
-       FROM op_join AS opj \
-       LEFT JOIN seed_nonce_revelation AS s ON ($seed AND opj.operation_hash = s.hash) \
-       LEFT JOIN activation AS f ON ($activation AND opj.operation_hash = f.hash) \
-       LEFT JOIN transaction AS t ON ($transaction AND opj.operation_hash = t.hash) \
-       LEFT JOIN origination AS ori ON ($origination AND opj.operation_hash = ori.hash) \
-       LEFT JOIN delegation AS d ON ($delegation AND opj.operation_hash = d.hash) \
-       LEFT JOIN endorsement AS e ON ($endorsement AND opj.operation_hash = e.hash) \
-       LEFT JOIN reveal AS r ON ($reveal AND opj.operation_hash = r.hash) \
-       ORDER BY opj.level DESC" >>= fun rows ->
-    return @@ List.rev @@ Pg_helper.operation_from_db_list rows
-
   let double_baking_evidence_from_recent page page_size =
     with_dbh >>> fun dbh ->
     let limit = Int64.of_int page_size in
@@ -1606,7 +1468,8 @@ module Reader_generic (M : Db_intf.MONAD) = struct
        INNER JOIN block_operation AS bo ON bo.operation_hash = dbe.hash \
        INNER JOIN block AS bl ON bl.hash = bo.block_hash \
        WHERE bl.distance_level = 0 \
-       ORDER BY bl.level DESC LIMIT $limit OFFSET $offset" >>= fun bl_rows ->
+       ORDER BY bl.level DESC, dbe.hash LIMIT $limit OFFSET $offset"
+    >>= fun bl_rows ->
     PGSQL(dbh)
       "SELECT bl2.signature, dbe.*, h1.*, h2.* \
        FROM double_baking_evidence AS dbe \
@@ -1616,7 +1479,7 @@ module Reader_generic (M : Db_intf.MONAD) = struct
        INNER JOIN block AS bl ON bl.hash = bo.block_hash \
        INNER JOIN block AS bl2 ON h1.level = bl2.level \
        WHERE bl.distance_level = 0 AND bl2.distance_level = 0\
-       ORDER BY bl.level DESC LIMIT $limit OFFSET $offset" >>= fun rows ->
+       ORDER BY bl.level DESC, dbe.hash LIMIT $limit OFFSET $offset" >>= fun rows ->
     return @@ List.map2 (fun (op_hash, op_block_hash, op_network_hash) row ->
         {op_hash; op_block_hash; op_network_hash;
          op_type = Anonymous [Pg_helper.dbe_from_db row]}) bl_rows rows
@@ -1631,14 +1494,14 @@ module Reader_generic (M : Db_intf.MONAD) = struct
        INNER JOIN block_operation AS bo ON bo.operation_hash = dee.hash \
        INNER JOIN block AS bl ON bl.hash = bo.block_hash \
        WHERE bl.distance_level = 0 \
-       ORDER BY bl.level DESC LIMIT $limit OFFSET $offset" >>= fun bl_rows ->
+       ORDER BY bl.level DESC, dee.hash LIMIT $limit OFFSET $offset" >>= fun bl_rows ->
     PGSQL(dbh)
       "SELECT dee.* \
        FROM double_endorsement_evidence AS dee \
        INNER JOIN block_operation AS bo ON bo.operation_hash = dee.hash \
        INNER JOIN block AS bl ON bl.hash = bo.block_hash \
        WHERE bl.distance_level = 0 \
-       ORDER BY bl.level DESC LIMIT $limit OFFSET $offset" >>= fun rows ->
+       ORDER BY bl.level DESC, dee.hash LIMIT $limit OFFSET $offset" >>= fun rows ->
     return @@ List.map2 (fun (op_hash, op_block_hash, op_network_hash, op_level) row ->
         {op_hash; op_block_hash; op_network_hash;
          op_type = Anonymous [Pg_helper.dee_from_db (row, op_level)]}) bl_rows rows
@@ -1656,10 +1519,10 @@ module Reader_generic (M : Db_intf.MONAD) = struct
         | [ "Origination" ] -> origination_from_account ~delegate page page_size hash
         | [ "Reveal" ] -> reveal_from_account page page_size hash
         | [ "Activation" ] -> activation_from_account page page_size hash
-        | _ -> operations_from_account filters page page_size hash
+        | _ -> assert false
       end
 
-    | Pending -> operations_from_pending filters page page_size
+    | Pending -> assert false
 
     | Empty ->
       begin match filters with
@@ -1668,11 +1531,12 @@ module Reader_generic (M : Db_intf.MONAD) = struct
         | [ "Endorsement" ] -> endorsement_from_recent page page_size
         | [ "Origination" ] -> origination_from_recent page page_size
         | [ "Reveal" ] -> reveal_from_recent page page_size
+        | [ "Activation" ] -> activation_from_recent page page_size
         | [ "Double_baking_evidence" ] ->
           double_baking_evidence_from_recent page page_size
         | [ "Double_endorsement_evidence" ] ->
           double_endorsement_evidence_from_recent page page_size
-        | _ -> operations_from_recent filters page page_size
+        | _ -> assert false
       end
 
   (* Temporary *)
@@ -1684,16 +1548,12 @@ module Reader_generic (M : Db_intf.MONAD) = struct
        INNER JOIN protocol AS p ON b.protocol = p.hash \
        INNER JOIN protocol AS pt ON b.test_protocol = pt.hash \
        WHERE distance_level = 0 ORDER BY level DESC LIMIT 1"
-    >>= function
-    | [ number ] -> return number
-    | _ -> return Int64.zero
+    >>= of_db
 
   let current_cycle () =
     with_dbh >>> fun dbh ->
     PGSQL(dbh) "SELECT MAX(cycle) FROM block WHERE distance_level = 0"
-    >>= function
-    | [ Some c ] -> return c
-    | _ -> return 0L
+    >>= of_db_opt
 
   (* Baking Section *)
 
@@ -1718,17 +1578,19 @@ module Reader_generic (M : Db_intf.MONAD) = struct
     let interval_b_prio = CalendarLib.Calendar.Period.second time_b_prio in
     PGSQL(dbh)
       "SELECT b.hash, b.baker, b.level, b.cycle, b.priority, \
+       lr.bakers_priority[array_position(lr.bakers, $hash)], \
        b.distance_level, b.fees, \
        bake_time(b.timestamp - pred.timestamp, b.priority, $interval_b_blocks, \
        $interval_b_prio), \
-       b.baker = $hash \
+       b.baker = $hash, b.timestamp \
        FROM block AS b \
        LEFT JOIN block AS pred ON b.predecessor = pred.hash \
        INNER JOIN level_rights AS lr ON b.level = lr.level \
        WHERE (b.baker = $hash OR \
        lr.bakers_priority[array_position(lr.bakers, $hash)] <= b.priority) \
        AND ($nocycle OR b.cycle = $?cycle) AND lr.level <= $head_lvl \
-       ORDER BY b.level DESC NULLS FIRST LIMIT $page_size64 OFFSET $offset"
+       ORDER BY b.level DESC, b.distance_level \
+       NULLS FIRST LIMIT $page_size64 OFFSET $offset"
     >>= fun rows ->
     return @@ Pg_helper.bakings_from_db_list rows
 
@@ -1755,14 +1617,16 @@ module Reader_generic (M : Db_intf.MONAD) = struct
   let total_bakings hash =
     let block_reward = Tezos_constants.Constants.block_reward in
     let block_deposit = Tezos_constants.Constants.block_security_deposit in
-    let ramp_up_cycle = Int64.of_int Tezos_constants.ramp_up_cycles in
+    let ramp_up_cycle = Tezos_constants.Constants.ramp_up_cycles in
+    let start_reward_cycle = Tezos_constants.Constants.start_reward_cycle in
     current_cycle () >>= fun head_cycle ->
     with_dbh >>> fun dbh ->
     PGSQL(dbh)
       "SELECT COUNT( * ), SUM(array_sum(nb_baking,1))::bigint, \
        SUM(array_sum(nb_baking,2))::bigint, SUM(nb_miss_baking)::bigint, \
        SUM(array_wavg(nb_baking,1)), SUM(fees)::bigint, SUM(time), \
-       SUM(bk_rewards(array_sum(nb_baking,1) * $block_reward, cycle, true))::bigint, \
+       SUM(bk_rewards(array_sum(nb_baking,1) * $block_reward, cycle, \
+       $start_reward_cycle, true))::bigint, \
        SUM(deposits(array_sum(nb_baking,1) * $block_deposit, cycle, $ramp_up_cycle, \
        1, true))::bigint \
        FROM cycle_count_baker \
@@ -1805,6 +1669,20 @@ module Reader_generic (M : Db_intf.MONAD) = struct
        ORDER BY level ASC NULLS FIRST LIMIT $page_size64 OFFSET $offset"
     >>= fun rows ->
     return @@ Pg_helper.baker_rights_from_db_list rows
+
+
+  let cycle_all_rights ?cycle ?(prio=0) hash =
+    head_level () >>= fun head_lvl ->
+    with_dbh >>> fun dbh ->
+    let (cycle, nocycle) = test_opt Int64.of_int cycle in
+    let prio = Int32.of_int prio in
+    PGSQL(dbh)
+      "SELECT COUNT(CASE WHEN ARRAY_POSITION(bakers, $hash) = $prio THEN 1 ELSE 0 END), \
+       COUNT(CASE WHEN ARRAY_POSITION(endorsers, $hash) = $prio THEN 1 ELSE 0 END) \
+       FROM level_rights \
+       WHERE $hash = ANY (bakers) AND level > $head_lvl AND \
+       ($nocycle OR cycle = $?cycle)"
+    >>= of_count_pair
 
   let nb_cycle_baker_rights hash =
     head_level () >>= fun head_lvl ->
@@ -1878,15 +1756,16 @@ module Reader_generic (M : Db_intf.MONAD) = struct
        ($nocycle OR level >= ($?cycle * $block_per_cycle::bigint)::bigint \
        AND level < ($?cycle + 1::bigint) * $block_per_cycle) \
        AND level < $head_lvl), \
-       p(level, hash, endorser, cycle, priority, distance_level, slots) AS ( \
-       SELECT block_level, op_block_hash, source, op_cycle, priority, distance_level, slots \
+       p(level, hash, endorser, cycle, priority, distance_level, slots, tsp) AS ( \
+       SELECT block_level, op_block_hash, source, op_cycle, priority, \
+       distance_level, slots, timestamp \
        FROM endorsement_all \
        WHERE source = $hash AND ( $nocycle OR op_cycle = $?cycle ) \
        AND distance_level = 0) \
        SELECT lr.level, lr.nslot, p.hash, p.endorser, p.cycle, p.priority, \
-       p.distance_level, p.slots \
+       p.distance_level, p.slots, p.tsp \
        FROM lr AS lr LEFT JOIN p AS p ON lr.level = p.level \
-       ORDER BY lr.level DESC LIMIT $limit OFFSET $offset"
+       ORDER BY lr.level DESC, p.distance_level LIMIT $limit OFFSET $offset"
     >>= fun rows ->
     return @@ Pg_helper.bakings_endorsement_from_db_list rows
 
@@ -1903,9 +1782,10 @@ module Reader_generic (M : Db_intf.MONAD) = struct
     current_cycle () >>= fun head_cycle ->
     with_dbh >>> fun dbh ->
     let reward = Tezos_constants.Constants.endorsement_reward_coeff in
+    let start_reward_cycle = Tezos_constants.Constants.start_reward_cycle in
     PGSQL(dbh)
       "SELECT cycle, array_sum(nb_endorsement,1), nb_miss_endorsement, \
-       array_wavg(nb_endorsement, 1), end_rewards_array($reward, cycle, nb_endorsement) \
+       array_wavg(nb_endorsement, 1), end_rewards_array($reward, cycle, nb_endorsement, $start_reward_cycle) \
        FROM cycle_count_baker WHERE tz = $hash AND cycle <= $head_cycle \
        ORDER BY cycle DESC LIMIT $limit OFFSET $offset"
     >>= fun rows ->
@@ -1915,13 +1795,14 @@ module Reader_generic (M : Db_intf.MONAD) = struct
   let total_endorsements hash =
     let reward = Tezos_constants.Constants.endorsement_reward_coeff in
     let deposit = Tezos_constants.Constants.endorsement_security_deposit in
-    let ramp_up_cycle = Int64.of_int Tezos_constants.ramp_up_cycles in
+    let ramp_up_cycle = Tezos_constants.Constants.ramp_up_cycles in
+    let start_reward_cycle = Tezos_constants.Constants.start_reward_cycle in
     current_cycle () >>= fun head_cycle ->
     with_dbh >>> fun dbh ->
     PGSQL(dbh)
       "SELECT COUNT( * ), SUM(array_sum(nb_endorsement,1))::bigint, \
        SUM(nb_miss_endorsement)::bigint, SUM(array_wavg(nb_endorsement,1)), \
-       SUM(end_rewards_array($reward, cycle, nb_endorsement))::bigint, \
+       SUM(end_rewards_array($reward, cycle, nb_endorsement, $start_reward_cycle))::bigint, \
        SUM(deposits(array_sum(nb_endorsement,1) * $deposit, cycle, $ramp_up_cycle, \
        1, true))::bigint \
        FROM cycle_count_baker \
@@ -2047,6 +1928,60 @@ module Reader_generic (M : Db_intf.MONAD) = struct
     >>= fun rows ->
     return @@ Pg_helper.rights_from_db_list rows
 
+  let last_baking_and_endorsement hash =
+    head_level () >>= fun head_lvl ->
+    with_dbh >>> fun dbh ->
+    PGSQL(dbh)
+      "SELECT hash, baker, level, cycle, priority, 0, distance_level, \
+       fees, 0::float, true, timestamp \
+       FROM block \
+       WHERE baker = $hash AND distance_level = 0 \
+       ORDER BY level DESC LIMIT 1"
+    >>= fun last_baking ->
+    PGSQL(dbh)
+      "nullable-results"
+      "SELECT block_level, array_length(slots, 1), op_block_hash, source, \
+       op_cycle, priority, 0, slots, timestamp \
+       FROM endorsement_all \
+       WHERE source = $hash AND distance_level = 0 \
+       ORDER BY block_level DESC LIMIT 1"
+    >>= fun last_endorsement ->
+    PGSQL(dbh)
+      "SELECT MAX(lr.level)
+       FROM block AS b \
+       INNER JOIN level_rights AS lr ON b.level = lr.level \
+       WHERE lr.bakers_priority[array_position(lr.bakers, $hash)] <= b.priority \
+       AND lr.level <= $head_lvl"
+    >>= of_count_opt >>= fun last_baking_right ->
+    PGSQL(dbh)
+      "SELECT MAX(level) FROM level_rights \
+       WHERE $hash = ANY(endorsers) AND level < $head_lvl"
+    >>= of_count_opt >>= fun last_endorsement_right ->
+    let last_baking = Pg_helper.bakings_from_db_list last_baking in
+    let last_endorsement = Pg_helper.bakings_endorsement_from_db_list last_endorsement in
+    return (last_baking, last_endorsement, last_baking_right, last_endorsement_right)
+
+  let next_baking_and_endorsement hash =
+    with_dbh >>> fun dbh ->
+    PGSQL(dbh)
+      "SELECT b.cycle, b.level, b.timestamp FROM block AS b \
+       WHERE distance_level = 0 ORDER BY level DESC LIMIT 1"
+    >>= begin function
+      | [ head_cycle, head_level, head_tsp ] ->
+        return (head_cycle, head_level, Pg_helper.string_of_cal head_tsp)
+      | _ -> return (0L, 0L, "1970-01-01T00:00:00Z") end
+    >>= fun (head_cycle, head_lvl, head_tsp) ->
+    PGSQL(dbh)
+      "SELECT MIN(level) FROM level_rights WHERE level > $head_lvl AND \
+       $hash = ANY(bakers) AND bakers_priority[array_position(bakers, $hash)] = 0"
+    >>= of_count_opt >>= fun next_baking ->
+    PGSQL(dbh)
+      "SELECT MIN(level) FROM level_rights WHERE level >= $head_lvl AND \
+       $hash = ANY(endorsers)" >>= of_count_opt
+    >>= fun next_endorsement ->
+    return (Int64.to_int head_cycle, Int64.to_int head_lvl,
+            next_baking, next_endorsement, head_tsp)
+
   let required_balance hash =
     with_dbh >>> fun dbh ->
     PGSQL(dbh) "SELECT MAX(cycle), MAX(level) FROM block WHERE distance_level = 0"
@@ -2127,7 +2062,7 @@ module Reader_generic (M : Db_intf.MONAD) = struct
           "SELECT hash, op_block_hash, network, source, slots, block_hash, \
            block_level, op_level, priority, timestamp FROM endorsement_all \
            WHERE block_hash = $block_hash AND distance_level = 0 \
-           ORDER BY priority, slots"
+           ORDER BY priority, slots DESC"
       | Level level ->
         let level64 = Int64.of_int level in
         PGSQL(dbh)
@@ -2135,7 +2070,7 @@ module Reader_generic (M : Db_intf.MONAD) = struct
            block_level, op_level, priority, timestamp FROM endorsement_all \
            WHERE block_level = $level64 AND distance_level = 0 AND \
            op_block_hash <> 'Orphan' \
-           ORDER BY priority, slots"
+           ORDER BY priority, slots DESC"
     end
     >>= fun rows ->
     return @@ List.map
@@ -2365,81 +2300,58 @@ module Reader_generic (M : Db_intf.MONAD) = struct
   let baker_stats hash =
     with_dbh >>> fun dbh ->
     PGSQL(dbh)
-      "SELECT b.baker, COUNT( b.hash ), SUM(b.volume)::bigint AS volume, \
-       SUM(b.fees)::bigint AS fees \
-       FROM block AS b \
-       WHERE b.distance_level = 0 AND b.baker = $hash \
-       GROUP BY baker ORDER BY COUNT(*) DESC" >>= fun rows ->
+      "WITH tmp(volume) AS ( \
+       SELECT SUM(volume)::bigint FROM block \
+       WHERE distance_level = 0 AND baker = $hash ), \
+       tmp2(nbb, nbe, fees) AS ( \
+       SELECT SUM(array_sum(nb_baking, 1))::bigint, \
+       SUM(array_sum(nb_endorsement, 1))::bigint, SUM(fees)::bigint
+       FROM cycle_count_baker WHERE tz = $hash ) \
+       SELECT nbb, nbe, volume, fees FROM tmp, tmp2"
+    >>= fun rows ->
     return @@ match rows with
-    |  [ baker_hash, Some nb, vol_opt, fees_opt ] ->
-      let nb_blocks = Int64.to_int nb in
-      let volume_total =
-        match vol_opt with
-        | Some i -> i
-        | None -> 0L in
-      let fees_total =
-        match fees_opt with
-        | Some i -> i
-        | None -> 0L in
-      { baker_hash = Alias.to_name baker_hash; nb_blocks; volume_total; fees_total }
+    |  [ Some nbb, Some nbe, vol_opt, fees_opt ] ->
+      let nb_blocks = Int64.to_int nbb in
+      let nb_endorsements = Int64.to_int nbe in
+      let volume_total = Misc.unopt 0L vol_opt in
+      let fees_total = Misc.unopt 0L fees_opt in
+      { baker_hash = Alias.to_name hash; nb_blocks; volume_total; fees_total;
+        nb_endorsements }
     | _ ->
-      { baker_hash = Alias.to_name hash; nb_blocks = 0; volume_total = 0L; fees_total = 0L }
+      { baker_hash = Alias.to_name hash; nb_blocks = 0; volume_total = 0L;
+        fees_total = 0L; nb_endorsements = 0 }
 
   let bakers_stats ?cycle () =
+    let cycle, nocycle = test_opt Int64.of_int cycle in
     with_dbh >>> fun dbh ->
-    (match cycle with
-     | None ->
-       PGSQL(dbh)
-         "SELECT b.baker, COUNT( b.hash ), SUM(b.volume)::bigint AS volume, \
-          SUM(b.fees)::bigint AS fees \
-          FROM block AS b \
-          WHERE b.distance_level = 0 AND b.baker <> 'God' \
-          GROUP BY baker ORDER BY COUNT(*) DESC"
-     | Some cycle ->
-       let cycle = Int64.of_int cycle in
-       PGSQL(dbh)
-         "SELECT b.baker, COUNT( b.hash ), SUM(b.volume)::bigint AS volume, \
-          SUM(b.fees)::bigint AS fees \
-          FROM block AS b \
-          WHERE b.distance_level = 0 AND b.baker <> 'God' AND b.cycle = $cycle \
-          GROUP BY baker ORDER BY COUNT(*) DESC")
+    PGSQL(dbh)
+      "WITH tmp(tz, volume) AS ( \
+       SELECT baker, SUM(volume)::bigint FROM block \
+       WHERE distance_level = 0 AND ($nocycle OR cycle = $?cycle) \
+       GROUP BY baker ) \
+       SELECT tmp.tz, SUM(array_sum(nb_baking, 1))::bigint AS nb_block, \
+       MAX(volume)::bigint, SUM(fees)::bigint, \
+       SUM(array_sum(nb_endorsement, 1))::bigint \
+       FROM tmp INNER JOIN cycle_count_baker AS ccb ON ccb.tz = tmp.tz \
+       WHERE $nocycle OR cycle = $?cycle \
+       GROUP BY tmp.tz
+       ORDER BY nb_block DESC, tmp.tz"
     >>= fun rows ->
     return @@
-    List.map (function
-        | (baker_hash, Some nb, vol_opt, fees_opt) ->
-          let nb_blocks = Int64.to_int nb in
-          let volume_total =
-            match vol_opt with
-            | Some i -> i
-            | None -> 0L in
-          let fees_total =
-            match fees_opt with
-            | Some i -> i
-            | None -> 0L in
-          { baker_hash = Alias.to_name baker_hash; nb_blocks; volume_total; fees_total }
-        | _ -> assert false)
-      rows
-
-  let calculate_revelation_rate level_per_cycle row =
-    let revelation_max_number =
-      float_of_int @@ Tezos_constants.nb_revelations_per_cycle () in
-    if level_per_cycle = 0. then 0.
-    else
-      match row with
-      | [ Some i ] ->
-        ((Int64.to_float i) /. revelation_max_number) *. 100.
-      | _ -> 0.
+    List.map (fun (baker_hash, nbb, vol_opt, fees_opt, nbe) ->
+        let nb_blocks = Misc.unoptf 0 Int64.to_int nbb in
+        let nb_endorsements = Misc.unoptf 0 Int64.to_int nbe in
+        let volume_total = Misc.unopt 0L vol_opt in
+        let fees_total = Misc.unopt 0L fees_opt in
+        { baker_hash = Alias.to_name baker_hash; nb_blocks; volume_total;
+          fees_total; nb_endorsements } ) rows
 
   let health_stats cycle =
     with_dbh >>> fun dbh ->
     let cycle = Int64.of_int cycle in
     PGSQL(dbh)
-      "SELECT priority FROM block \
-       WHERE distance_level = 0 AND cycle = $cycle" >>= fun priorities ->
-    PGSQL(dbh)
-      "SELECT SUM(priority)/COUNT(*) AS mean, \
-       SUM(volume)::bigint AS volume, \
-       SUM(fees)::bigint AS fees \
+      "SELECT AVG(priority)::float, SUM(volume)::bigint, SUM(fees)::bigint, \
+       AVG(LEAST(priority, 16)^2)::float \
        FROM block WHERE distance_level = 0 AND cycle = $cycle"
     >>= fun cycle_stats ->
     PGSQL(dbh)
@@ -2461,21 +2373,23 @@ module Reader_generic (M : Db_intf.MONAD) = struct
     PGSQL(dbh)
       "SELECT COUNT( * ) FROM cycle_count_baker \
        WHERE cycle = $cycle AND nb_baking <> '{}'"
-    >>= fun cycle_bakers ->
+    >>= of_count_opt >>= fun cycle_bakers ->
     PGSQL(dbh)
       "SELECT COUNT(*) FROM cycle_count_baker \
        WHERE cycle = $cycle AND nb_endorsement <> '{}'"
-    >>= fun cycle_endorsers ->
+    >>= of_count_opt >>= fun cycle_endorsers ->
     PGSQL(dbh)
       "SELECT COUNT(*) FROM block \
        WHERE distance_level <> 0 AND \
-       cycle = $cycle" >>= fun number_alt_heads ->
+       cycle = $cycle"
+    >>= of_count_opt >>= fun alternative_heads_number ->
     PGSQL(dbh)
       "SELECT COUNT(s.level) FROM seed_nonce_revelation AS s \
        INNER JOIN block_operation AS bo ON bo.operation_hash = s.hash \
        INNER JOIN block AS bl ON bl.hash = bo.block_hash \
        WHERE s.level IN (SELECT level FROM block WHERE cycle = $cycle) \
-       AND bl.distance_level = 0" >>= fun cycle_revelations_number ->
+       AND bl.distance_level = 0"
+    >>= of_count_opt >>= fun cycle_revelations_number ->
     PGSQL(dbh)
       "SELECT SUM(CASE WHEN distance_level = 0 THEN array_length(slots, 1) ELSE 0 END), \
        SUM(CASE WHEN distance_level <> 0 THEN array_length(slots, 1) ELSE 0 END) \
@@ -2496,11 +2410,9 @@ module Reader_generic (M : Db_intf.MONAD) = struct
     PGSQL(dbh)
       "SELECT baker, COUNT(*) FROM block WHERE \
        cycle = $cycle GROUP BY baker \
-       ORDER BY COUNT(*) DESC LIMIT 1" >>= fun top_baker ->
-
+       ORDER BY COUNT(*) DESC, baker LIMIT 1" >>= fun top_baker ->
     let slot_number =
       float_of_int Tezos_constants.Constants.endorsers_per_block in
-
     let cycle_start_level, year_start, month_start, day_start  = match cycle_start with
       | (level, Some year, Some month, Some day) :: _
         -> Int64.to_int level, int_of_float year, int_of_float month, int_of_float day
@@ -2509,18 +2421,10 @@ module Reader_generic (M : Db_intf.MONAD) = struct
        | (level, Some year, Some month, Some day) :: _
       -> Int64.to_int level, int_of_float year, int_of_float month, int_of_float day
       | _ -> -1, -1, -1, -1 in
-    let cycle_volume = match cycle_stats with
-      | [ _, Some f, _ ] -> f
-      | _ -> 0L in
-    let cycle_fees = match cycle_stats with
-      | [ _, _, Some f ] -> f
-      | _ -> 0L in
-    let cycle_bakers = match cycle_bakers with
-      | [ Some i ] -> Int64.to_int i
-      | _ -> -1 in
-    let cycle_endorsers = match cycle_endorsers with
-      | [ Some i ] -> Int64.to_int i
-      | _ -> -1 in
+    let mean_priority, cycle_volume, cycle_fees, prio2 = match cycle_stats with
+      | [ Some priority, Some volume, Some fees, Some prio2 ] ->
+        priority, volume, fees, prio2
+      | _ -> 0., 0L, 0L, 0. in
     let cycle_position =
       float_of_int @@ (cycle_end_level - cycle_start_level) + 1 in
     let total_endorsements, main_endorsements_rate,
@@ -2529,40 +2433,21 @@ module Reader_generic (M : Db_intf.MONAD) = struct
         let main_endo = Misc.unoptf 0. Int64.to_float main_endo in
         let alt_endo = Misc.unoptf 0. Int64.to_float alt_endo in
         int_of_float (main_endo +. alt_endo),
-        main_endo /. (alt_endo +. main_endo),
+        main_endo /. (alt_endo +. main_endo) *. 100.,
         (alt_endo /. (cycle_position *. slot_number)) *. 100.
       | _ -> 0, 0., 0. in
     let endorsements_rate =
       ((float total_endorsements) /. (cycle_position *. slot_number)) *. 100. in
     let empty_endorsements_rate = 100. -. endorsements_rate in
     let main_revelation_rate =
-      calculate_revelation_rate cycle_position cycle_revelations_number in
-    let alternative_heads_number = match number_alt_heads with
-      | [ Some i ] -> Int64.to_int i
-      | _ -> 0 in
+      ((float_of_int cycle_revelations_number) /.
+       (float_of_int @@ Tezos_constants.Constants.block_per_cycle /
+                        Tezos_constants.Constants.blocks_between_revelations)) *. 100. in
     let double_endorsements = 0 in
-    let switch_number = match switch_stats with
-      | [ i, _ ] -> Int64.to_int i
-      | _ -> -1 in
-    let longest_switch_depth = match switch_stats with
-      | [ _, i ] -> Int64.to_int i
-      | _ -> -1 in
-    let mean_priority =
-      (List.fold_left (fun acc p -> Int32.to_float p +. acc) 0. priorities) /.
-      (float (List.length priorities)) in
-    let score_priority =
-      let cycle_size =
-        float_of_int @@
-        (cycle_end_level - cycle_start_level + 1) in
-      let m_priority = 16. in    (* TODO to delete *)
-      let m2 = m_priority ** 2. in
-      let m = m2 *. cycle_size in
-      let s =
-        List.fold_left (fun acc p ->
-            let p = min (Int32.to_float p) m_priority in
-            (p ** 2.) +. acc)
-          0. priorities in
-      ((m -. s) /. m) *. 100. in
+    let switch_number, longest_switch_depth = match switch_stats with
+      | [ i, j ] -> Int64.to_int i, Int64.to_int j
+      | _ -> -1, -1 in
+    let score_priority = 100. -. prio2 /. (16. ** 2.) *. 100. in
     let biggest_block_volume = match biggest_block_volume with
       | ( hash, level, _ ) :: _ -> hash, Int64.to_int level
       | _ -> "No one", -1 in
@@ -2972,81 +2857,96 @@ module Reader_generic (M : Db_intf.MONAD) = struct
       | [ id ] -> return id
       | _ -> return Int64.minus_one
     end >>= fun id ->
-    match kind with
-    | "balances" ->
-      PGSQL(dbh)
-        "SELECT hash, balance FROM top_balances \
-         WHERE id = $id ORDER BY balance DESC, hash OFFSET $offset LIMIT $limit"
-      >>= return
-    | "frozen_balances" ->
-      PGSQL(dbh)
-        "SELECT hash, frozen_balance FROM top_frozen_balances \
-         WHERE id = $id ORDER BY frozen_balance DESC, hash OFFSET $offset LIMIT $limit"
-      >>= return
-    | "frozen_deposits" ->
-      PGSQL(dbh)
-        "SELECT hash, frozen_deposits FROM top_frozen_deposits \
-         WHERE id = $id ORDER BY frozen_deposits DESC, hash OFFSET $offset LIMIT $limit"
-      >>= return
-    | "frozen_rewards" ->
-      PGSQL(dbh)
-        "SELECT hash, frozen_rewards FROM top_frozen_rewards \
-         WHERE id = $id ORDER BY frozen_rewards DESC, hash OFFSET $offset LIMIT $limit"
-      >>= return
-    | "paid_bytes" ->
-      PGSQL(dbh)
-        "SELECT hash, paid_bytes FROM top_paid_bytes \
-         WHERE id = $id ORDER BY paid_bytes DESC, hash OFFSET $offset LIMIT $limit"
-      >>= return
-    | "staking_balances" ->
-      PGSQL(dbh)
-        "SELECT hash, staking_balance FROM top_staking_balances \
-         WHERE id = $id ORDER BY staking_balance DESC, hash OFFSET $offset LIMIT $limit"
-      >>= return
-    | "total_balances" ->
-      PGSQL(dbh)
-        "SELECT hash, total_balance FROM top_total_balances \
-         WHERE id = $id ORDER BY total_balance DESC, hash OFFSET $offset LIMIT $limit"
-      >>= return
-    | "total_delegated" ->
-      PGSQL(dbh)
-        "SELECT hash, total_delegated FROM top_total_delegated \
-         WHERE id = $id ORDER BY total_delegated DESC, hash OFFSET $offset LIMIT $limit"
-      >>= return
-    | "total_delegators" ->
-      PGSQL(dbh)
-        "SELECT hash, total_delegators FROM top_total_delegators \
-         WHERE id = $id ORDER BY total_delegators DESC, hash OFFSET $offset LIMIT $limit"
-      >>= return
-    | "total_frozen_fees" ->
-      PGSQL(dbh)
-        "SELECT hash, total_frozen_fees FROM top_total_frozen_fees \
-         WHERE id = $id ORDER BY total_frozen_fees DESC, hash OFFSET $offset LIMIT $limit"
-      >>= return
-    | "used_bytes" ->
-      PGSQL(dbh)
-        "SELECT hash, used_bytes FROM top_used_bytes \
-         WHERE id = $id ORDER BY used_bytes DESC, hash OFFSET $offset LIMIT $limit"
-      >>= return
-    | _ -> return []
+    PGSQL(dbh)
+      "SELECT hash, period, period_kind FROM context_totals \
+       WHERE id = $id" >>= begin function
+      | [ Some top_hash, Some top_period, Some top_kind ] ->
+        return (top_hash, top_period, top_kind)
+      | _ -> return ("", "", "")
+    end >>= fun (top_hash, top_period, top_kind) ->
+    begin match kind with
+      | "balances" ->
+        PGSQL(dbh)
+          "SELECT hash, balance FROM top_balances \
+           WHERE id = $id ORDER BY balance DESC, hash OFFSET $offset LIMIT $limit"
+      | "frozen_balances" ->
+        PGSQL(dbh)
+          "SELECT hash, frozen_balance FROM top_frozen_balances \
+           WHERE id = $id ORDER BY frozen_balance DESC, hash \
+           OFFSET $offset LIMIT $limit"
+      | "frozen_deposits" ->
+        PGSQL(dbh)
+          "SELECT hash, frozen_deposits FROM top_frozen_deposits \
+           WHERE id = $id ORDER BY frozen_deposits DESC, hash \
+           OFFSET $offset LIMIT $limit"
+      | "frozen_rewards" ->
+        PGSQL(dbh)
+          "SELECT hash, frozen_rewards FROM top_frozen_rewards \
+           WHERE id = $id ORDER BY frozen_rewards DESC, hash \
+           OFFSET $offset LIMIT $limit"
+      | "paid_bytes" ->
+        PGSQL(dbh)
+          "SELECT hash, paid_bytes FROM top_paid_bytes \
+           WHERE id = $id ORDER BY paid_bytes DESC, hash \
+           OFFSET $offset LIMIT $limit"
+      | "staking_balances" ->
+        PGSQL(dbh)
+          "SELECT hash, staking_balance FROM top_staking_balances \
+           WHERE id = $id ORDER BY staking_balance DESC, hash \
+           OFFSET $offset LIMIT $limit"
+      | "total_balances" ->
+        PGSQL(dbh)
+          "SELECT hash, total_balance FROM top_total_balances \
+           WHERE id = $id ORDER BY total_balance DESC, hash \
+           OFFSET $offset LIMIT $limit"
+      | "total_delegated" ->
+        PGSQL(dbh)
+          "SELECT hash, total_delegated FROM top_total_delegated \
+           WHERE id = $id ORDER BY total_delegated DESC, hash \
+           OFFSET $offset LIMIT $limit"
+      | "total_delegators" ->
+        PGSQL(dbh)
+          "SELECT hash, total_delegators FROM top_total_delegators \
+           WHERE id = $id ORDER BY total_delegators DESC, hash \
+           OFFSET $offset LIMIT $limit"
+      | "total_frozen_fees" ->
+        PGSQL(dbh)
+          "SELECT hash, total_frozen_fees FROM top_total_frozen_fees \
+           WHERE id = $id ORDER BY total_frozen_fees DESC, hash \
+           OFFSET $offset LIMIT $limit"
+      | "used_bytes" ->
+        PGSQL(dbh)
+          "SELECT hash, used_bytes FROM top_used_bytes \
+           WHERE id = $id ORDER BY used_bytes DESC, hash \
+           OFFSET $offset LIMIT $limit"
+      | _ -> return []
+    end >>= fun top_list ->
+    let top_list = List.map (fun (tz, value) ->
+        Alias.to_name tz, value
+      ) top_list in
+    return {
+      top_hash ;
+      top_period ;
+      top_kind ;
+      top_list
+    }
 
   let account_bonds_rewards hash =
     with_dbh >>> fun dbh ->
     let allowed_fork64 = Int64.of_int Tezos_constants.Constants.allowed_fork in
-    let ramp_up_cycle = Int64.of_int Tezos_constants.ramp_up_cycles in
+    let ramp_up_cycle = Tezos_constants.Constants.ramp_up_cycles in
+    let start_reward_cycle = Tezos_constants.Constants.start_reward_cycle in
     let b_reward = Tezos_constants.Constants.block_reward in
     let e_reward = Tezos_constants.Constants.endorsement_reward_coeff in
     let b_security_deposit = Tezos_constants.Constants.block_security_deposit in
     let e_security_deposit = Tezos_constants.Constants.endorsement_security_deposit in
+    current_cycle () >>= fun current_cycle ->
+    let cycle_limit =
+        if current_cycle < allowed_fork64 then 0L
+        else Int64.sub current_cycle allowed_fork64 in
     PGSQL(dbh)
-      "SELECT MAX(cycle) FROM block" >>= fun current_cycle ->
-    let cycle_limit = match current_cycle with
-      | [ Some c ] ->
-        if c < allowed_fork64 then 0L
-        else Int64.sub c allowed_fork64
-      | _ -> assert false in
-    PGSQL(dbh)
-      "SELECT SUM(bk_rewards($b_reward, cycle, true) * array_sum(nb_baking,1))::bigint, \
+      "SELECT SUM(bk_rewards($b_reward, cycle, $start_reward_cycle, true) \
+       * array_sum(nb_baking,1))::bigint, \
        SUM(deposits($b_security_deposit, cycle, $ramp_up_cycle, 1, true) \
        * array_sum(nb_baking,1))::bigint, \
        SUM(fees)::bigint \
@@ -3054,7 +2954,7 @@ module Reader_generic (M : Db_intf.MONAD) = struct
        WHERE cycle >= $cycle_limit AND tz = $hash"
     >>= fun block_res ->
     PGSQL(dbh)
-      "SELECT SUM(end_rewards_array($e_reward, cycle, nb_endorsement))::bigint, \
+      "SELECT SUM(end_rewards_array($e_reward, cycle, nb_endorsement, $start_reward_cycle))::bigint, \
        SUM(deposits($e_security_deposit, cycle, $ramp_up_cycle, array_sum(nb_endorsement,1)::int, true))::bigint \
        FROM cycle_count_baker \
        WHERE tz = $hash AND cycle >= $cycle_limit"
@@ -3079,7 +2979,7 @@ module Reader_generic (M : Db_intf.MONAD) = struct
     PGSQL(dbh)
       "SELECT tz1, count FROM snapshot_owner AS so \
        INNER JOIN snapshot_rolls AS sr ON sr.id = so.id \
-       WHERE sr.cycle = $cycle ORDER BY count, tz1 DESC" >>= fun rows ->
+       WHERE sr.cycle = $cycle ORDER BY count DESC, tz1" >>= fun rows ->
     return @@
     List.map (fun (tz, rolls) -> Alias.to_name tz, Int32.to_int rolls) rows
 
@@ -3181,18 +3081,14 @@ module Reader_generic (M : Db_intf.MONAD) = struct
       "SELECT count(*) \
        FROM snapshot_deleguees AS sd \
        INNER JOIN snapshot_rolls AS sr ON sd.id = sr.id
-       WHERE tz1 = $hash AND sr.cycle = $cycle" >>= function
-    | [ Some count ] -> return @@ Int64.to_int count
-    | _ -> return 0
+       WHERE tz1 = $hash AND sr.cycle = $cycle" >>= of_count_opt
 
   let nb_cycle_rewards hash =
     with_dbh >>> fun dbh ->
     PGSQL(dbh)
       "SELECT COUNT(sr.cycle) FROM snapshot_owner AS so \
        INNER JOIN snapshot_rolls AS sr ON sr.id = so.id \
-       WHERE so.tz1 = $hash" >>= function
-      | [ Some count ] -> return @@ Int64.to_int count
-      | _ -> return 0
+       WHERE so.tz1 = $hash" >>= of_count_opt
 
   let delegate_rewards_split_cycles ?(page=0) ?(page_size=20) hash =
     head_level () >>= fun head_lvl ->
@@ -3201,37 +3097,36 @@ module Reader_generic (M : Db_intf.MONAD) = struct
     let b_reward = Tezos_constants.Constants.block_reward in
     let e_reward = Tezos_constants.Constants.endorsement_reward_coeff in
     let r_reward = Tezos_constants.Constants.revelation_reward in
+    let start_reward_cycle = Tezos_constants.Constants.start_reward_cycle in
     let blocks_between_revelations =
       Int64.of_int Tezos_constants.Constants.blocks_between_revelations in
     let block_per_cycle = Int64.of_int Tezos_constants.Constants.block_per_cycle in
     with_dbh >>> fun dbh ->
     (* assume endorsed_level = endorsing_level - 1 for rights *)
-    PGSQL(dbh)
-      "SELECT MAX(cycle) FROM block" >>= begin function
-      | [ Some current_cycle ] -> return current_cycle
-      | _ -> return 0L end >>= fun current_cycle ->
+    current_cycle () >>= fun current_cycle ->
     PGSQL(dbh)
       "nullable-results"
       "WITH block_rew(cycle, fees, rewards) AS \
-       (SELECT cycle, fees, array_sum(nb_baking,1) * bk_rewards($b_reward, cycle, true) \
+       (SELECT cycle, fees, array_sum(nb_baking,1) * \
+       bk_rewards($b_reward, cycle, $start_reward_cycle, true) \
        FROM cycle_count_baker \
        WHERE tz = $hash), \
        endorsement_rew(cycle, rewards) AS \
-       (SELECT cycle, end_rewards_array($e_reward, cycle, nb_endorsement) \
+       (SELECT cycle, end_rewards_array($e_reward, cycle, nb_endorsement, $start_reward_cycle) \
        FROM cycle_count_baker \
        WHERE tz = $hash), \
        delegators AS \
        (SELECT sd.id, sd.tz1, count(*) AS count \
        FROM snapshot_deleguees AS sd WHERE tz1 = $hash GROUP BY id, tz1), \
        bk_rights AS \
-       (SELECT cycle, SUM(bk_rewards($b_reward, cycle, true))::bigint AS reward \
+       (SELECT cycle, SUM(bk_rewards($b_reward, cycle, $start_reward_cycle, true))::bigint AS reward \
        FROM level_rights WHERE bakers_priority[ARRAY_POSITION(bakers, $hash)] = 0 \
        AND level > $head_lvl \
        GROUP BY cycle ORDER BY cycle ASC), \
        endo_rights AS \
        (SELECT level / $block_per_cycle AS endo_cycle, \
        SUM(end_rewards($e_reward, level / $block_per_cycle, \
-       slots[ARRAY_POSITION(endorsers, $hash)], 0, true))::bigint AS reward \
+       slots[ARRAY_POSITION(endorsers, $hash)], 0, $start_reward_cycle, true))::bigint AS reward \
        FROM level_rights WHERE $hash = ANY(endorsers) AND level > $head_lvl \
        GROUP BY endo_cycle ORDER BY endo_cycle ASC), \
        gain_rewards AS \
@@ -3325,29 +3220,31 @@ module Reader_generic (M : Db_intf.MONAD) = struct
     let b_reward = Tezos_constants.Constants.block_reward in
     let e_reward = Tezos_constants.Constants.endorsement_reward_coeff in
     let r_reward = Tezos_constants.Constants.revelation_reward in
+    let start_reward_cycle = Tezos_constants.Constants.start_reward_cycle in
     let blocks_between_revelations =
       Int64.of_int Tezos_constants.Constants.blocks_between_revelations in
     let block_per_cycle = Int64.of_int Tezos_constants.Constants.block_per_cycle in
     with_dbh >>> fun dbh ->
     head_level () >>= fun head_lvl ->
     PGSQL(dbh)
-      "SELECT bk_rewards($b_reward, cycle, true) * array_sum(nb_baking, 1), fees \
+      "SELECT bk_rewards($b_reward, cycle, $start_reward_cycle, true) \
+       * array_sum(nb_baking, 1), fees \
        FROM cycle_count_baker \
        WHERE cycle = $cycle AND tz = $hash"
     >>= fun block_res ->
     PGSQL(dbh)
-      "SELECT end_rewards_array($e_reward, cycle, nb_endorsement) \
+      "SELECT end_rewards_array($e_reward, cycle, nb_endorsement, $start_reward_cycle) \
        FROM cycle_count_baker \
        WHERE tz = $hash AND cycle = $cycle"
     >>= fun endorsement_res ->
     PGSQL(dbh)
-      "SELECT SUM(bk_rewards($b_reward, cycle, true))::bigint \
+      "SELECT SUM(bk_rewards($b_reward, cycle, $start_reward_cycle, true))::bigint \
        FROM level_rights WHERE bakers_priority[ARRAY_POSITION(bakers, $hash)] = 0 \
        AND cycle = $cycle AND level > $head_lvl"
     >>= fun bk_rights ->
     PGSQL(dbh)
       "SELECT SUM(end_rewards($e_reward, level / $block_per_cycle, \
-       slots[ARRAY_POSITION(endorsers, $hash)], 0, true))::bigint \
+       slots[ARRAY_POSITION(endorsers, $hash)], 0, $start_reward_cycle, true))::bigint \
        FROM level_rights WHERE $hash = ANY(endorsers) AND \
        level / $block_per_cycle = $cycle AND level > $head_lvl"
     >>= fun endo_rights ->
@@ -3383,10 +3280,7 @@ module Reader_generic (M : Db_intf.MONAD) = struct
        WHERE (dbe.denouncer = $hash OR dbe.accused = $hash) \
        AND bl.cycle = $cycle"
     >>= fun dbe_res ->
-    PGSQL(dbh)
-      "SELECT MAX(cycle) from block" >>= begin function
-    | [ Some cycle ] -> return cycle
-    | _ -> return 0L end >>= fun current_cycle ->
+    current_cycle () >>= fun current_cycle ->
     PGSQL(dbh)
       "SELECT
        SUM(CASE WHEN s.hash IS NOT NULL THEN $r_reward ELSE 0::bigint END)::bigint, \
@@ -3462,14 +3356,12 @@ module Reader_generic (M : Db_intf.MONAD) = struct
     let b_reward = Tezos_constants.Constants.block_reward in
     let e_reward = Tezos_constants.Constants.endorsement_reward_coeff in
     let r_reward = Tezos_constants.Constants.revelation_reward in
+    let start_reward_cycle = Tezos_constants.Constants.start_reward_cycle in
     let blocks_between_revelations =
       Int64.of_int Tezos_constants.Constants.blocks_between_revelations in
     let block_per_cycle = Int64.of_int Tezos_constants.Constants.block_per_cycle in
     with_dbh >>> fun dbh ->
-    PGSQL(dbh)
-      "SELECT MAX(cycle) FROM block" >>= begin function
-    | [ Some cycle ] -> return cycle
-    | _ -> return 0L end >>= fun current_cycle ->
+    current_cycle () >>= fun current_cycle ->
     PGSQL(dbh)
       "nullable-results"
       "WITH delegate AS \
@@ -3479,15 +3371,15 @@ module Reader_generic (M : Db_intf.MONAD) = struct
        WHERE deleguee = $hash), \
        block_rew(cycle, fees, rewards) AS \
        (SELECT ccb.cycle, fees, array_sum(nb_baking,1) * \
-       bk_rewards($b_reward, ccb.cycle, true) \
+       bk_rewards($b_reward, ccb.cycle, $start_reward_cycle, true) \
        FROM cycle_count_baker AS ccb \
        INNER JOIN delegate AS dl ON dl.tz1 = ccb.tz AND dl.cycle = ccb.cycle), \
        endorsement_rew(cycle, rewards) AS \
-       (SELECT ccb.cycle, end_rewards_array($e_reward, ccb.cycle, nb_endorsement) \
+       (SELECT ccb.cycle, end_rewards_array($e_reward, ccb.cycle, nb_endorsement, $start_reward_cycle) \
        FROM cycle_count_baker AS ccb \
        INNER JOIN delegate AS dl ON dl.tz1 = ccb.tz AND dl.cycle = ccb.cycle), \
        bk_rights(cycle, rewards) AS \
-       (SELECT lr.cycle, SUM(bk_rewards($b_reward, lr.cycle, true))::bigint \
+       (SELECT lr.cycle, SUM(bk_rewards($b_reward, lr.cycle, $start_reward_cycle, true))::bigint \
        FROM level_rights AS lr
        INNER JOIN delegate AS dl ON dl.cycle = lr.cycle AND \
        dl.tz1 = ANY (bakers) \
@@ -3497,7 +3389,7 @@ module Reader_generic (M : Db_intf.MONAD) = struct
        endo_rights(endo_cycle, rewards) AS \
        (SELECT level / $block_per_cycle AS endo_cycle, \
        SUM(end_rewards($e_reward, level / $block_per_cycle, \
-       slots[ARRAY_POSITION(endorsers::varchar[], dl.tz1::varchar)], 0, true))::bigint \
+       slots[ARRAY_POSITION(endorsers::varchar[], dl.tz1::varchar)], 0, $start_reward_cycle, true))::bigint \
        FROM level_rights AS lr \
        INNER JOIN delegate AS dl ON dl.cycle = level / $block_per_cycle \
        AND dl.tz1 = ANY (endorsers) \
@@ -3582,18 +3474,6 @@ module Reader_generic (M : Db_intf.MONAD) = struct
          | _ -> acc
       ) [] rows
 
-
-  let rewards_stats ?cycle _hash =
-    match cycle with
-    | None | Some _ ->
-      return {
-        rstats_staking_balance = 0L ;
-        rstats_delegators_nb = 0 ;
-        rstats_rewards = 0L;
-        rstats_pc_blocks = 0. ;
-        rstats_pc_endorsements = 0. ;
-      }
-
   let search_block ?(limit=20) str =
     let limit = Int64.of_int (min limit search_limit) in
     let str2 = Printf.sprintf "%s%%" str in
@@ -3639,9 +3519,7 @@ module Reader_generic (M : Db_intf.MONAD) = struct
 
   let activated_balances () =
     with_dbh >>> fun dbh ->
-    PGSQL(dbh) "SELECT SUM(balance)::bigint FROM activation_balance" >>= function
-    | [ Some sum ] -> return sum
-    | _ -> return 0L
+    PGSQL(dbh) "SELECT SUM(balance)::bigint FROM activation_balance" >>= of_db_opt
 
   (* let supply_activated_balances () =
    *   with_dbh >>> fun dbh ->
@@ -3652,10 +3530,7 @@ module Reader_generic (M : Db_intf.MONAD) = struct
 
   let h_activated_balances hash =
     with_dbh >>> fun dbh ->
-    PGSQL(dbh) "SELECT balance FROM activation_balance WHERE pkh = $hash" >>= function
-    | [ tez ] ->
-      return tez
-    | _ -> return 0L
+    PGSQL(dbh) "SELECT balance FROM activation_balance WHERE pkh = $hash" >>= of_db
 
   (* let activated_balances_at_level lvl =
    *   with_dbh >>> fun dbh ->
@@ -3671,10 +3546,11 @@ module Reader_generic (M : Db_intf.MONAD) = struct
   let unfrozen_rewards cycle_limit =
     let b_reward = Tezos_constants.Constants.block_reward in
     let e_reward = Tezos_constants.Constants.endorsement_reward_coeff in
+    let start_reward_cycle = Tezos_constants.Constants.start_reward_cycle in
     with_dbh >>> fun dbh ->
     PGSQL(dbh)
       "SELECT SUM(array_sum(nb_prio,1) * $b_reward + \
-       end_rewards_array($e_reward, cycle, nb_endorsement))::bigint \
+       end_rewards_array($e_reward, cycle, nb_endorsement, $start_reward_cycle))::bigint \
        FROM cycle_count \
        WHERE cycle < $cycle_limit AND cycle > 6" >>= function
     | [ Some rewards ] -> return rewards
@@ -3683,10 +3559,11 @@ module Reader_generic (M : Db_intf.MONAD) = struct
   let h_unfrozen_rewards cycle_limit hash =
     let b_reward = Tezos_constants.Constants.block_reward in
     let e_reward = Tezos_constants.Constants.endorsement_reward_coeff in
+    let start_reward_cycle = Tezos_constants.Constants.start_reward_cycle in
     with_dbh >>> fun dbh ->
     PGSQL(dbh)
       "SELECT SUM(CASE WHEN cycle > 6 then array_sum(nb_baking,1) * $b_reward + \
-       end_rewards_array($e_reward, cycle, nb_endorsement) ELSE 0 END)::bigint, \
+       end_rewards_array($e_reward, cycle, nb_endorsement, $start_reward_cycle) ELSE 0 END)::bigint, \
        SUM(fees)::bigint FROM cycle_count_baker \
        WHERE cycle < $cycle_limit AND tz = $hash" >>= function
     | [ Some rewards, Some fees ] -> return (rewards, fees)
@@ -3747,33 +3624,24 @@ module Reader_generic (M : Db_intf.MONAD) = struct
 
   let burned_ori_tez () =
     with_dbh >>> fun dbh ->
-    PGSQL(dbh) "SELECT SUM(burn_tez) FROM origination WHERE NOT failed"
-    >>= function
-    | [ Some count ] -> return @@ Int64.of_string count
-    | _ -> return 0L
+    PGSQL(dbh) "SELECT SUM(burn_tez)::bigint FROM origination WHERE NOT failed"
+    >>= of_db_opt
 
   let ori_tez hash =
     with_dbh >>> fun dbh ->
-    PGSQL(dbh) "SELECT SUM(burn_tez) FROM origination WHERE NOT failed AND source = $hash"
-    >>= begin function
-      | [ Some count ] -> return @@ Int64.of_string count
-      | _ -> return 0L
-    end
-    >>= fun burn ->
-    PGSQL(dbh) "SELECT SUM(balance + fee) FROM origination WHERE NOT failed AND source = $hash"
-    >>= begin function
-      | [ Some count ] -> return @@ Int64.of_string count
-      | _ -> return 0L
-    end >>= fun send ->
-    PGSQL(dbh) "SELECT SUM(fee) FROM origination WHERE source = $hash AND failed"
-    >>= begin function
-      | [ Some count ] -> return @@ Int64.of_string count
-      | _ -> return 0L
-    end >>= fun fees ->
-    PGSQL(dbh) "SELECT SUM(balance) FROM origination WHERE NOT failed AND tz1 = $hash"
-    >>= function
-    | [ Some count ] -> return (burn, Int64.add fees send, Int64.of_string count)
-    | _ -> return (burn, Int64.add fees send, 0L)
+    PGSQL(dbh) "SELECT SUM(burn_tez)::bigint FROM origination \
+                WHERE NOT failed AND source = $hash"
+    >>= of_db_opt >>= fun burn ->
+    PGSQL(dbh) "SELECT SUM(balance + fee)::bigint FROM origination \
+                WHERE NOT failed AND source = $hash"
+    >>= of_db_opt >>= fun send ->
+    PGSQL(dbh) "SELECT SUM(fee)::bigint FROM origination \
+                WHERE source = $hash AND failed"
+    >>= of_db_opt >>= fun fees ->
+    PGSQL(dbh) "SELECT SUM(balance)::bigint FROM origination \
+                WHERE NOT failed AND tz1 = $hash"
+    >>= of_db_opt >>= fun balances ->
+    return (burn, Int64.add fees send, balances)
 
   (* let burned_ori_tez_at_level lvl =
    *   with_dbh >>> fun dbh ->
@@ -3789,32 +3657,24 @@ module Reader_generic (M : Db_intf.MONAD) = struct
 
   let burned_tr_tez () =
     with_dbh >>> fun dbh ->
-    PGSQL(dbh) "SELECT SUM(burn_tez) FROM transaction WHERE NOT failed"
-    >>= function
-    | [ Some count ] -> return @@ Int64.of_string count
-    | _ -> return 0L
+    PGSQL(dbh) "SELECT SUM(burn_tez)::bigint FROM transaction WHERE NOT failed"
+    >>= of_db_opt
 
   let tr_tez hash =
     with_dbh >>> fun dbh ->
-    PGSQL(dbh) "SELECT SUM(burn_tez) FROM transaction WHERE NOT failed AND source = $hash"
-    >>= begin function
-      | [ Some count ] -> return @@ Int64.of_string count
-      | _ -> return 0L
-    end >>= fun burn ->
-    PGSQL(dbh) "SELECT SUM(amount + fee) FROM transaction WHERE NOT failed AND source = $hash"
-    >>= begin function
-      | [ Some count ] -> return @@ Int64.of_string count
-      | _ -> return 0L
-    end >>= fun send ->
-    PGSQL(dbh) "SELECT SUM(fee) FROM transaction WHERE source = $hash AND failed"
-    >>= begin function
-      | [ Some count ] -> return @@ Int64.of_string count
-      | _ -> return 0L
-    end >>= fun fees ->
-    PGSQL(dbh) "SELECT SUM(amount) FROM transaction WHERE NOT failed AND destination = $hash"
-    >>= function
-    | [ Some count ] -> return (burn, Int64.add fees send, Int64.of_string count)
-    | _ -> return (burn, Int64.add fees send, 0L)
+    PGSQL(dbh) "SELECT SUM(burn_tez)::bigint FROM transaction \
+                WHERE NOT failed AND source = $hash"
+    >>= of_db_opt >>= fun burn ->
+    PGSQL(dbh) "SELECT SUM(amount + fee)::bigint FROM transaction \
+                WHERE NOT failed AND source = $hash"
+    >>= of_db_opt >>= fun send ->
+    PGSQL(dbh) "SELECT SUM(fee)::bigint FROM transaction \
+                WHERE source = $hash AND failed"
+    >>= of_db_opt >>= fun fees ->
+    PGSQL(dbh) "SELECT SUM(amount)::bigint FROM transaction \
+                WHERE NOT failed AND destination = $hash"
+    >>= of_db_opt >>= fun amount ->
+    return (burn, Int64.add fees send, amount)
 
   (* let burned_tr_tez_at_level lvl =
    *   with_dbh >>> fun dbh ->
@@ -3902,55 +3762,42 @@ module Reader_generic (M : Db_intf.MONAD) = struct
 
   let del_tez hash =
     with_dbh >>> fun dbh ->
-    PGSQL(dbh) "SELECT SUM(fee) FROM delegation WHERE source = $hash"
-    >>= function
-    | [ Some count ] -> return @@ Int64.of_string count
-    | _ -> return 0L
+    PGSQL(dbh) "SELECT SUM(fee)::bigint FROM delegation WHERE source = $hash"
+    >>= of_db_opt
 
   let rvl_tez hash =
     with_dbh >>> fun dbh ->
-    PGSQL(dbh) "SELECT SUM(fee) FROM reveal WHERE source = $hash"
-    >>= function
-    | [ Some count ] -> return @@ Int64.of_string count
-    | _ -> return 0L
+    PGSQL(dbh) "SELECT SUM(fee)::bigint FROM reveal WHERE source = $hash"
+    >>= of_db_opt
 
   let supply () =
-  let ico = Infos.api.api_config.conf_ico in
-  let dls = ico.ico_company_tokens in
-  let foundation = ico.ico_foundation_tokens in
-  let early_bakers = ico.ico_early_tokens in
-  let contributors = ico.ico_contributors_tokens in
-
-    with_dbh >>> fun dbh ->
+    let ico = Infos.api.api_config.conf_ico in
+    let dls = ico.ico_company_tokens in
+    let foundation = ico.ico_foundation_tokens in
+    let early_bakers = ico.ico_early_tokens in
+    let contributors = ico.ico_contributors_tokens in
     let allowed_fork64 = Int64.of_int Tezos_constants.Constants.allowed_fork in
-    PGSQL(dbh)
-      "SELECT MAX(cycle) FROM block" >>= fun current_cycle ->
-    let cycle_limit = match current_cycle with
-      | [ Some c ] ->
-        if c < allowed_fork64 then 0L
-        else Int64.sub c allowed_fork64
-      | _ -> assert false in
-
+    current_cycle () >>= fun current_cycle ->
+    let cycle_limit =
+      if current_cycle < allowed_fork64 then 0L
+      else Int64.sub current_cycle allowed_fork64 in
     unfrozen_rewards cycle_limit >>= fun unfrozen_rewards ->
     revelations cycle_limit >>=
     fun (revelation_rewards, missing_revelations, burned_tez_revelation) ->
     burned_ori_tez () >>= fun burned_tez_origination ->
     burned_tr_tez () >>= fun burned_tez_transaction ->
     burned_double_baking cycle_limit >>= fun burned_tez_double_baking ->
-
     let total_supply_ico = Ico_constants.total_supply_ico ico in
     let burned_total =
-      Int64.(add
-               burned_tez_revelation
-               (add burned_tez_origination
-                  (add burned_tez_transaction
-                     burned_tez_double_baking))) in
+      List.fold_left Int64.add 0L [
+        burned_tez_revelation; burned_tez_origination;
+        burned_tez_transaction; burned_tez_double_baking ] in
     let current_circulating_supply =
-      Int64.(add
-               total_supply_ico
-               (sub
-                  (add unfrozen_rewards revelation_rewards)
-                  burned_total)) in
+      Int64.(
+        add total_supply_ico
+          (sub
+             (add unfrozen_rewards revelation_rewards)
+             burned_total)) in
     return
       { dls ; foundation ; early_bakers ; contributors ;
         unfrozen_rewards ;
@@ -3960,16 +3807,11 @@ module Reader_generic (M : Db_intf.MONAD) = struct
         total_supply_ico ; current_circulating_supply  }
 
   let balance_break_down hash =
-    with_dbh >>> fun dbh ->
     let allowed_fork64 = Int64.of_int Tezos_constants.Constants.allowed_fork in
-    PGSQL(dbh)
-      "SELECT MAX(cycle) FROM block" >>= fun current_cycle ->
-    let cycle_limit = match current_cycle with
-      | [ Some c ] ->
-        if c < allowed_fork64 then 0L
-        else Int64.sub c allowed_fork64
-      | _ -> assert false in
-
+    current_cycle () >>= fun current_cycle ->
+    let cycle_limit =
+      if current_cycle < allowed_fork64 then 0L
+      else Int64.sub current_cycle allowed_fork64 in
     h_activated_balances hash >>= fun h_activated_balance ->
     h_unfrozen_rewards cycle_limit hash >>= fun (h_unfrozen_rewards, fees) ->
     h_revelations cycle_limit hash >>=
@@ -3979,40 +3821,16 @@ module Reader_generic (M : Db_intf.MONAD) = struct
     double_baking cycle_limit hash >>= fun (h_burned_tez_double_baking, h_tez_dbe_rewards) ->
     del_tez hash >>= fun h_del_fees ->
     rvl_tez hash >>= fun h_rvl_fees ->
-
     let plus_total =
-      Int64.(add
-               h_activated_balance
-               (add
-                  h_unfrozen_rewards
-                  (add
-                     fees
-                     (add
-                        h_revelation_rewards
-                        (add
-                           h_tez_origination_recv
-                           (add
-                              h_tez_transaction_recv
-                              h_tez_dbe_rewards)))))) in
+      List.fold_left Int64.add 0L [
+        h_activated_balance; h_unfrozen_rewards; fees; h_revelation_rewards;
+        h_tez_origination_recv; h_tez_transaction_recv; h_tez_dbe_rewards ] in
     let minus_total =
-      Int64.(add
-               h_burned_tez_revelation
-               (add
-                  h_tez_origination_send
-                  (add
-                     h_burned_tez_origination
-                     (add
-                        h_burned_tez_transaction
-                        (add
-                           h_tez_transaction_send
-                           (add
-                              h_del_fees
-                              (add
-                                 h_rvl_fees
-                                 h_burned_tez_double_baking))))))) in
-
+      List.fold_left Int64.add 0L [
+        h_burned_tez_revelation; h_tez_origination_send; h_burned_tez_origination;
+        h_burned_tez_transaction; h_tez_transaction_send; h_del_fees;
+        h_rvl_fees; h_burned_tez_double_baking ] in
     let h_total = Int64.sub plus_total minus_total in
-
     return
       {
         h_activated_balance ;
@@ -4075,10 +3893,7 @@ module Reader_generic (M : Db_intf.MONAD) = struct
     let h24_block_0_rate = (float blocks0) /. (float blocks) *. 100. in
     PGSQL(dbh) "SELECT staking_balances FROM context_totals \
                       ORDER BY period DESC LIMIT 1"
-    >>= begin function
-      | [ Some result ] -> return result
-      | _ -> return 0L end
-    >>= fun h24_baking_rate ->
+    >>= of_db_opt >>= fun h24_baking_rate ->
     begin PGSQL(dbh) "select cycle,index from snapshot_rolls \
                 WHERE cycle = (SELECT MAX(cycle) FROM snapshot_rolls)"
     >>= function
@@ -4188,4 +4003,258 @@ module Reader_generic (M : Db_intf.MONAD) = struct
           (CalendarLib.Printer.Calendar.sprint "%Y-%m-%dT%H:00:00Z" tsp,
            [|"price_usd", usd; "price_btc", btc |]) :: acc
         | _ -> acc) [] rows
+
+  let nb_balance_updates ?(from=0) ?up_to account_hash =
+
+    let from = Int32.of_int (from * Tezos_constants.Constants.block_per_cycle) in
+    match up_to with
+      Some d -> let d = Int32.of_int (d * Tezos_constants.Constants.block_per_cycle)  in
+      with_dbh >>> fun dbh ->
+      PGSQL(dbh) "SELECT COUNT(*) FROM balance_updates \
+                  WHERE hash=$account_hash \
+                  AND level BETWEEN $from AND $d \
+                  AND distance_level=0"
+      >>= of_count_opt
+    | None ->
+      with_dbh >>> fun dbh ->
+      PGSQL(dbh)
+        "SELECT COUNT(*) FROM balance_updates \
+         WHERE hash=$account_hash AND level >= $from \
+         AND distance_level=0"
+       >>= of_count_opt
+
+  let make_balance_update_info
+        (bu_account,
+         bu_block_hash,
+         bu_diff,
+         bu_date,
+         bu_update_type,
+         bu_op_type,bu_internal,
+         bu_level,bu_frozen,bu_burn) =
+    {bu_account;
+     bu_block_hash;
+     bu_diff;
+     bu_date = Pg_helper.date_of_cal bu_date;
+     bu_update_type;
+     bu_op_type;
+     bu_internal;
+     bu_level;
+     bu_frozen;
+     bu_burn}
+
+  let balance_updates
+      ?(page=0) ?(page_size=20) ?(from=0) ?up_to account_hash : balance_update_info list Monad.t =
+    let offset = Int64.of_int (page * page_size)
+    and limit = Int64.of_int page_size
+    and from = Int32.of_int (from * Tezos_constants.Constants.block_per_cycle) in
+    let info_list =
+      match up_to with
+        Some d -> let d = Int32.of_int (d * Tezos_constants.Constants.block_per_cycle) in
+        with_dbh >>> fun dbh ->
+        PGSQL(dbh)
+          "SELECT hash,block_hash,diff,date,update_type,operation_type,internal,level,frozen,burn \
+           FROM balance_updates \
+           WHERE hash=$account_hash AND level BETWEEN $from AND $d \
+           AND distance_level=0 \
+           ORDER BY level DESC, diff DESC, hash OFFSET $offset LIMIT $limit"
+      | None ->
+        with_dbh >>> fun dbh ->
+        PGSQL(dbh)
+          "SELECT hash,block_hash,diff,date,update_type,operation_type,internal,level,frozen,burn \
+           FROM balance_updates \
+           WHERE hash=$account_hash AND level >= $from \
+           AND distance_level=0 \
+           ORDER BY level DESC, diff DESC, hash OFFSET $offset LIMIT $limit" in
+    info_list >>=
+    List.fold_left
+      (fun (acc : balance_update_info list Monad.t) res ->
+         acc >>=
+         (fun (a:balance_update_info list) ->
+            return @@ (make_balance_update_info res) :: a))
+      (return [])
+
+  let cycle_frozen cycle account_hash =
+    let theoretical_min =  Int64.of_int (cycle * Tezos_constants.Constants.block_per_cycle) in
+    let max = Int64.(add theoretical_min @@ of_int Tezos_constants.Constants.block_per_cycle) in
+    let min =
+      with_dbh >>> fun dbh ->
+      PGSQL(dbh) "WITH hd AS (SELECT header1 FROM double_baking_evidence WHERE accused=$account_hash) \
+                  SELECT MAX(level) FROM header WHERE level>=$theoretical_min AND id IN (SELECT * FROM hd)"
+    in
+    min >>=
+    (fun min ->
+       let min32 : int32 = match min with
+           []
+         | None :: _ -> Int64.to_int32 theoretical_min
+
+         | Some hd :: _ -> Int64.to_int32 hd in
+       let max32 = Int64.to_int32 max in
+
+       with_dbh >>> fun dbh ->
+       PGSQL(dbh)
+         "SELECT \
+          SUM(CASE WHEN distance_level=0 AND update_type='Reward' AND (level!=$max32-1 OR diff>0) THEN diff ELSE 0 END), \
+          SUM(CASE WHEN distance_level=0 AND update_type='Fee' AND (level!=$max32-1 OR diff>0) THEN diff ELSE 0 END), \
+          SUM(CASE WHEN distance_level=0 AND update_type='Deposit' AND (level!=$max32-1 OR diff>0) THEN diff ELSE 0 END) \
+          FROM balance_updates \
+          WHERE level>=$min32 AND level<$max32 AND hash=$account_hash" >>=
+       (function
+         | (Some b, Some c, Some d) :: _ ->
+           let b_rewards = Int64.of_string b and b_fees = Int64.of_string c and b_deposits = Int64.of_string d
+           in
+           return
+             {b_spendable = Int64.zero;
+              b_frozen = Int64.(add b_rewards @@ add b_fees b_deposits);
+              b_rewards;
+              b_fees;
+              b_deposits}
+         | _ ->
+           return
+             {b_spendable = Int64.zero;
+              b_frozen =  Int64.zero;
+              b_rewards =  Int64.zero;
+              b_fees =  Int64.zero;
+              b_deposits =  Int64.zero}
+       ))
+
+  let active_balance_updates cycle account_hash =
+    let level_begin_cycle =
+      cycle * Tezos_constants.Constants.block_per_cycle in
+    let level_begin_cycle32 = Int32.of_int level_begin_cycle in
+    let level_end_cycle = level_begin_cycle + Tezos_constants.Constants.block_per_cycle in
+    let level_end_cycle32 = Int32.of_int level_end_cycle in
+    let list =
+      with_dbh >>> fun dbh -> PGSQL(dbh)
+        "SELECT hash,block_hash,diff,date,update_type,operation_type,internal,level,frozen,burn \
+         FROM balance_updates \
+         WHERE hash=$account_hash \
+         AND level < $level_end_cycle32 AND level >= $level_begin_cycle32 \
+         AND ((frozen='false' AND operation_type='Transaction') OR (frozen='true' AND diff < 0)) \
+         AND distance_level=0" in
+    list >>=
+    List.fold_left
+      (fun (acc : balance_update_info list Monad.t) res ->
+         acc >>=
+         (fun (a:balance_update_info list) ->
+            return @@ (make_balance_update_info res) :: a))
+      (return [])
+
+  let balance account_hash : int64 Monad.t =
+    let req = with_dbh >>> fun dbh ->
+      PGSQL(dbh)
+        "SELECT spendable_balance \
+         FROM balance_from_balance_updates \
+         WHERE hash=$account_hash \
+         ORDER BY cycle DESC LIMIT 1" in
+    req >>=
+    (function [] -> return Int64.zero | elt :: _ -> return elt)
+
+  let balance_from_balance_updates account_hash : balance Monad.t =
+    let req = with_dbh >>> fun dbh ->
+      PGSQL(dbh)
+        "SELECT spendable_balance,frozen,rewards,fees,deposits \
+         FROM balance_from_balance_updates \
+         WHERE hash=$account_hash \
+         ORDER BY cycle DESC LIMIT 1" in
+    req >>=
+      (function
+         [] ->
+          return
+            {b_spendable = Int64.zero;
+             b_frozen =  Int64.zero;
+             b_rewards =  Int64.zero;
+             b_fees =  Int64.zero;
+             b_deposits =  Int64.zero}
+       | (b_spendable, b_frozen, b_rewards, b_fees, b_deposits) :: _ ->
+          return {b_spendable; b_frozen; b_rewards; b_fees; b_deposits})
+
+  let balance_history account_hash :(Int32.t * balance) list Monad.t =
+    let req = with_dbh >>> fun dbh ->
+      PGSQL(dbh)
+        "SELECT cycle,spendable_balance,frozen,rewards,fees,deposits \
+         FROM balance_from_balance_updates \
+         WHERE hash=$account_hash
+         ORDER BY cycle ASC" in
+    req >>=
+      (function
+         [] ->
+          return [Int32.zero,
+                  {b_spendable = Int64.zero;
+                   b_frozen =  Int64.zero;
+                   b_rewards =  Int64.zero;
+                   b_fees =  Int64.zero;
+                   b_deposits =  Int64.zero}]
+       | l ->
+          return @@
+            List.map
+              (fun (c,b_spendable, b_frozen, b_rewards, b_fees, b_deposits) ->
+                (c,{b_spendable;
+                   b_frozen;
+                   b_rewards;
+                   b_fees;
+                   b_deposits}))
+         l
+      )
+
+  let nb_balance cycle =
+    with_dbh >>> fun dbh ->
+    PGSQL(dbh)
+        "SELECT COUNT(*) \
+         FROM balance_from_balance_updates \
+         WHERE cycle=$cycle"
+    >>= of_count_opt
+
+  let balance_ranking ?(page=0) ?(page_size=20) cycle spendable : (int * account_name * Int64.t) list Monad.t =
+    let offset = Int64.of_int (page * page_size)
+    and limit = Int64.of_int page_size in
+    with_dbh >>> fun dbh ->
+    (if spendable
+    then
+      PGSQL(dbh)
+        "SELECT hash,spendable_balance \
+         FROM balance_from_balance_updates \
+         WHERE cycle=$cycle \
+         ORDER BY spendable_balance DESC, hash OFFSET $offset LIMIT $limit"
+    else
+      PGSQL(dbh)
+        "SELECT hash,frozen \
+         FROM balance_from_balance_updates \
+         WHERE cycle=$cycle \
+         ORDER BY frozen DESC, hash OFFSET $offset LIMIT $limit")
+      >>=
+        (fun l ->
+          return @@ List.mapi (fun i (str,v) -> (Int64.to_int offset + i + 1),(Alias.to_name str),v) l)
+
+  let nb_exchange () =
+    with_dbh >>> fun dbh ->
+    PGSQL(dbh) "SELECT COUNT(DISTINCT name) FROM coingecko_exchange" >>= of_count_opt
+
+  let exchange_info ?(page=0) ?(page_size=10) () =
+    let offset = Int64.of_int (page * page_size)
+    and limit = Int64.of_int page_size in
+    with_dbh >>> fun dbh ->
+    PGSQL(dbh)
+      "WITH tmp(name, total_volume) AS ( \
+       SELECT name, SUM(volume) as total_volume FROM coingecko_exchange \
+       GROUP BY name ORDER BY total_volume DESC \
+       OFFSET $offset LIMIT $limit ) \
+       SELECT tmp.name, tmp.total_volume, base, target, volume, conversion, price_usd \
+       FROM coingecko_exchange AS ce \
+       INNER JOIN tmp on tmp.name = ce.name \
+       ORDER BY total_volume, name"
+    >>= fun rows ->
+    return @@
+    List.fold_left (fun acc exc ->
+        match exc with
+        | (ex_name, Some ex_total_volume, ex_base, ex_target,
+                ex_volume, ex_conversion, ex_price_usd) ->
+          let ticker = {ex_base; ex_target; ex_volume;
+                        ex_conversion; ex_price_usd} in
+          if acc = [] || (List.hd acc).ex_name <> ex_name then
+            {ex_name; ex_total_volume; ex_tickers = [ticker]} :: acc
+          else
+            {ex_name; ex_total_volume;
+             ex_tickers = ticker :: (List.hd acc).ex_tickers} :: (List.tl acc)
+        | _ -> acc )
+      [] rows
 end

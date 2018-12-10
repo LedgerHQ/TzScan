@@ -58,11 +58,19 @@ let fan_block_id = "fan-block"
 let fan_baking_rate_id = "fan-baking-rate"
 let fan_activation_rate_id = "fan-activation-rate"
 
-let color v =
-  try
-    if float_of_string v < 0. then red
-    else green
-  with _ -> ""
+let color ?(limit=0.) v =
+  match float_of_string_opt v with
+  | None -> []
+  | Some f ->
+    if f > limit then
+      [ a_class [green]; a_title (Printf.sprintf "value above %.2g%%" limit) ]
+    else if f < -1. *. limit then
+      [ a_class [red]; a_title (Printf.sprintf "value below -%.2g%%" limit) ]
+    else
+      [ a_class [blue]; a_title (Printf.sprintf "value between -%.2g%% and %.2g%%" limit limit) ]
+
+let additional_divs = ref
+    (div [] : (Html_types.div_content_fun Tyxml_js.Html5.elt))
 
 let make_stats_loading () =
   let last_block_value =
@@ -209,8 +217,12 @@ let make_stats_loading () =
                cxsoffset1;
                "front-box" ] ] [
       right_container ] in
+  let ads_div = !additional_divs in
+
   let front_row =
-    div ~a:[ a_id "front-row" ; a_class [ row ] ] [ left_div ; right_div ] in
+    div ~a:[ a_id "front-row" ; a_class [ row ] ] [
+      ads_div ; left_div ; right_div
+    ] in
   front_row
 
 (* Last blocks *)
@@ -389,9 +401,9 @@ let update_leftbox_marketcap price_usd price_btc volume
             td [ pcdata @@ Printf.sprintf "$%.2f" price_usd ] ;
             td [ pcdata price_btc ] ;
             td [ pcdata @@ "$" ^ volume ] ;
-            td ~a:[ a_class [ color change_1 ] ] [ pcdata @@ change_1 ^ "%" ] ;
-            td ~a:[ a_class [ color change_24 ] ] [ pcdata @@ change_24 ^ "%" ] ;
-            td ~a:[ a_class [ color change_7 ] ] [ pcdata @@ change_7 ^ "%" ]
+            td ~a:(color ~limit:0.25 change_1) [ pcdata @@ change_1 ^ "%" ] ;
+            td ~a:(color ~limit:1. change_24) [ pcdata @@ change_24 ^ "%" ] ;
+            td ~a:(color ~limit:1. change_7) [ pcdata @@ change_7 ^ "%" ]
           ]
         ]
       ]
@@ -583,7 +595,7 @@ let make_page () =
           div [ h4 [ pcdata_t s_block_prio_0_baked ] ] ;
           make_fan 0 fan_block_id ] ;
 
-        div ~a:[ a_class [ cmd3 ; cxs6; "stat-item" ] ] [
+        div ~a:[ a_class [ cmd4 ; cxs8; "stat-item" ] ] [
           a ~a:(Common.a_link "transactions") [
             div [ h4 [ pcdata_t s_transactions] ] ;
             div ~a:[ a_id odometer_transac_id ;
@@ -591,7 +603,7 @@ let make_page () =
               pcdata "0"] ;
           ]
         ] ;
-        div ~a:[ a_class [ cmd3 ; cxs6; "stat-item" ] ] [
+        div ~a:[ a_class [ cmd2 ; cxs4; "stat-item" ] ] [
           a ~a:(Common.a_link "originations") [
             div [ h4 [ pcdata_t s_originations] ] ;
             div ~a:[ a_id odometer_orig_id ;
@@ -599,7 +611,7 @@ let make_page () =
               pcdata "0"] ;
           ]
         ] ;
-        div ~a:[ a_class [ cmd3; cxs6; "stat-item" ] ] [
+        div ~a:[ a_class [ cmd4; cxs8; "stat-item" ] ] [
           a ~a:(Common.a_link "delegations") [
             div [ h4 [ pcdata_t s_delegations ] ] ;
             div ~a:[ a_id odometer_del_id ;
@@ -607,7 +619,7 @@ let make_page () =
               pcdata "0"] ;
           ]
         ] ;
-        div ~a:[ a_class [ cmd3; cxs6 ; "stat-item" ] ] [
+        div ~a:[ a_class [ cmd2; cxs4 ; "stat-item" ] ] [
           a ~a:(Common.a_link "activations") [
             div [ h4 [ pcdata_t s_activations ] ] ;
             div ~a:[ a_id odometer_act_id ;

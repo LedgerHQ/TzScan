@@ -19,34 +19,100 @@ open Data_types
 open EzAPI
 
 let param_number =
-  Param.int ~name:"page_size" ~descr:"Max number of replies" "number"
+  Param.int
+    ~name:"page_size"
+    ~descr:"Max number of replies"
+    "number"
+
 let param_operations =
-  Param.bool ~name:"operations" ~descr:"Whether the field `operations` should be filled (`false` by default)." "operations"
+  Param.bool
+    ~name:"operations"
+    ~descr:"Whether the field `operations` should be filled (`false` by default)."
+    "operations"
+
 let param_page =
-  Param.int ~name:"page" ~descr:"Offset in number of pages" "p"
+  Param.int
+    ~name:"page"
+    ~descr:"Offset in number of pages"
+    "p"
+
 let param_contract =
-  Param.bool ~name:"contract" ~descr:"Limit the request to contracts, i.e. accounts with code" "contract"
+  Param.bool
+    ~name:"contract"
+    ~descr:"Limit the request to contracts, i.e. accounts with code"
+    "contract"
+
 let param_type =
-  Param.string ~name:"type of operation" ~descr:"Limit the request to a particular kind of operations (`Transaction`, etc.)" "type"
+  Param.string
+    ~name:"type of operation"
+    ~descr:"Limit the request to a particular kind of operations (`Transaction`, etc.)"
+    "type"
+
 let param_status =
-  Param.string ~name:"status of operation" ~descr:"TODO" "status"
+  Param.string
+    ~name:"status of operation"
+    ~descr:"TODO"
+    "status"
+
 let param_peers =
-  Param.string ~name:"state of peers" ~descr:"TODO" "state"
+  Param.string
+    ~name:"state of peers"
+    ~descr:"TODO"
+    "state"
+
 let param_level =
-  Param.string ~name:"level" ~descr:"Filtering by level" "level"
+  Param.string
+    ~name:"level"
+    ~descr:"Filtering by level"
+    "level"
+
 let param_cycle =
-  Param.string ~name:"cycle" ~descr:"Filtering by cycle" "cycle"
+  Param.string
+    ~name:"cycle"
+    ~descr:"Filtering by cycle"
+    "cycle"
+
 let param_delegate =
-  Param.bool ~name:"delegate" ~descr:"Originations as delegate" "delegate"
+  Param.bool
+    ~name:"delegate"
+    ~descr:"Originations as delegate"
+    "delegate"
+
 let param_search_filter =
-  Param.string ~name:"filter" ~descr:"Filter search results" "filter"
+  Param.string
+    ~name:"filter"
+    ~descr:"Filter search results"
+    "filter"
+
 let param_future =
-  Param.bool ~name:"future" ~descr:"Get future rights" "future"
+  Param.bool
+    ~name:"future"
+    ~descr:"Get future rights"
+    "future"
+
 let param_kind =
   Param.string
     ~name:"kind of tops"
     ~descr:"Limit the request to a particular kind of top accounts (`Frozen_deposits`, etc.)"
     "kind"
+
+let param_spendable =
+  Param.bool
+    ~name:"spendable"
+    ~descr:"Specifies the type of balance"
+    "spendable"
+
+let param_prio =
+  Param.int
+    ~name:"priority"
+    ~descr:"Filter by priority"
+    "priority"
+
+let param_block_hash =
+  Param.string
+    ~name:"block_hash"
+    ~descr:"Optional block hash"
+    "block_hash"
 
 let pagination_params = [ param_page; param_number ]
 let number_params = [ param_number ]
@@ -54,31 +120,33 @@ let operations_params = [ param_operations ]
 let contract_params = [ param_contract ]
 let filters_params = [ param_type; param_status ]
 let peers_params = [ param_peers ]
-let bakings_params = [ param_status ]
 let cycle_params = [ param_cycle ]
 let delegate_params = [ param_delegate ]
 let search_filter_params = [ param_search_filter ]
 let future_params = [ param_future ]
+let spendable_params = [ param_spendable ]
+let prio_params = [ param_prio ]
+let block_hash_params = [ param_block_hash ]
 
 let arg_block_hash =
   arg_string "block_hash",
-  "BMVCUZCPwFMRD2SJkVMyVsVKW7bmx5PoVoEoN9TS1m9Hu2gdGpW"
+  "BKyKuFqvCG7smSmXTewhigcVvHUTvecS8SAjsx7cjDzKe7js3HL"
 
 let arg_account_hash =
   arg_string "account_hash",
-  "tz1ey28xfyVvtPRPN9d43Wbf1vkPs868CGXM"
+  "tz3RDC3Jdn4j15J7bBHZd29EUee9gVB1CxD9"
 
 let arg_contract_hash =
   arg_string "contract_hash",
-  "KT1ey28xfyVvtPRPN9d43Wbf1vkPs868CGXM"
+  "KT1QuofAgnsWffHzLA7D78rxytJruGHDe7XG"
 
 let arg_op_hash =
   arg_string "op_hash",
-  "oo9wLVpWkGAsmFTsFPv8DT1H9ArgUk98vDtc3YqYFncenYW9wEn"
+  "oo5fwMjaLq8jzmKH1HJi9Qpg2VAfT3yMsMGtjnbHuCUAWAjiehV"
 
 let arg_hash =
   arg_string "hash",
-  "BMVCUZCPwFMRD2SJkVMyVsVKW7bmx5PoVoEoN9TS1m9Hu2gdGpW"
+  "BKyKuFqvCG7smSmXTewhigcVvHUTvecS8SAjsx7cjDzKe7js3HL"
 
 let arg_period =
   arg_string "period",
@@ -86,11 +154,11 @@ let arg_period =
 
 let arg_level =
   arg_int "level",
-  12333
+  188418
 
 let arg_cycle =
   arg_int "cycle",
-  123
+  42
 
 let arg_node =
   arg_string "node",
@@ -107,35 +175,34 @@ let arg_day =
 module type VERSION = sig val version_str : string end
 
 module V (V : VERSION) = struct
-  let version = V.version_str
   let version_v = V.version_str
 
 
 
-let section_server = EzAPI.section "Server Requests"
-let section_stats = EzAPI.section "Stats Requests" (* Private *)
-let section_blocks = EzAPI.section "Blocks Requests"
-let section_block = EzAPI.section "Block Requests"
-let section_accounts = EzAPI.section "Accounts Requests"
-let section_operations = EzAPI.section "Operations Requests"
-let section_level = EzAPI.section "Level Requests"
-let section_search = EzAPI.section "Search Requests"
-let section_node = EzAPI.section "Node Requests"
-let section_protocol = EzAPI.section "Protocol Requests"
+  let section_server = EzAPI.section "Server Requests" (* Private *)
+  let section_stats = EzAPI.section "Stats Requests" (* Private *)
+  let section_blocks = EzAPI.section "Blocks Requests"
+  let section_block = EzAPI.section "Block Requests"
+  let section_accounts = EzAPI.section "Accounts Requests"
+  let section_operations = EzAPI.section "Operations Requests"
+  let section_level = EzAPI.section "Level Requests"
+  let section_search = EzAPI.section "Search Requests"
+  let section_node = EzAPI.section "Node Requests" (* Private *)
+  let section_protocol = EzAPI.section "Protocol Requests"
+  let section_balance_updates = EzAPI.section "Balance Updates Requests"
 
-let sections = [
-  section_server;
-  section_blocks;
-  section_block;
-  section_operations;
-  section_accounts;
-  section_level;
-  section_search;
-  section_node;
-  section_protocol;
+  let sections = [
+    section_blocks;
+    section_block;
+    section_operations;
+    section_accounts;
+    section_level;
+    section_search;
+    section_protocol;
+    section_balance_updates
   ]
 
-let other_sections = [ section_stats ]
+  let other_sections = [ section_server; section_stats; section_node ]
 
   (*   SECTION BLOCKS *)
 
@@ -147,7 +214,7 @@ let other_sections = [ section_stats ]
       ~name:"block"
       ~params:operations_params
       ~output:Api_encoding.V1.Block.encoding
-      Path.(root // version // "block" /: arg_block_hash)
+      Path.(root // version_v // "block" /: arg_block_hash)
 
   (* Shortcut to last block *)
   let head : Data_types.block service0 =
@@ -156,16 +223,16 @@ let other_sections = [ section_stats ]
       ~name:"head"
       ~section:section_blocks
       ~output:Api_encoding.V1.Block.encoding
-      Path.(root // version // "head")
+      Path.(root // version_v // "head")
 
-  (* Shortcut to fist block *)
+  (* Shortcut to first block *)
   let genesis : Data_types.block service0 =
     service
       ~params:[]
       ~name:"genesis"
       ~section:section_blocks
       ~output:Api_encoding.V1.Block.encoding
-      Path.(root // version // "genesis")
+      Path.(root // version_v // "genesis")
 
   (* A list of blocks *)
   let blocks : Data_types.block list service0 =
@@ -174,7 +241,7 @@ let other_sections = [ section_stats ]
       ~name:"blocks"
       ~params: (operations_params@pagination_params)
       ~output:(Json_encoding.list Api_encoding.V1.Block.encoding)
-      Path.(root // version // "blocks")
+      Path.(root // version_v // "blocks")
 
   let nb_snapshot_blocks : int service0 =
     service
@@ -182,7 +249,7 @@ let other_sections = [ section_stats ]
       ~name:"nb_snapshot_blocks"
       ~params:[]
       ~output:Json_encoding.(tup1 int)
-      Path.(root // version // "nb_snapshot_blocks")
+      Path.(root // version_v // "nb_snapshot_blocks")
 
   let snapshot_blocks : Data_types.snapshot list service0 =
     service
@@ -190,15 +257,14 @@ let other_sections = [ section_stats ]
       ~name:"snapshot_blocks"
       ~params:pagination_params
       ~output:Api_encoding.V1.Snapshot.encoding
-      Path.(root // version // "snapshot_blocks")
+      Path.(root // version_v // "snapshot_blocks")
 
   let snapshot_levels : int list service0 =
     service
       ~section:section_blocks
       ~name:"snapshot_levels"
-      ~params:[]
       ~output:Json_encoding.(list int)
-      Path.(root // version // "snapshot_levels")
+      Path.(root // version_v // "snapshot_levels")
 
   (* Alternative heads *)
   let heads : Data_types.block list service0 =
@@ -207,23 +273,22 @@ let other_sections = [ section_stats ]
       ~name:"heads"
       ~params:pagination_params
       ~output:(Json_encoding.list Api_encoding.V1.Block.encoding)
-      Path.(root // version // "heads")
+      Path.(root // version_v // "heads")
 
   let nb_heads : int service0 =
     service
       ~section:section_blocks
       ~name:"nb_heads"
       ~output:Json_encoding.(tup1 int)
-      Path.(root // version // "nb_heads")
+      Path.(root // version_v // "nb_heads")
 
   (* Count Alternative heads *)
   let nb_uncles : (int, int) service1 =
     service
       ~section:section_blocks
       ~name:"nb_uncles"
-      ~params:pagination_params
       ~output: Json_encoding.(tup1 int)
-      Path.(root // version // "nb_uncles" /: arg_level)
+      Path.(root // version_v // "nb_uncles" /: arg_level)
 
 
   (*    SECTION ACCOUNTS *)
@@ -235,7 +300,7 @@ let other_sections = [ section_stats ]
       ~params:(pagination_params @ contract_params)
       ~section:section_accounts
       ~output:(Json_encoding.list Api_encoding.V1.Account.encoding)
-      Path.(root // version // "accounts")
+      Path.(root // version_v // "accounts")
 
   (* The number of accounts *)
   let nb_accounts : int service0 =
@@ -244,7 +309,7 @@ let other_sections = [ section_stats ]
       ~name:"nb_accounts"
       ~params: contract_params
       ~output:Json_encoding.(tup1 int)
-      Path.(root // version // "number_accounts")
+      Path.(root // version_v // "number_accounts")
 
   let account_bonds_rewards : (string, Data_types.account_bonds_rewards) service1 =
     service
@@ -359,7 +424,7 @@ let other_sections = [ section_stats ]
       ~name:"nb_cycle_rewards"
       ~section: section_accounts
       ~output: Json_encoding.(tup1 int)
-      Path.(root // version_v // "nb_cycle_rewards" /: arg_hash)
+      Path.(root // version_v // "nb_cycle_rewards" /: arg_account_hash)
 
   let nb_delegators : (account_hash, int) service1 =
     service
@@ -367,7 +432,7 @@ let other_sections = [ section_stats ]
       ~name:"nb_delegators"
       ~section: section_accounts
       ~output: Json_encoding.(tup1 int)
-      Path.(root // version_v // "nb_delegators" /: arg_hash)
+      Path.(root // version_v // "nb_delegators" /: arg_account_hash)
 
   let rewards_split_cycles : (account_hash, all_rewards_split list) service1 =
     service
@@ -375,7 +440,7 @@ let other_sections = [ section_stats ]
       ~name:"rewards_split_cycles"
       ~section: section_accounts
       ~output: (Json_encoding.list Api_encoding.V1.Rewards_split.all_encoding)
-      Path.(root // version_v // "rewards_split_cycles" /: arg_hash)
+      Path.(root // version_v // "rewards_split_cycles" /: arg_account_hash)
 
   let rewards_split : (account_hash, rewards_split) service1 =
     service
@@ -383,7 +448,7 @@ let other_sections = [ section_stats ]
       ~name:"rewards_split"
       ~section: section_accounts
       ~output:Api_encoding.V1.Rewards_split.encoding
-      Path.(root // version_v // "rewards_split" /: arg_hash)
+      Path.(root // version_v // "rewards_split" /: arg_account_hash)
 
   let rewards_split_fast : (account_hash, (account_name * int64) list) service1 =
     service
@@ -392,7 +457,7 @@ let other_sections = [ section_stats ]
       ~section: section_accounts
       ~output:Json_encoding.(
           list (tup2 Api_encoding.account_name_encoding Api_encoding.tez))
-      Path.(root // version_v // "rewards_split_fast" /: arg_hash)
+      Path.(root // version_v // "rewards_split_fast" /: arg_account_hash)
 
   let nb_cycle_delegator_rewards : (account_hash, int) service1 =
     service
@@ -400,7 +465,7 @@ let other_sections = [ section_stats ]
       ~name:"nb_cycle_delegator_rewards"
       ~section: section_accounts
       ~output: Json_encoding.(tup1 int)
-      Path.(root // version_v // "nb_cycle_delegator_rewards" /: arg_hash)
+      Path.(root // version_v // "nb_cycle_delegator_rewards" /: arg_contract_hash)
 
   let delegator_rewards : (account_hash, delegator_reward list) service1 =
     service
@@ -408,15 +473,7 @@ let other_sections = [ section_stats ]
       ~name:"delegator_rewards"
       ~section:section_accounts
       ~output:Api_encoding.V1.Rewards_split.delegator_encodings
-      Path.(root // version_v // "delegator_rewards" /: arg_hash)
-
-  let rewards_stats : (account_hash, rewards_stats) service1 =
-    service
-      ~params:cycle_params
-      ~name:"rewards_stats"
-      ~section: section_accounts
-      ~output: Api_encoding.V1.Rewards_stats.encoding
-      Path.(root // version_v // "rewards_stats" /: arg_hash)
+      Path.(root // version_v // "delegator_rewards" /: arg_contract_hash)
 
   (*   SECTION OPERATIONS *)
 
@@ -432,7 +489,7 @@ let other_sections = [ section_stats ]
      service
       ~params:[]
       ~section:section_accounts
-      ~name:"accoutn_from_alias"
+      ~name:"account_from_alias"
       ~output:Json_encoding.(tup1 (option string))
       Path.(root // version_v // "account_from_alias" /: arg_alias)
 
@@ -443,11 +500,11 @@ let other_sections = [ section_stats ]
   (* A single operation *)
   let operation : (string, Data_types.operation) service1 =
     service
-      ~params: []
+      ~params:block_hash_params
       ~name:"operation"
-      ~section: section_operations
+      ~section:section_operations
       ~output:Api_encoding.V1.Operation.operation
-      Path.(root // version // "operation" /: arg_op_hash)
+      Path.(root // version_v // "operation" /: arg_op_hash)
 
   (* A list of operations *)
   let operations_bh : (string, Data_types.operation list) service1 =
@@ -456,163 +513,167 @@ let other_sections = [ section_stats ]
       ~section: section_operations
       ~name:"operations_bh"
       ~output:(Json_encoding.list Api_encoding.V1.Operation.operation)
-      Path.(root // version // "operations" /: arg_block_hash)
+      Path.(root // version_v // "operations" /: arg_block_hash)
 
   (* List of baked blocks for a given account *)
   let bakings : (string, Data_types.baking list) service1 =
     service
-      ~params:(bakings_params @ cycle_params @ pagination_params)
+      ~params:(cycle_params @ pagination_params)
       ~name:"bakings"
       ~section: section_operations
       ~output:Api_encoding.V1.BakeOp.bakings
-      Path.(root // version // "bakings" /: arg_account_hash)
+      Path.(root // version_v // "bakings" /: arg_account_hash)
 
   (* The number of baked blocks for an account *)
   let nb_bakings : (string, int) service1 =
     service
-      ~params:(bakings_params @ cycle_params)
+      ~params:cycle_params
       ~name:"nb_bakings"
       ~section: section_operations
       ~output:Json_encoding.(tup1 int)
-      Path.(root // version // "number_bakings" /: arg_account_hash)
+      Path.(root // version_v // "number_bakings" /: arg_account_hash)
 
   let nb_bakings_endorsement : (string, int) service1 =
     service
-      ~params:(bakings_params @ cycle_params)
+      ~params:cycle_params
       ~name:"nb_bakings_endorsement"
       ~section: section_operations
       ~output:Json_encoding.(tup1 int)
-      Path.(root // version // "number_bakings_endorsement" /: arg_account_hash)
+      Path.(root // version_v // "number_bakings_endorsement" /: arg_account_hash)
 
   let bakings_endorsement : (string, Data_types.baking_endorsement list) service1 =
     service
-      ~params:(bakings_params @ cycle_params @ pagination_params)
+      ~params:(cycle_params @ pagination_params)
       ~name:"bakings_endorsement"
       ~section: section_operations
       ~output:Api_encoding.V1.BakeEndorsementOp.bakings
-      Path.(root // version // "bakings_endorsement" /: arg_account_hash)
+      Path.(root // version_v // "bakings_endorsement" /: arg_account_hash)
 
   let nb_bakings_history : (string, int) service1 =
     service
-      ~params:bakings_params
       ~name:"nb_bakings_history"
       ~section:section_operations
       ~output:Json_encoding.(tup1 int)
-      Path.(root // version // "number_bakings_history" /: arg_account_hash)
+      Path.(root // version_v // "number_bakings_history" /: arg_account_hash)
 
   let bakings_history :
     (string, Data_types.cycle_baking list * Data_types.cycle_rights list *
              Data_types.cycle_baking list) service1 =
     service
-      ~params:(bakings_params @ pagination_params)
+      ~params:pagination_params
       ~name:"bakings_history"
       ~section:section_operations
       ~output:(Json_encoding.tup3
                  Api_encoding.V1.CycleBakeOp.bakings
                  Api_encoding.V1.CycleRights.rights
                  Api_encoding.V1.CycleBakeOp.bakings)
-      Path.(root // version // "bakings_history" /: arg_account_hash)
+      Path.(root // version_v // "bakings_history" /: arg_account_hash)
 
   let total_bakings : (string, Data_types.cycle_baking list) service1 =
     service
-      ~params:bakings_params
       ~name:"total_bakings"
       ~section:section_operations
       ~output:Api_encoding.V1.CycleBakeOp.bakings
-      Path.(root // version // "total_bakings" /: arg_account_hash)
+      Path.(root // version_v // "total_bakings" /: arg_account_hash)
 
   let nb_endorsements_history : (string, int) service1 =
     service
-      ~params:bakings_params
       ~name:"nb_endorsements_history"
       ~section:section_operations
       ~output:Json_encoding.(tup1 int)
-      Path.(root // version // "number_endorsements_history" /: arg_account_hash)
+      Path.(root // version_v // "number_endorsements_history" /: arg_account_hash)
 
   let endorsements_history :
     (string, Data_types.cycle_endorsement list * Data_types.cycle_rights list *
              Data_types.cycle_endorsement list) service1 =
     service
-      ~params:(bakings_params @ pagination_params)
+      ~params:pagination_params
       ~name:"endorsements_history"
       ~section:section_operations
       ~output:(Json_encoding.tup3
                  Api_encoding.V1.CycleEndorsementOp.bakings
                  Api_encoding.V1.CycleRights.rights
                  Api_encoding.V1.CycleEndorsementOp.bakings)
-      Path.(root // version // "endorsements_history" /: arg_account_hash)
+      Path.(root // version_v // "endorsements_history" /: arg_account_hash)
 
   let total_endorsements : (string, Data_types.cycle_endorsement list) service1 =
     service
-      ~params:bakings_params
       ~name:"total_endorsements"
       ~section:section_operations
       ~output:Api_encoding.V1.CycleEndorsementOp.bakings
-      Path.(root // version // "total_endorsements" /: arg_account_hash)
+      Path.(root // version_v // "total_endorsements" /: arg_account_hash)
 
   let nb_cycle_rights : int service0 =
     service
       ~params:(search_filter_params @ future_params)
-      ~name:"nb_baking_priorities"
+      ~name:"nb_cycle_rights"
       ~section: section_operations
       ~output:Json_encoding.(tup1 int)
-      Path.(root // version // "number_baking_rights")
+      Path.(root // version_v // "number_baking_rights")
 
   let cycle_rights : Data_types.rights list service0 =
     service
-      ~params:(bakings_params @ pagination_params @ search_filter_params @ future_params)
-      ~name:"baking_priorities"
+      ~params:(pagination_params @ search_filter_params @ future_params)
+      ~name:"cycle_rights"
       ~section: section_operations
       ~output:(Json_encoding.list Api_encoding.V1.Rights.encoding)
-      Path.(root // version // "baking_rights")
+      Path.(root // version_v // "baking_rights")
 
   let nb_baker_rights : (string, int) service1 =
     service
-      ~params:(bakings_params @ cycle_params)
-      ~name:"nb_pending_priorities_hash"
+      ~params:cycle_params
+      ~name:"nb_baker_rights"
       ~section: section_operations
       ~output:Json_encoding.(tup1 int)
-      Path.(root // version // "number_baker_rights" /: arg_account_hash)
+      Path.(root // version_v // "number_baker_rights" /: arg_account_hash)
 
   let baker_rights : (string, Data_types.baker_rights list) service1 =
     service
-      ~params:(bakings_params @ cycle_params @ pagination_params)
-      ~name:"pending_priorities"
+      ~params:(cycle_params @ pagination_params)
+      ~name:"baker_rights"
       ~section: section_operations
       ~output:Api_encoding.V1.BakerRights.rights
-      Path.(root // version // "baker_rights" /: arg_account_hash)
+      Path.(root // version_v // "baker_rights" /: arg_account_hash)
+
+  let cycle_all_rights : (string, int * int) service1 =
+    service
+      ~params:(cycle_params@prio_params)
+      ~name:"cycle_all_rights"
+      ~section: section_operations
+      ~output:Json_encoding.(tup2 int int)
+      Path.(root // version_v // "cycle_all_rights" /: arg_account_hash)
 
    let cycle_baker_rights : (string, Data_types.cycle_rights list) service1 =
     service
       ~params:[]
-      ~name:"cycles_pending_priorities"
+      ~name:"cycle_baker_rights"
       ~section: section_operations
       ~output:Api_encoding.V1.CycleRights.rights
-      Path.(root // version // "cycle_baker_rights" /: arg_account_hash)
+      Path.(root // version_v // "cycle_baker_rights" /: arg_account_hash)
 
   let nb_endorser_rights : (string, int) service1 =
     service
-      ~params:(bakings_params @ cycle_params)
-      ~name:"nb_pending_priorities_hash"
+      ~params:cycle_params
+      ~name:"nb_endorser_rights"
       ~section: section_operations
       ~output:Json_encoding.(tup1 int)
-      Path.(root // version // "number_endorser_rights" /: arg_account_hash)
+      Path.(root // version_v // "number_endorser_rights" /: arg_account_hash)
 
   let endorser_rights : (string, Data_types.endorser_rights list) service1 =
     service
-      ~params:(bakings_params @ cycle_params @ pagination_params)
-      ~name:"pending_priorities"
+      ~params:(cycle_params @ pagination_params)
+      ~name:"endorser_rights"
       ~section: section_operations
       ~output:(Json_encoding.list Api_encoding.V1.EndorserRights.encoding)
-      Path.(root // version // "endorser_rights" /: arg_account_hash)
+      Path.(root // version_v // "endorser_rights" /: arg_account_hash)
 
   let cycle_endorser_rights : (string, Data_types.cycle_rights list) service1 =
     service
       ~params:[]
-      ~name:"cycle_pending_priorities"
+      ~name:"cycle_endorser_rights"
       ~section: section_operations
       ~output:Api_encoding.V1.CycleRights.rights
-      Path.(root // version // "cycle_endorser_rights" /: arg_account_hash)
+      Path.(root // version_v // "cycle_endorser_rights" /: arg_account_hash)
 
   let required_balance : (string, (int * int64 * int64 * int64 * int * int) list) service1 =
     service
@@ -623,7 +684,7 @@ let other_sections = [ section_stats ]
                  (Json_encoding.tup6 Json_encoding.int
                     Api_encoding.tez Api_encoding.tez Api_encoding.tez
                     Json_encoding.int Json_encoding.int))
-      Path.(root // version // "required_balance" /: arg_hash)
+      Path.(root // version_v // "required_balance" /: arg_account_hash)
 
   (* The number of operations for a block or an account *)
   let nb_operations_hash : (string, int) service1 =
@@ -632,7 +693,7 @@ let other_sections = [ section_stats ]
       ~name:"nb_operations_hash"
       ~section: section_operations
       ~output:Json_encoding.(tup1 int)
-      Path.(root // version // "number_operations" /: arg_hash)
+      Path.(root // version_v // "number_operations" /: arg_hash)
 
   (* The number of operations *)
   let nb_operations : int service0 =
@@ -641,7 +702,7 @@ let other_sections = [ section_stats ]
       ~name:"nb_operations"
       ~section: section_operations
       ~output:Json_encoding.(tup1 int)
-      Path.(root // version // "number_operations")
+      Path.(root // version_v // "number_operations")
 
   let endorsements_level : (int, Data_types.operation list) service1 =
     service
@@ -649,7 +710,7 @@ let other_sections = [ section_stats ]
       ~section: section_operations
       ~name:"endorsements_level"
       ~output:(Json_encoding.list Api_encoding.V1.Operation.operation)
-      Path.(root // version // "endorsements" /: arg_level)
+      Path.(root // version_v // "endorsements" /: arg_level)
 
   let operations : Data_types.operation list service0 =
     service
@@ -657,23 +718,23 @@ let other_sections = [ section_stats ]
       ~section: section_operations
       ~name:"operations"
       ~output:(Json_encoding.list Api_encoding.V1.Operation.operation)
-      Path.(root // version // "operations")
+      Path.(root // version_v // "operations")
 
       (* <--- not used ?
   let pending_operations : Data_types.operation list service0 =
     service
       ~output:(Json_encoding.list Api_encoding.Operation.API.api_operation)
-      Path.(root // version // "pending_operations")
+      Path.(root // version_v // "pending_operations")
 
   let pending_operations_hash : (string, Data_types.operation list) service1 =
     service
       ~output:(Json_encoding.list Api_encoding.Operation.API.api_operation)
-      Path.(root // version // "pending_operations" /: arg_string "hash")
+      Path.(root // version_v // "pending_operations" /: arg_string "hash")
 
   let pending_endorsements : (string, Data_types.operation list) service1 =
     service
       ~output:(Json_encoding.list Api_encoding.Operation.API.api_operation)
-      Path.(root // version // "pending_endorsements" /: arg_string "hash")
+      Path.(root // version_v // "pending_endorsements" /: arg_string "hash")
        *)
 
   (*   SECTION BLOCK *)
@@ -684,7 +745,7 @@ let other_sections = [ section_stats ]
       ~section:section_block
       ~name:"block_next"
       ~output:Json_encoding.(tup1 string)
-      Path.(root // version // "block_next" /: arg_block_hash)
+      Path.(root // version_v // "block_next" /: arg_block_hash)
 
   let block_pred : (string, block_hash) service1 =
     service
@@ -692,7 +753,7 @@ let other_sections = [ section_stats ]
       ~section:section_block
       ~name:"block_prev"
       ~output:Json_encoding.(tup1 string)
-      Path.(root // version // "block_prev" /: arg_block_hash)
+      Path.(root // version_v // "block_prev" /: arg_block_hash)
 
   let timestamp : (string, timestamp) service1 =
     service
@@ -700,7 +761,7 @@ let other_sections = [ section_stats ]
       ~section:section_block
       ~name:"timestamp"
       ~output:Json_encoding.(tup1 string)
-      Path.(root // version // "timestamp" /: arg_block_hash)
+      Path.(root // version_v // "timestamp" /: arg_block_hash)
 
   let level : (string, Tezos_types.level) service1 =
     service
@@ -708,7 +769,7 @@ let other_sections = [ section_stats ]
       ~section:section_block
       ~name:"level"
       ~output:Api_encoding.V1.Level.encoding
-      Path.(root // version // "level" /: arg_block_hash)
+      Path.(root // version_v // "level" /: arg_block_hash)
 
   let network : (string, network_hash) service1 =
     service
@@ -716,7 +777,7 @@ let other_sections = [ section_stats ]
       ~section:section_block
       ~name:"network"
       ~output:Json_encoding.(tup1 string)
-      Path.(root // version // "network" /: arg_block_hash)
+      Path.(root // version_v // "network" /: arg_block_hash)
 
   let priority : (string, int) service1 =
     service
@@ -724,7 +785,7 @@ let other_sections = [ section_stats ]
       ~section:section_block
       ~name:"priority"
       ~output:Json_encoding.(tup1 int)
-      Path.(root // version // "priority" /: arg_block_hash)
+      Path.(root // version_v // "priority" /: arg_block_hash)
 
   let volume : (string, int64) service1 =
     service
@@ -732,7 +793,7 @@ let other_sections = [ section_stats ]
       ~section:section_block
       ~name:"volume"
       ~output:(Json_encoding.tup1 Api_encoding.tez)
-      Path.(root // version // "volume" /: arg_block_hash)
+      Path.(root // version_v // "volume" /: arg_block_hash)
 
 
 
@@ -747,7 +808,7 @@ let other_sections = [ section_stats ]
       ~section:section_level
       ~name:"block_level"
       ~output:Api_encoding.V1.Block.encoding
-      Path.(root // version // "block_level" /: arg_level)
+      Path.(root // version_v // "block_level" /: arg_level)
 
   let block_hash_level : (int, block_hash) service1 =
     service
@@ -755,7 +816,7 @@ let other_sections = [ section_stats ]
       ~section:section_level
       ~name:"block_hash_level"
       ~output:Json_encoding.(tup1 string)
-      Path.(root // version // "block_hash_level" /: arg_level)
+      Path.(root // version_v // "block_hash_level" /: arg_level)
 
    let nonces : (Data_types.nonces list) service0 =
     service
@@ -763,7 +824,7 @@ let other_sections = [ section_stats ]
       ~section:section_level
       ~name:"nonces"
       ~output:(Json_encoding.list Api_encoding.V1.Nonce_hash.encoding)
-      Path.(root // version // "nonces")
+      Path.(root // version_v // "nonces")
 
 
   (* SECTION STATS *)
@@ -774,7 +835,7 @@ let other_sections = [ section_stats ]
       ~section:section_stats
       ~name:"marketcap"
       ~output:Api_encoding.V1.MarketCap.encoding
-      Path.(root // version // "marketcap" )
+      Path.(root // version_v // "marketcap" )
 
   (* The number of peers *)
   let nb_network_peers : int service0 =
@@ -783,7 +844,7 @@ let other_sections = [ section_stats ]
       ~section: section_stats
       ~name:"nb_network_peers"
       ~output:Json_encoding.(tup1 int)
-      Path.(root // version // "number_network_peers")
+      Path.(root // version_v // "number_network_peers")
 
   let network_stats : Tezos_types.network_stats list service0 =
     service
@@ -791,7 +852,7 @@ let other_sections = [ section_stats ]
       ~section:section_stats
       ~name:"network_stats"
       ~output:Api_encoding.V1.Network.encoding
-      Path.(root // version // "network" )
+      Path.(root // version_v // "network" )
 
   let country_stats : Data_types.country_stats list service0 =
     service
@@ -799,7 +860,7 @@ let other_sections = [ section_stats ]
       ~section:section_stats
       ~name:"country_stats"
       ~output:Api_encoding.V1.Network.country_stats_encoding
-      Path.(root // version // "country" )
+      Path.(root // version_v // "country" )
 
   let baker : (string, Data_types.baker_stats) service1 =
     service
@@ -807,7 +868,7 @@ let other_sections = [ section_stats ]
       ~section:section_stats
       ~name:"baker"
       ~output:Api_encoding.V1.Baker.encoding
-      Path.(root // version // "baker_stats" /: arg_account_hash )
+      Path.(root // version_v // "baker_stats" /: arg_account_hash )
 
   let bakers : Data_types.baker_stats list service0 =
     service
@@ -815,7 +876,7 @@ let other_sections = [ section_stats ]
       ~section:section_stats
       ~name:"bakers"
       ~output:Api_encoding.V1.Baker.bakers_encoding
-      Path.(root // version // "baker_stats" )
+      Path.(root // version_v // "baker_stats" )
 
   let blocks_per_day : int Data_types.per_day service0 =
     service
@@ -823,7 +884,7 @@ let other_sections = [ section_stats ]
       ~section:section_stats
       ~name:"blocks_per_day"
       ~output:Api_encoding.V1.Charts.int_per_day_encoding
-      Path.(root // version // "blocks_per_day" )
+      Path.(root // version_v // "blocks_per_day" )
 
   let bakers_per_day : int Data_types.per_day service0 =
     service
@@ -831,7 +892,7 @@ let other_sections = [ section_stats ]
       ~section:section_stats
       ~name:"bakers_per_day"
       ~output:Api_encoding.V1.Charts.int_per_day_encoding
-      Path.(root // version // "bakers_per_day" )
+      Path.(root // version_v // "bakers_per_day" )
 
   let priorities_per_day : float Data_types.per_day service0 =
     service
@@ -839,7 +900,7 @@ let other_sections = [ section_stats ]
       ~section:section_stats
       ~name:"priorities_per_day"
       ~output:Api_encoding.V1.Charts.float_per_day_encoding
-      Path.(root // version // "priorities_per_day" )
+      Path.(root // version_v // "priorities_per_day" )
 
   let operations_per_day : int Data_types.per_day service0 =
     service
@@ -847,7 +908,7 @@ let other_sections = [ section_stats ]
       ~section:section_stats
       ~name:"operations_per_day"
       ~output:Api_encoding.V1.Charts.int_per_day_encoding
-      Path.(root // version // "operations_per_day" )
+      Path.(root // version_v // "operations_per_day" )
 
   let operations_per_block_per_day : int Data_types.per_day service0 =
     service
@@ -855,7 +916,7 @@ let other_sections = [ section_stats ]
       ~section:section_stats
       ~name:"operations_per_block_per_day"
       ~output:Api_encoding.V1.Charts.int_per_day_encoding
-      Path.(root // version // "operations_per_block_per_day" )
+      Path.(root // version_v // "operations_per_block_per_day" )
 
   let fees_per_day : int64 Data_types.per_day service0 =
     service
@@ -863,7 +924,7 @@ let other_sections = [ section_stats ]
       ~section:section_stats
       ~name:"fees_per_day"
       ~output:Api_encoding.V1.Charts.int64_per_day_encoding
-      Path.(root // version // "fees_per_day" )
+      Path.(root // version_v // "fees_per_day" )
 
   let volume_per_day : int64 Data_types.per_day service0 =
     service
@@ -871,13 +932,13 @@ let other_sections = [ section_stats ]
       ~section:section_stats
       ~name:"volume_per_day"
       ~output:Api_encoding.V1.Charts.int64_per_day_encoding
-      Path.(root // version // "volume_per_day" )
+      Path.(root // version_v // "volume_per_day" )
 
   let mini_stats : mini_stats service0 =
     service
       ~params:[]
       ~name:"mini_stats"
-      ~section:section_server
+      ~section:section_stats
       ~output:Api_encoding.V1.Charts.mini_stats
       Path.(root // version_v // "mini_stats" )
 
@@ -921,12 +982,12 @@ let other_sections = [ section_stats ]
       ~output:Json_encoding.(tup1 int)
       Path.(root // version_v // "nb_tops")
 
-  let tops : (string * int64) list service0 =
+  let tops : top_accounts service0 =
     service
       ~params: (param_kind :: pagination_params)
       ~section:section_stats
       ~name:"tops"
-      ~output:Json_encoding.(list (tup2 string Api_encoding.int64))
+      ~output:Api_encoding.Tops.top_accounts_encoding
       Path.(root // version_v // "tops")
 
   let h24_stats : Data_types.h24_stats service0 =
@@ -966,7 +1027,7 @@ let other_sections = [ section_stats ]
   let nb_search_block : (string, int) service1 =
     service
       ~params: []
-      ~name:"search"
+      ~name:"nb_search_block"
       ~section: section_search
       ~output: Json_encoding.(tup1 int)
       Path.(root // version_v // "nb_search_block" /: arg_block_hash)
@@ -974,7 +1035,7 @@ let other_sections = [ section_stats ]
   let nb_search_operation : (string, int) service1 =
     service
       ~params: []
-      ~name:"search"
+      ~name:"nb_search_operation"
       ~section: section_search
       ~output: Json_encoding.(tup1 int)
       Path.(root // version_v // "nb_search_operation" /: arg_op_hash)
@@ -982,7 +1043,7 @@ let other_sections = [ section_stats ]
   let nb_search_account : (string, int) service1 =
     service
       ~params: []
-      ~name:"search"
+      ~name:"nb_search_account"
       ~section: section_search
       ~output: Json_encoding.(tup1 int)
       Path.(root // version_v // "nb_search_account" /: arg_account_hash)
@@ -1111,6 +1172,106 @@ let other_sections = [ section_stats ]
       ~name:"market_prices"
       ~output:Json_encoding.(array (tup2 string (array (tup2 string float))))
       Path.(root // version_v // "market_prices")
+
+  let balance_updates_number : (string, int) service1 =
+    service
+      ~section:section_balance_updates
+      ~name:"nb_balance_updates"
+      ~params:cycle_params
+      ~output:Json_encoding.(tup1 int)
+      Path.(root // version_v // "balance_updates_number" /: arg_account_hash)
+
+  let balance_updates : (string, balance_update_info list) service1 =
+    service
+      ~section:section_balance_updates
+      ~name:"balance_updates"
+      ~params:(pagination_params@cycle_params)
+      ~output:Api_encoding.V1.Balance_update_info.encoding
+      Path.(root // version_v // "balance_updates" /: arg_account_hash)
+
+  let active_balance_updates : (string, balance_update_info list) service1 =
+    service
+      ~section:section_balance_updates
+      ~name:"active_balance_updates"
+      ~params:cycle_params
+      ~output:Api_encoding.V1.Balance_update_info.encoding
+      Path.(root // version_v // "active_balance_updates" /: arg_account_hash)
+
+  let balance : (string, Int64.t) service1 =
+    service
+      ~section:section_balance_updates
+      ~name:"balance"
+      ~params:[]
+      ~output:(Api_encoding.tez)
+      Path.(root // version_v // "balance" /: arg_account_hash)
+
+  let balance_from_balance_updates :
+        (string, balance)
+          service1 =
+    service
+      ~section:section_balance_updates
+      ~name:"balance_from_balance_updates"
+      ~params:[]
+      ~output:(Api_encoding.V1.Balance.encoding)
+      Path.(root // version_v // "balance_from_balance_updates" /: arg_account_hash)
+
+  let balance_history : (string, (Int32.t * balance) list) service1 =
+    service
+      ~section:section_balance_updates
+      ~name:"balance_history"
+      ~params:[]
+      ~output:(Json_encoding.list @@
+                 Json_encoding.tup2
+                   Json_encoding.int32
+                   Api_encoding.V1.Balance.encoding)
+      Path.(root // version_v // "balance_history" /: arg_account_hash)
+
+  let cycle_frozen : (string, balance) service1 =
+    service
+      ~section:section_balance_updates
+      ~name:"cycle_frozen"
+      ~params:[param_cycle]
+      ~output:(Api_encoding.V1.Balance.encoding)
+      Path.(root // version_v // "cycle_frozen" /: arg_account_hash)
+
+  let balance_number : int service0 =
+    service
+      ~section:section_balance_updates
+      ~name:"nb_balance"
+      ~params:cycle_params
+      ~output:Json_encoding.(tup1 int)
+      Path.(root // version_v // "balance_number")
+
+  let balance_ranking : ((int * account_name * Int64.t) list) service0 =
+    service
+      ~section:section_balance_updates
+      ~name:"balance_ranking"
+      ~params:(pagination_params @ cycle_params @ spendable_params)
+      ~output:(Json_encoding.list @@
+               Json_encoding.tup3
+                 Json_encoding.int
+                 Api_encoding.account_name_encoding
+                 Api_encoding.tez)
+      Path.(root // version_v // "balance_ranking")
+
+  let last_baking_and_endorsement :
+    (string, baking list * baking_endorsement list * int * int) service1 =
+    service
+      ~section:section_accounts
+      ~name:"last_baking_and_endorsement"
+      ~output:Json_encoding.(tup4
+                 Api_encoding.V1.BakeOp.bakings
+                 Api_encoding.V1.BakeEndorsementOp.bakings
+                 int int)
+      Path.(root // version_v // "last_baking_and_endorsement" /: arg_account_hash)
+
+  let next_baking_and_endorsement : (string, int * int * int * int * string) service1 =
+    service
+      ~section:section_accounts
+      ~name:"next_baking_and_endorsement"
+      ~output:Json_encoding.(tup5 int int int int string)
+      Path.(root // version_v // "next_baking_and_endorsement" /: arg_account_hash)
+
 end
 
 let init () = ()

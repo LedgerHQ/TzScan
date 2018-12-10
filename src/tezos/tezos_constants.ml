@@ -35,14 +35,6 @@ let net = match TzscanConfig.database with
   | "local" -> Betanet
   | _ -> assert false
 
-let ramp_up_cycles = 64 (* IN BLOCK GENESIS *)
-
-let cycle_deposits default_deposits cycle =
-  if cycle >= ramp_up_cycles then default_deposits
-  else
-    Int64.(div (mul default_deposits (of_int cycle)) (of_int ramp_up_cycles))
-
-
 
 open Tezos_types
 let constants = {
@@ -99,6 +91,9 @@ module type Constants = sig
   val blocks_between_revelations : int
 
   val revelation_reward : int64
+
+  val ramp_up_cycles : int64
+  val start_reward_cycle : int64
 end
 
 module Alphanet = struct
@@ -130,6 +125,9 @@ module Alphanet = struct
     time_between_blocks + (n *  (time_between_blocks - 10))
 
   let revelation_reward = 125_000L
+
+  let ramp_up_cycles = 0L (* IN BLOCK GENESIS *)
+  let start_reward_cycle = 0L (* IN BLOCK GENESIS *)
 end
 
 module Betanet = struct
@@ -165,6 +163,9 @@ module Betanet = struct
     time_between_blocks + (n * (time_between_blocks + 15))
 
   let revelation_reward = 125_000L
+
+  let ramp_up_cycles = 64L (* IN BLOCK GENESIS *)
+  let start_reward_cycle = 7L (* IN BLOCK GENESIS *)
 end
 
 module Zeronet = struct
@@ -195,6 +196,9 @@ module Zeronet = struct
   let time_delay_for_priority n = time_between_blocks * n
 
   let revelation_reward = 125_000L
+
+  let ramp_up_cycles = 0L (* IN BLOCK GENESIS *)
+  let start_reward_cycle = 0L (* IN BLOCK GENESIS *)
 end
 
 module Constants = (val (match net with
@@ -202,9 +206,10 @@ module Constants = (val (match net with
                          | Zeronet -> (module Zeronet : Constants)
                          | Alphanet -> (module Alphanet : Constants)))
 
-
-let nb_revelations_per_cycle () =
-  Constants.block_per_cycle / Constants.blocks_between_revelations
-
 let cycle_from_level level =
   (level - 1) / Constants.block_per_cycle
+
+let cycle_deposits default_deposits cycle =
+  if cycle >= (Int64.to_int Constants.ramp_up_cycles) then default_deposits
+  else
+    Int64.(div (mul default_deposits (of_int cycle))  Constants.ramp_up_cycles)

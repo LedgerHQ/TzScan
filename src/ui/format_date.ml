@@ -18,14 +18,35 @@ open Tezos_types
 open Js_utils
 open Tyxml_js.Html5
 open Lang (* s_ *)
-open Text
 
+module TEXT = struct
+  (*
+  let s_year = ss_ "year"
+  let s_years = ss_ "years"
+  let s_month = ss_ "month"
+  let s_months = ss_ "months"
+*)
+  let s_day = ss_ "day"
+  let s_days = ss_ "days"
+      (*
+  let s_hour = ss_ "hour"
+  let s_hours = ss_ "hours"
+  let s_min = ss_ "min"
+  let s_mins = ss_ "mins"
+*)
+end
+open TEXT
+
+(*
 let years y = if y > 1 then s_years else s_year
 let months m = if m > 1 then s_months else s_month
+*)
 let days d = if d > 1 then s_days else s_day
+(*
 let hours h = if h > 1 then s_hours else s_hour
 let minutes m = if m > 1 then s_mins else s_min
 let seconds _s = "s"
+*)
 
 
 let get_now () =
@@ -70,9 +91,11 @@ let parse_seconds t =
           Printf.sprintf "%d %s" ds (t_ (days ds))
 
 let ago timestamp_f =
-  let diff = (get_now () -. timestamp_f) /. 1000. in
-  let diff = int_of_float diff in
-  parse_seconds diff
+  (get_now () -. timestamp_f) /. 1000.
+
+let ago_str ?(future=false) timestamp_f =
+  let diff = int_of_float @@ ago timestamp_f in
+  parse_seconds @@ if future then -1 * diff else diff
 
 let time_before_level ~cst diff_level =
   let seconds_left = diff_level * List.hd cst.time_between_blocks in
@@ -91,10 +114,10 @@ let time_before_level ~cst diff_level =
   else
     Printf.sprintf "%dd %dh %dm" days_left hours_left minutes_left
 
+let float_of_iso timestamp =
+  Js.date##parse (Js.string timestamp)
 
-let auto_updating_timespan timestamp =
-  (*  Js_utils.log "date = %S" timestamp; *)
-  let timestamp_f = Js.date##parse (Js.string timestamp) in
+let auto_updating_timespan_float ?refresh ?(future=false) timestamp_f =
   let timestamp_js = jsnew Js.date_fromTimeValue(timestamp_f) in
   let timestamp_str =
     try
@@ -102,16 +125,26 @@ let auto_updating_timespan timestamp =
     with exn ->
       Printf.eprintf "Error in toLocaleString: %s\n%!"
         (Printexc.to_string exn);
-      timestamp
+      string_of_float timestamp_f
   in
-  let diff = (get_now () -. timestamp_f) /. 1000. in
-  let delay = if diff < 600. then 1 else 60 in
+  let diff = ago timestamp_f in
+  let diff = if future then -1. *. diff else diff in
+  let delay = if abs_float diff < 600. then 1 else 60 in
   let ts_span =
     span ~a:[Bootstrap_helpers.Attributes.a_data_toggle "tooltip";
              a_title timestamp_str] [] in
   let update () =
-    let value = ago timestamp_f in
-    Manip.setInnerHtml ts_span value
-  in
-  Common.do_and_update_every delay update;
+    let diff = ago timestamp_f in
+    let diff = if future then -1. *. diff else diff in
+    begin match refresh with
+      | None -> ()
+      | Some refresh -> refresh diff
+    end;
+    let value = parse_seconds @@ int_of_float @@ diff in
+    Manip.setInnerHtml ts_span value in
+  Misc_js.UpdateOnFocus.update_every delay update;
   ts_span
+
+let auto_updating_timespan ?refresh ?(future=false) timestamp =
+  let timestamp_f = float_of_iso timestamp in
+  auto_updating_timespan_float ?refresh ~future timestamp_f

@@ -18,8 +18,23 @@ List = module("ocp-build:List", "1.0");
 
 ocaml.has_asm = false;
 
+pp_js = { pp = camlp4_js };
+
+OCaml.library("tzscan-utils-js", ocaml+{
+    requires = [
+            "ocplib-tezos";
+            "ocplib-utils-js";
+    ];
+    files = [
+            "lang.ml";
+            "misc_js.ml", pp_js;
+            "format_date.ml", pp_js;
+    ];
+  });
+
 OCaml.library("explorer-lib", ocaml+ {
   requires = [
+    "tzscan-utils-js";
     "data-types-lib";
     "js_of_ocaml";
     "js_of_ocaml.tyxml";
@@ -41,14 +56,12 @@ OCaml.library("explorer-lib", ocaml+ {
     ] + List.map(
             function(file){ return (file, { pp = camlp4_js }); },
             [
-            "lang.ml";
             "text.ml";
             "common.ml";
             "tez.ml";
             "glossary_doc.ml";
             "tabs.ml";
             "panel.ml";
-            "format_date.ml";
             "node_state_ui.ml";
             "health_stats_ui.ml";
             "context_stats_ui.ml";
@@ -63,8 +76,11 @@ OCaml.library("explorer-lib", ocaml+ {
             "rolls_distribution_ui.ml";
             "baking_charts_ui.ml";
             "baking_ui.ml";
+	    "balance_charts_ui.ml";
+	    "balance_ui.ml";
             "rewards_ui.ml";
             "dapps.ml";
+            "top_accounts_ui.ml";
             "accounts_ui.ml";
             "network_stats_ui.ml";
             "charts_ui.ml";

@@ -64,10 +64,24 @@ let rec register main config hash =
     let level = Request.level config hash in
     debug "[Crawler] Found level %d\n%!" level.node_lvl_level ;
     let block = Request.block config hash in
+    let date = block.node_header.header_timestamp in
     let operations = List.flatten @@ block.node_operations in
     debug "[Crawler] Found operations %d\n%!" @@ List.length operations ;
     let t1 = Unix.gettimeofday () in
     debug "[Crawler] [%d] Registering block %s\n%!" block.node_header.header_level hash ;
+    begin
+      if level.node_lvl_level = 1
+      then
+        let first_contracts = Request.node_contracts config hash in
+        List.iter
+          (fun (h,b) ->
+            Dbw.register_init_balance
+              h
+              b
+              date
+              level.node_lvl_level)
+          first_contracts
+    end;
     Dbw.register_all block level operations ;
     if main then
       Dbw.register_main_chain !count block;
@@ -105,7 +119,10 @@ let main_chain config =
                    =========\n%!" hash level current_level;
             register main url hash)
           (catchup_levels url hash current_level)
-      end in
+      end
+      (* Now we are up to date, we can register alt heads *)
+      else
+        alternative_heads_flag := true in
     (* Try to register the current head (if predecessor doesn't exist,
        try to get it first recursively). If until_mode is enabled, use
        the hash given in CLI as new head. *)
@@ -114,16 +131,21 @@ let main_chain config =
       | None ->
         Request.get_head_hash ?block:(!new_head) url
       | Some hash -> hash in
+    (* Wait to be up to date before registering alt head (Cf. issue
+       when catching new chain from scratch) *)
+    alternative_heads_flag := false ;
     register_or_not ~main:true url head_hash ;
     debug "[Crawler] Registered block %s\n%!" head_hash ;
     if !until_mode then exit 1 ;
 
     if !alternative_heads_flag then begin
       (* Registering alternative heads and operations in their branches *)
-      let heads = Request.get_alternative_heads_hashes url in
-      debug "[Crawler] Found heads %d\n%!" @@ List.length heads ;
-      List.iter (register_or_not url) @@ List.flatten heads ;
-      debug "[Crawler] Registered heads\n%!" ;
+      match Request.get_alternative_heads_hashes url with
+      | [] -> ()
+      | _ :: heads -> (* Ignore the first block *)
+        debug "[Crawler] Found heads %d\n%!" @@ List.length heads ;
+        List.iter (register_or_not url) @@ List.flatten heads ;
+        debug "[Crawler] Registered heads\n%!" ;
     end;
 
     if !pending_operations_flag then begin

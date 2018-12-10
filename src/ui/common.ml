@@ -26,6 +26,8 @@ open Bootstrap_helpers.Form
 open EzAPI.TYPES
 open Text
 
+let do_and_update_every = Misc_js.UpdateOnFocus.update_every
+
 let html_escaped s =
   let len = String.length s in
   let b = Buffer.create len in
@@ -45,18 +47,25 @@ let link_dispatcher = ref (fun (_path : string list) -> ())
 
 let pages = Hashtbl.create 113
 
-(* Every time we dispatch to a new page, we update this counter. It is
-   used in timers to prevent timers from one page to run on another
-   page after the user moved between them.  *)
-let current_page = ref 0
-let get_current_page () = !current_page
-let dispatch path =
-  try
-    (Hashtbl.find pages path) ()
-  with Not_found ->
-    incr current_page;
-    !link_dispatcher path
+let page_hooks = ref []
+let add_page_hook f = page_hooks := !page_hooks @ [f]
+let exec_page_hooks () =
+  List.iter (fun f -> try f () with exn ->
+      Js_utils.log "Exception in page_hook: %s" (Printexc.to_string exn))
+    !page_hooks
 
+let dispatch path =
+  Misc_js.UpdateOnFocus.incr_page ();
+  begin
+    try
+      try
+        (Hashtbl.find pages path) ()
+      with Not_found ->
+        !link_dispatcher path
+    with exn ->
+      Js_utils.log "Exception in dispatch: %s" (Printexc.to_string exn)
+  end;
+  exec_page_hooks ()
 
 let add_page path updater =
   Hashtbl.add pages path updater
@@ -66,7 +75,9 @@ let initial_redraw_done = ref false
 let register_redraw r =
   redrawers := !redrawers @ [r]
 let redraw () =
-  List.iter (fun f -> try f () with _ -> ()) !redrawers
+  List.iter (fun f -> try f () with exn ->
+      Js_utils.log "Exception in redrawer: %s"
+        (Printexc.to_string exn)) !redrawers
 let initial_redraw () =
   initial_redraw_done := true;
   redraw ()
@@ -337,6 +348,16 @@ let () =
           Lwt.return ()
         )))
 
+let set_child id v =
+  let td = Js_utils.find_component id in
+  Js_utils.Manip.removeChildren td;
+  Js_utils.Manip.appendChild td v
+
+let set_children id v =
+  let td = Js_utils.find_component id in
+  Js_utils.Manip.removeChildren td;
+  Js_utils.Manip.appendChildren td v
+
 let crop_hash ?crop_len hash =
   match crop_len with
   | Some crop_len ->
@@ -431,8 +452,9 @@ let update_endorsements_slots bhash slots operations =
                 List.exists (fun e -> i = e) e.endorse_slot
               ) operations in
           let row =
-            td ~a:[ a_class ["slot"] ]
-              [ a ~a:( a_link op_hash ) [ make_slot i ] ] in
+            td ~a:[ a_class ["slot"] ] [
+              a ~a:( a_link ~args:["block_hash", op_block_hash] op_hash ) [
+                make_slot i ] ] in
           if is_double_endorsement i operations then
             Js_utils.Manip.addClass row "slot-double"
           else if op_block_hash = Utils.pending_block_hash
@@ -459,56 +481,12 @@ let update_main_content div =
      (* Hack for scrollbar *)
   ignore (Js.Unsafe.eval_string "jQuery('.scrollbar-macosx').scrollbar();")
 
-let auto_refresh = ref (match Jsloc.find_arg "refresh" with
-    | Some ( "0" | "false" | "n" | "N" ) -> false
-    | None | Some _ -> true)
-
-let do_and_update_every time_s f =
-  let current_page = get_current_page () in
-  f ();
-  let cb () =
-    if !auto_refresh && current_page = get_current_page () then
-      match !window_focused with
-      | Focused -> f ()
-      | Blurred_since last ->
-        if (jsnew date_now ())##valueOf() -. last <= stop_update_delay
-        then f ()
-        else ()
-  in
-  Dom_html.window##setInterval(
-    Js.wrap_callback cb,
-    float_of_int time_s *. 1000.)
-  |> ignore
-  (* let unfocused = ref false in
-   * let enter_loop () =
-   *   f ();
-   *   Dom_html.window##setInterval(Js.wrap_callback f,
-   *                                float_of_int time_s *. 1000.)
-   * in
-   * let interval_id = ref (enter_loop ()) in
-   * Dom_html.window##onblur <-
-   *   Dom_html.handler (fun _ ->
-   *       print_endline("blured");
-   *       Dom_html.window##clearInterval(!interval_id);
-   *       unfocused := true;
-   *       Js._true);
-   * Dom_html.window##onfocus <-
-   *   Dom_html.handler (fun _ ->
-   *       print_endline("focused");
-   *       if !unfocused then begin
-   *         unfocused := true;
-   *         interval_id := enter_loop ()
-   *       end;
-   *       Js._true) *)
-
 let get_fitness raw_fitness =
   match String.split_on_char ' ' raw_fitness with
   | [ _version ; fitness ] ->
      (* TODO: do something with version ? *)
      int_of_float @@ float_of_string @@ "0x" ^ fitness
   | _ -> 0
-
-
 
 module Xhr = EzXhr
 
@@ -757,6 +735,9 @@ let pcdata_account account =
         with Not_found -> account.tz
     )
 
+let a_account s =
+  a ~a:(a_link s.tz) [pcdata_account s]
+
 let hash_to_name ?alias tz = {tz; alias}
 
 let time_diff timestamp =
@@ -807,6 +788,11 @@ let download_button elt xhr =
       xhr (fun s ->
           Dom_html.window##location##href <- Js.string ("/download/" ^ s));
       true) ] elt
+
+let div_of_html html =
+  let content = Dom_html.createDiv Dom_html.window##document in
+  content##innerHTML <- Js.string html ;
+  Tyxml_js.Of_dom.of_div content
 
 let compute_fees manager_ops =
   List.fold_left (fun acc op ->

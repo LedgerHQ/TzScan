@@ -90,7 +90,7 @@ let update_bakers_chart bakers =
           td [ pcdata @@ string_of_int b.nb_blocks ];
           td [ Tez.pp_amount ~precision:2 ~width:6 b.volume_total ];
           td [ Tez.pp_amount ~precision:2 ~width:6 b.fees_total ];
-          td [ pcdata @@ Common.bullshit_s ]
+          td [ pcdata @@ string_of_int b.nb_endorsements ]
         ]) bakers
   in
   Bakers.paginate_all rows;
@@ -348,6 +348,8 @@ let update_market_prices data =
       leftAxis##inside <- false;
       leftAxis##dashLength <- 3;
       leftAxis##title <- Js.string "BTC";
+      leftAxis##titleColor <- Js.string "#0000ff";
+      leftAxis##color <- Js.string "#0000ff";
       leftAxis##position <- Js.string "left";
       chart##addValueAxis(leftAxis);
 
@@ -356,6 +358,8 @@ let update_market_prices data =
       rightAxis##inside <- false;
       rightAxis##dashLength <- 3;
       rightAxis##title <- Js.string "USD";
+      rightAxis##titleColor <- Js.string "#ff0000";
+      rightAxis##color <- Js.string "#ff0000";
       rightAxis##position <- Js.string "right";
       chart##addValueAxis(rightAxis);
 

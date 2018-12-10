@@ -81,6 +81,11 @@ let accounts () =
   Common.update_main_content content;
   Api_request.Accounts.request ()
 
+let top_accounts () =
+  let content = Top_accounts_ui.make_page () in
+  Common.update_main_content content;
+  Api_request.Top_accounts.request ()
+
 let contracts () =
   let content = Accounts_ui.make_accounts ~contract:true () in
   Common.update_main_content content;
@@ -252,6 +257,7 @@ let dispatch path =
       | "contracts" -> contracts ()
       | "context" -> context_stats ()
       | "accounts" -> accounts ()
+      | "top" -> top_accounts ()
       | "activations" -> activations ~refresh:30 ~pending:false
       | "transactions" -> transactions ~refresh:30 ~pending:false
       | "endorsements" -> endorsements ~refresh:60 ~pending:false
@@ -278,11 +284,11 @@ let dispatch path =
       | "opsperblock" -> charts_operations_per_block_per_day ()
       | "feesperday" -> charts_fees_per_day ()
       | "volumeperday" -> charts_volume_per_day ()
-      | "market_prices" -> market_prices ()
       | "health" -> health_stats ()
       | "rolls-distribution" -> rolls_distrib ()
       | "snapshot-blocks" -> snapshot_blocks ()
       | "protocols" -> protocols ()
+      | "market_prices" -> market_prices ()
       | _ ->
         (* Specific hashes *)
         match String.get path 0 with
