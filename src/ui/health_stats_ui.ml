@@ -14,12 +14,13 @@
 (*                                                                      *)
 (************************************************************************)
 
-open Tezos_types
-open Tyxml_js.Html5
-open Data_types
+open Ocp_js
+open Html
 open Js_utils
 open Bootstrap_helpers.Grid
 open Bootstrap_helpers.Panel
+open Tezos_types
+open Data_types
 
 let health_content_id = "health-content-id"
 let health_cmd_id = "health-cmd-id"
@@ -28,21 +29,28 @@ let health_cmd_select_id = "health-cmd-select-id"
 let loading_fan_number = ref 0
 (* We should have a place to store all protocol variables *)
 
+let colors () =
+  match Jsloc.find_arg "theme" with
+  | Some "slate" -> "#008000", "#e50000"
+  | _ -> "#00ff00", "#ff0000"
+
 let get_progress_class i =
-  if i < 50 then "bad-value"
-  else "good-value"
+  if i < 50 then "red"
+  else "green"
 
 let get_progress_color i =
-  if i < 50 then "#ff0000"
-  else "#00ff00"
+  let colors = colors () in
+  if i < 50 then (snd colors)
+  else (fst colors)
 
 let get_reverse_progress_class i =
-  if i < 50 then "good-value"
-  else "bad-value"
+  if i < 50 then "green"
+  else "red"
 
 let get_reverse_progress_color i =
-  if i < 50 then "#00ff00"
-  else "#ff0000"
+  let colors = colors () in
+  if i < 50 then (fst colors)
+  else (snd colors)
 
 let init_fan () =
   for i = 0 to !loading_fan_number - 1 do
@@ -56,7 +64,7 @@ let make_fan percent =
   let fan_init_class = Printf.sprintf "fanbar-%d" !loading_fan_number in
   let fan_class = get_progress_class percent in
   let set_fan bar =
-    let barjs = Tyxml_js.To_dom.of_element bar in
+    let barjs = To_dom.of_element bar in
     barjs##setAttribute(Js.string "data-value", Js.string @@ string_of_int percent) ;
     barjs##setAttribute(Js.string "data-stroke", Js.string color) ;
     barjs##setAttribute(Js.string "data-preset", Js.string "fan") in
@@ -70,7 +78,7 @@ let make_reverse_fan percent =
   let fan_init_class = Printf.sprintf "fanbar-%d" !loading_fan_number in
   let fan_class = get_reverse_progress_class percent in
   let set_fan bar =
-    let barjs = Tyxml_js.To_dom.of_element bar in
+    let barjs = To_dom.of_element bar in
     barjs##setAttribute(Js.string "data-value", Js.string @@ string_of_int percent) ;
     barjs##setAttribute(Js.string "data-stroke", Js.string color) ;
     barjs##setAttribute(Js.string "data-preset", Js.string "fan") in
@@ -90,7 +98,7 @@ let make_progress_bar ~cst cycle_position =
                  a_role ["progressbar"];
                  a_style percent_str;
                ] [
-          span ~a:[a_id "bar-span"] [pcdata percent_span]]]]]
+          span ~a:[a_id "bar-span"] [txt percent_span]]]]]
 
 
 let calculate_health_score stats =
@@ -164,9 +172,9 @@ let update_health_page cycle stats =
   let cst = Infos.constants ~cycle in
   let cycle_str = Printf.sprintf "Cycle #%i" cycle in
 
-  let level_title = pcdata "Cycle Levels" in
+  let level_title = txt "Cycle Levels" in
   let level_value =
-    pcdata @@
+    txt @@
     Printf.sprintf "%d - %d" stats.cycle_start_level stats.cycle_end_level in
   let level_desc =
     if stats.cycle_end_level - stats.cycle_start_level + 1 =
@@ -174,49 +182,49 @@ let update_health_page cycle stats =
     then
       let year_start, month_start, day_start = stats.cycle_date_start in
       let year_end, month_end, day_end = stats.cycle_date_end in
-      pcdata @@ Printf.sprintf "%02d/%02d/%d - %02d/%02d/%d"
+      txt @@ Printf.sprintf "%02d/%02d/%d - %02d/%02d/%d"
        day_start month_start year_start day_end month_end year_end
     else begin
       let levels_left =
         cst.blocks_per_cycle - (stats.cycle_end_level - stats.cycle_start_level) in
-      pcdata @@ Printf.sprintf "Cycle in progress: %s left"
+      txt @@ Printf.sprintf "Cycle in progress: %s left"
         (Format_date.time_before_level ~cst levels_left)
     end in
-  let volume_title = pcdata "Cycle Volume" in
+  let volume_title = txt "Cycle Volume" in
   let volume_value = Tez.pp_amount ~width:12 stats.cycle_volume in
   let volume_desc =
     let hash, level = stats.biggest_block_volume in
     span [
-      pcdata "Highest Volume Block " ;
+      txt "Highest Volume Block " ;
       Common.make_link (string_of_int level) ~path:hash
     ] in
 
-  let fees_title = pcdata "Cycle Fees" in
+  let fees_title = txt "Cycle Fees" in
   let fees_value = Tez.pp_amount ~width:12 stats.cycle_fees in
   let fees_desc =
     let hash, level = stats.biggest_block_fees in
     span [
-      pcdata "Highest Fees Block " ;
+      txt "Highest Fees Block " ;
       Common.make_link (string_of_int level) ~path:hash
     ] in
 
-  let bakers_endorsers_title = pcdata "Uniquer bakers / endorsers" in
+  let bakers_endorsers_title = txt "Uniquer bakers / endorsers" in
   let bakers_endorsers_value =
-    pcdata @@
+    txt @@
     Printf.sprintf "%d / %d" stats.cycle_bakers stats.cycle_endorsers in
   let bakers_endorsers_desc =
     span ~a:[a_class ["no-overflow"; cxs12]] [
-      pcdata "Top Baker ";
+      txt "Top Baker ";
       Common.make_link_account stats.top_baker] in
   let health_score =
-    let health_title = pcdata "Health Score" in
+    let health_title = txt "Health Score" in
     let health_percent = calculate_health_score stats in
-    let health_desc = pcdata "" in
+    let health_desc = txt "" in
     div ~a:[ a_class [ row ] ] [
       make_centered_panel_fan health_title health_percent health_desc ;
     ] in
   let summary = div ~a:[ a_class [ "health-summary"; row] ] [
-      h1 [ pcdata cycle_str ] ;
+      h1 [ txt cycle_str ] ;
       health_score ;
       make_panel_info level_title level_value level_desc ;
       make_panel_info volume_title volume_value volume_desc ;
@@ -227,49 +235,49 @@ let update_health_page cycle stats =
         bakers_endorsers_desc ;
     ] in
   let progress_bar = make_progress_bar ~cst cycle_position in
-  let endorsements_rate_title = pcdata "Endorsement Rate" in
-  let endorsements_rate_desc = pcdata "Non empty slots" in
-  let main_endorsements_rate_title = pcdata "Endorsement Distribution" in
-  let main_endorsements_rate_desc = pcdata "Endorsements on the main chain" in
-  let alt_endorsements_rate_title = pcdata "Alt Chain Slot Rate" in
-  let alt_endorsements_rate_desc = pcdata "Endorsements on an alt chain" in
-  let empty_endorsements_rate_title = pcdata "Empty Slot Rate" in
-  let empty_endorsements_rate_desc = pcdata "Empty endorsement slots" in
+  let endorsements_rate_title = txt "Endorsement Rate" in
+  let endorsements_rate_desc = txt "Non empty slots" in
+  let main_endorsements_rate_title = txt "Endorsement Distribution" in
+  let main_endorsements_rate_desc = txt "Endorsements on the main chain" in
+  let alt_endorsements_rate_title = txt "Alt Chain Slot Rate" in
+  let alt_endorsements_rate_desc = txt "Endorsements on an alt chain" in
+  let empty_endorsements_rate_title = txt "Empty Slot Rate" in
+  let empty_endorsements_rate_desc = txt "Empty endorsement slots" in
 
-  let double_endorsement_title = pcdata "Double Endorsements" in
-  let double_endorsement_value = pcdata @@ string_of_int stats.double_endorsements in
+  let double_endorsement_title = txt "Double Endorsements" in
+  let double_endorsement_value = txt @@ string_of_int stats.double_endorsements in
   let double_endorsement_class =
     if stats.double_endorsements = 0 then "good-value" else "bad-value" in
-  let double_endorsement_desc = pcdata "Number of double endorsements" in
+  let double_endorsement_desc = txt "Number of double endorsements" in
 
-  let alt_heads_number_title = pcdata "Alternative Heads" in
+  let alt_heads_number_title = txt "Alternative Heads" in
   let alt_heads_number_value =
-    pcdata @@ string_of_int stats.alternative_heads_number in
+    txt @@ string_of_int stats.alternative_heads_number in
   let alt_heads_number_class =
     if stats.alternative_heads_number < 5 then "good-value" else "bad-value" in
-  let alt_heads_number_desc = pcdata "Number of alternative blocks" in
+  let alt_heads_number_desc = txt "Number of alternative blocks" in
 
-  let tzscan_stats = pcdata "TzScan Nodes Stats" in
-  let switch_number_title = pcdata "Number of Long Chains Received" in
+  let tzscan_stats = txt "TzScan Nodes Stats" in
+  let switch_number_title = txt "Number of Long Chains Received" in
   let switch_number_value =
-    pcdata @@ Printf.sprintf "%d" stats.switch_number in
+    txt @@ Printf.sprintf "%d" stats.switch_number in
   let switch_number_class =
     if stats.switch_number = 0 then "good-value" else "bad-value" in
-  let switch_number_desc = pcdata "Number of Long Chains Received By TzScan" in
+  let switch_number_desc = txt "Number of Long Chains Received By TzScan" in
 
-  let longest_switch_depth_title = pcdata "Longest Chain Received" in
+  let longest_switch_depth_title = txt "Longest Chain Received" in
   let longest_switch_depth_value =
-    pcdata @@ Printf.sprintf "%d" stats.longest_switch_depth in
+    txt @@ Printf.sprintf "%d" stats.longest_switch_depth in
   let longest_switch_depth_class =
     if stats.longest_switch_depth = 0 then "good-value" else "bad-value" in
-  let longest_switch_depth_desc = pcdata "Longest Chain Crawled by TzScan" in
+  let longest_switch_depth_desc = txt "Longest Chain Crawled by TzScan" in
 
-  let main_revelation_rate_title = pcdata "Nonce Revelations Rate" in
-  let main_revelation_rate_desc = pcdata "Nonce revealed in this cycle" in
+  let main_revelation_rate_title = txt "Nonce Revelations Rate" in
+  let main_revelation_rate_desc = txt "Nonce revealed in this cycle" in
 
-  let score_priority_title = pcdata "Priority Score" in
+  let score_priority_title = txt "Priority Score" in
   let score_priority_desc =
-    pcdata @@
+    txt @@
     Printf.sprintf "Average priority is %.2f" stats.mean_priority in
 
   let details =

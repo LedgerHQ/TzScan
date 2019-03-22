@@ -20,10 +20,9 @@ val init : (unit -> unit) -> unit
 type text
 val ss_ : string -> text
 val t_ : text -> string
-val pcdata_t : text -> [> `PCDATA ] Tyxml_js.Html5.elt
-(* val pcdata_s : text -> [> `PCDATA ] Tyxml_js.Html5.elt *)
+val txt_t : text -> [> `PCDATA ] Ocp_js.elt
 
 val id_ : text -> string
 
-val pcdata_s : string -> [> `PCDATA ] Tyxml_js.Html5.elt
+val txt_s : string -> [> `PCDATA ] Ocp_js.elt
 val s_ : string -> string

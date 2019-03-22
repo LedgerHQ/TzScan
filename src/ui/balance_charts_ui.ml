@@ -1,3 +1,20 @@
+(************************************************************************)
+(*                                TzScan                                *)
+(*                                                                      *)
+(*  Copyright 2017-2018 OCamlPro                                        *)
+(*                                                                      *)
+(*  This file is distributed under the terms of the GNU General Public  *)
+(*  License as published by the Free Software Foundation; either        *)
+(*  version 3 of the License, or (at your option) any later version.    *)
+(*                                                                      *)
+(*  TzScan is distributed in the hope that it will be useful,           *)
+(*  but WITHOUT ANY WARRANTY; without even the implied warranty of      *)
+(*  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the       *)
+(*  GNU General Public License for more details.                        *)
+(*                                                                      *)
+(************************************************************************)
+
+open Ocp_js
 open Data_types
 open Text
 
@@ -143,6 +160,7 @@ let make_chart splitted chart_id data =
       frozen_chart##dataProvider <- Amcharts3.DataItem.dataProvider data;
       chart##marginLeft <- 10;
       frozen_chart##marginLeft <- 10;
+      chart##addClassNames <- true;
 
       let update_categoryAxis categoryAxis =
         categoryAxis##parseDates <- false;
@@ -170,7 +188,7 @@ let make_chart splitted chart_id data =
       if not splitted then rightAxis##offset <- 35;
       rightAxis##dashLength <- 3;
       rightAxis##position <- Js.string (if splitted then "left" else "right");
-      leftAxis##includeAllValues <- true;
+      rightAxis##includeAllValues <- true;
       rightAxis##title <- Js.string @@ Lang.t_ s_frozen_balance ;
 
       frozen_chart##addValueAxis(rightAxis);

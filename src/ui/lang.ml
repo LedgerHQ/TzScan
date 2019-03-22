@@ -99,7 +99,7 @@ type text = Jslang.string_id
 let t_ = Jslang.t_
 let s_ = Jslang.s_
 
-let pcdata_t = Jslang.pcdata_t
-let pcdata_s = Jslang.pcdata_s
+let txt_t = Jslang.txt_t
+let txt_s = Jslang.txt_s
 let ss_ = Jslang.ss_
 let id_ = Jslang.id_

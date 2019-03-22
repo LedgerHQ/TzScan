@@ -38,11 +38,7 @@ let pg_lock f =
     end
 
 let head () =
-  PGSQL(dbh) "SELECT b.*, \
-              p.name AS protocol_name, pt.name AS test_protocol_name \
-              FROM block AS b \
-              INNER JOIN protocol AS p ON b.protocol = p.hash \
-              INNER JOIN protocol AS pt ON b.test_protocol = pt.hash \
+  PGSQL(dbh) "SELECT * FROM block \
               WHERE distance_level = 0 ORDER BY level DESC LIMIT 1"
   |> Pg_helper.rows_to_option
   |> Pg_helper.omap Pg_helper.block_of_tuple_noop
@@ -152,6 +148,9 @@ let register_block block level distance operation_count volume fees =
   let lvl_cycle_position = Int64.of_int level.node_lvl_cycle_position in
   let lvl_voting_period = Int64.of_int level.node_lvl_voting_period in
   let lvl_voting_period_position = Int64.of_int level.node_lvl_voting_period_position in
+  let voting_period_kind =
+    Tezos_utils.string_of_voting_period_kind
+      block.node_metadata.meta_header.header_meta_voting_period_kind in
 
   register_tezos_user baker ;
   register_cycle_count_baker lvl_cycle baker;
@@ -165,7 +164,7 @@ let register_block block level distance operation_count volume fees =
      network, test_network, test_network_expiration, level, level_position, \
      priority, cycle, cycle_position, voting_period, voting_period_position, \
      commited_nonce_hash, pow_nonce, distance_level, operation_count, \
-     volume, fees) \
+     volume, fees, voting_period_kind) \
      VALUES \
      ($hash, $predecessor_hash, $fitness, $baker, $timestamp, $validation_pass, \
      $proto, $data, $signature, \
@@ -174,7 +173,7 @@ let register_block block level distance operation_count volume fees =
      $lvl_level, $lvl_level_position, $priority, $lvl_cycle, \
      $lvl_cycle_position, $lvl_voting_period, $lvl_voting_period_position, \
      $commited_nonce_hash, $pow_nonce, $distance, $operation_count, \
-     $volume, $fees) \
+     $volume, $fees, $voting_period_kind) \
      ON CONFLICT (hash) DO NOTHING";
   (* factor 2 is to take some space for endorsements and transactions of alternative
      chains that we don't read in operation_recent *)
@@ -184,8 +183,24 @@ let register_block block level distance operation_count volume fees =
   let transaction_cut = match PGSQL(dbh) "SELECT MAX(id) FROM transaction_last" with
     | [ Some i ] -> Int64.(sub i (mul 2L Pg_update.Constants.last_transactions))
     | _ -> 0L in
+  let origination_cut = match PGSQL(dbh) "SELECT MAX(id) FROM origination_last" with
+    | [ Some i ] -> Int64.(sub i (mul 2L Pg_update.Constants.last_originations))
+    | _ -> 0L in
+  let reveal_cut = match PGSQL(dbh) "SELECT MAX(id) FROM reveal_last" with
+    | [ Some i ] -> Int64.(sub i (mul 2L Pg_update.Constants.last_reveals))
+    | _ -> 0L in
+  let delegation_cut = match PGSQL(dbh) "SELECT MAX(id) FROM delegation_last" with
+    | [ Some i ] -> Int64.(sub i (mul 2L Pg_update.Constants.last_delegations))
+    | _ -> 0L in
+  let activation_cut = match PGSQL(dbh) "SELECT MAX(id) FROM activation_last" with
+    | [ Some i ] -> Int64.(sub i (mul 2L Pg_update.Constants.last_activations))
+    | _ -> 0L in
   PGSQL(dbh) "DELETE FROM endorsement_last WHERE id < $endorsement_cut";
-  PGSQL(dbh) "DELETE FROM transaction_last WHERE id < $transaction_cut"
+  PGSQL(dbh) "DELETE FROM transaction_last WHERE id < $transaction_cut";
+  PGSQL(dbh) "DELETE FROM origination_last WHERE id < $origination_cut";
+  PGSQL(dbh) "DELETE FROM delegation_last WHERE id < $delegation_cut";
+  PGSQL(dbh) "DELETE FROM activation_last WHERE id < $activation_cut";
+  PGSQL(dbh) "DELETE FROM reveal_last WHERE id < $reveal_cut"
 
 let get_status_from_manager_metadata = function
   | None -> false (* Pending *)
@@ -376,11 +391,12 @@ let rec register_operation_type ?(internal=false) ?extra_info
            VALUES \
            ($hash, $pkh, $secret) \
            ON CONFLICT DO NOTHING" ;
-        begin match act.node_act_metadata with
-          | None -> assert false
+        let balance =
+          begin match act.node_act_metadata with
+          | None -> None
           | Some meta ->
             begin match meta.meta_op_balance_updates with
-              | None -> ()
+              | None -> Some 0L
               | Some l ->
                 begin match l with
                   | [ bu ] ->
@@ -391,12 +407,14 @@ let rec register_operation_type ?(internal=false) ?extra_info
                            (hash, pkh, balance) \
                            VALUES \
                            ($hash, $pkh, $amount) \
-                           ON CONFLICT DO NOTHING"
+                           ON CONFLICT DO NOTHING";
+                        Some amount
                       | _ ->
                         debug
                           "[Writer] Weird balance_updates type for \
                            activation %S\n%!"
-                          hash
+                          hash;
+                        Some 0L
                     end
                   | _ ->
                     debug
@@ -404,11 +422,30 @@ let rec register_operation_type ?(internal=false) ?extra_info
                        activation %S - %S\n%!"
                       hash @@
                     String.concat
-                      " " (List.map Utils.string_of_balance_update l)
+                      " " (List.map Utils.string_of_balance_update l);
+                    None
                 end
             end
-        end;
-        register_tezos_user pkh
+        end in
+        register_tezos_user pkh;
+        let op_level, op_block_hash, network, timestamp_block, distance_level =
+          match extra_info with
+          | Some (op_level, _, op_block_hash, network, timestamp_block) ->
+            Some (Int64.of_int op_level), Some op_block_hash, Some network,
+            Some timestamp_block, Some (-1l)
+          | _ -> None, None, None, None, None in
+        PGSQL(dbh)
+          "INSERT INTO activation_last \
+           (hash, pkh, secret, balance, timestamp_op, op_level, op_block_hash, \
+           distance_level, network, timestamp_block) \
+           VALUES($hash, $pkh, $secret, $?balance, $timestamp_op, $?op_level, \
+           $?op_block_hash, $?distance_level, $?network, $?timestamp_block)";
+        PGSQL(dbh)
+          "INSERT INTO activation_all \
+           (hash, pkh, secret, balance, timestamp_op, op_level, op_block_hash, \
+           distance_level, network, timestamp_block) \
+           VALUES($hash, $pkh, $secret, $?balance, $timestamp_op, $?op_level, \
+           $?op_block_hash, $?distance_level, $?network, $?timestamp_block)"
 
       (* Endorsement *)
       | NEndorsement endorsement ->
@@ -467,7 +504,7 @@ let rec register_operation_type ?(internal=false) ?extra_info
 
       (* Proposals *)
       | NProposals proposals ->
-        let src = "NO SOURCE" in
+        let src = proposals.node_prop_src in
         let voting = proposals.node_prop_voting_period in
         let proposals =
           List.map (fun str -> Some str) proposals.node_prop_proposals in
@@ -480,7 +517,7 @@ let rec register_operation_type ?(internal=false) ?extra_info
 
       (* Ballot *)
       | NBallot ballot ->
-        let src = "NO SOURCE" in
+        let src = ballot.node_ballot_src in
         let voting = ballot.node_ballot_voting_period in
         let proposal = ballot.node_ballot_proposal in
         let vote = Tezos_utils.string_of_ballot_vote ballot.node_ballot_vote in
@@ -524,46 +561,30 @@ let rec register_operation_type ?(internal=false) ?extra_info
            ($hash, $source, $dst, $fee, $counter, $amount, $?parameters, \
            $gas_limit, $storage_limit, $failed, $internal, $burn) \
            ON CONFLICT DO NOTHING" ;
-        begin
+        let op_level, op_block_hash, network, timestamp_block, distance_level =
           match extra_info with
           | Some (op_level, _, op_block_hash, network, timestamp_block) ->
-            let op_level = Int64.of_int op_level in
-            PGSQL(dbh)
-              "INSERT INTO transaction_all \
-               (hash, source, destination, fee, counter, amount, parameters, \
-               gas_limit, storage_limit, failed, internal, timestamp_op, burn_tez, \
-               op_level, op_block_hash, distance_level, network, timestamp_block) \
-               VALUES \
-               ($hash, $source, $dst, $fee, $counter, $amount, $?parameters, \
-               $gas_limit, $storage_limit, $failed, $internal, $timestamp_op, $burn, \
-               $op_level, $op_block_hash, -1, $network, $timestamp_block)";
-            PGSQL(dbh)
-              "INSERT INTO transaction_last \
-               (hash, source, destination, fee, counter, amount, parameters, \
-               gas_limit, storage_limit, failed, internal, timestamp_op, burn_tez, \
-               op_level, op_block_hash, distance_level, network, timestamp_block) \
-               VALUES \
-               ($hash, $source, $dst, $fee, $counter, $amount, $?parameters, \
-               $gas_limit, $storage_limit, $failed, $internal, $timestamp_op, $burn, \
-               $op_level, $op_block_hash, -1, $network, $timestamp_block)"
-          | _ ->
-            PGSQL(dbh)
-              "INSERT INTO transaction_all \
-               (hash, source, destination, fee, counter, amount, parameters, \
-               gas_limit, storage_limit, failed, internal, timestamp_op, burn_tez) \
-               VALUES \
-               ($hash, $source, $dst, $fee, $counter, $amount, $?parameters, \
-               $gas_limit, $storage_limit, $failed, $internal, $timestamp_op, $burn) \
-               ON CONFLICT DO NOTHING";
-            PGSQL(dbh)
-              "INSERT INTO transaction_last \
-               (hash, source, destination, fee, counter, amount, parameters, \
-               gas_limit, storage_limit, failed, internal, timestamp_op, burn_tez) \
-               VALUES \
-               ($hash, $source, $dst, $fee, $counter, $amount, $?parameters, \
-               $gas_limit, $storage_limit, $failed, $internal, $timestamp_op, $burn) \
-               ON CONFLICT DO NOTHING";
-        end;
+            Some (Int64.of_int op_level), Some op_block_hash, Some network,
+            Some timestamp_block, Some (-1l)
+          | _ -> None, None, None, None, None in
+        PGSQL(dbh)
+          "INSERT INTO transaction_all \
+           (hash, source, destination, fee, counter, amount, parameters, \
+           gas_limit, storage_limit, failed, internal, timestamp_op, burn_tez, \
+           op_level, op_block_hash, distance_level, network, timestamp_block) \
+           VALUES \
+           ($hash, $source, $dst, $fee, $counter, $amount, $?parameters, \
+           $gas_limit, $storage_limit, $failed, $internal, $timestamp_op, $burn, \
+           $?op_level, $?op_block_hash, $?distance_level, $?network, $?timestamp_block)";
+        PGSQL(dbh)
+          "INSERT INTO transaction_last \
+           (hash, source, destination, fee, counter, amount, parameters, \
+           gas_limit, storage_limit, failed, internal, timestamp_op, burn_tez, \
+           op_level, op_block_hash, distance_level, network, timestamp_block) \
+           VALUES \
+           ($hash, $source, $dst, $fee, $counter, $amount, $?parameters, \
+           $gas_limit, $storage_limit, $failed, $internal, $timestamp_op, $burn, \
+           $?op_level, $?op_block_hash, $?distance_level, $?network, $?timestamp_block)";
         begin match transaction.node_tr_metadata with
           | None -> ()
           | Some metadata ->
@@ -616,37 +637,50 @@ let rec register_operation_type ?(internal=false) ?extra_info
                     Tezos_constants.Constants.origination_burn)) in
         debug "[Writer] tz1 %S originated by %S\n%!" tz1 source ;
         register_tezos_user tz1;
-        begin match origination.node_or_script with
-          | None ->
-            PGSQL(dbh)
-              "INSERT INTO origination \
-               (hash, source, tz1, fee, \
-               counter, manager, delegate, spendable, delegatable, \
-               balance, gas_limit, storage_limit, failed, internal, burn_tez) \
-               VALUES \
-               ($hash, $source, $tz1, $fee, \
-               $counter, $manager, $delegate, $spendable, \
-               $delegatable, $balance, \
-               $gas_limit, $storage_limit, $failed, $internal, $burn) \
-               ON CONFLICT DO NOTHING"
-          | Some sc ->
-            let sc_code = sc.sc_code in
-            let sc_storage = sc.sc_storage in
-            PGSQL(dbh)
-              "INSERT INTO origination \
-               (hash, source, tz1, fee, \
-               counter, manager, delegate, script_code, \
-               script_storage_type, spendable, \
-               delegatable, balance, gas_limit, storage_limit, failed, internal,\
-               burn_tez) \
-               VALUES \
-               ($hash, $source, $tz1, $fee, \
-               $counter, $manager, $delegate, $sc_code, \
-               $sc_storage, $spendable, $delegatable, \
-               $balance, \
-               $gas_limit, $storage_limit, $failed, $internal, $burn) \
-               ON CONFLICT DO NOTHING"
-        end ;
+        let sc_code, sc_storage =
+        match origination.node_or_script with
+          | None -> None, None
+          | Some sc -> Some sc.sc_code, Some sc.sc_storage in
+        PGSQL(dbh)
+          "INSERT INTO origination \
+           (hash, source, tz1, fee, \
+           counter, manager, delegate, script_code, \
+           script_storage_type, spendable, \
+           delegatable, balance, gas_limit, storage_limit, failed, internal,\
+           burn_tez) \
+           VALUES \
+           ($hash, $source, $tz1, $fee, \
+           $counter, $manager, $delegate, $?sc_code, \
+           $?sc_storage, $spendable, $delegatable, \
+           $balance, \
+           $gas_limit, $storage_limit, $failed, $internal, $burn) \
+           ON CONFLICT DO NOTHING";
+        let op_level, op_block_hash, distance_level, network, timestamp_block =
+          match extra_info with
+          | Some (op_level, _priority, op_block_hash, network, timestamp_block) ->
+            Some (Int64.of_int op_level), Some op_block_hash, Some (-1l), Some network,
+            Some timestamp_block
+          | _ -> None, None, None, None, None in
+        PGSQL(dbh)
+          "INSERT INTO origination_last \
+           (hash, source, tz1, fee, counter, manager, delegate, script_code, \
+           script_storage_type, spendable, delegatable, balance, gas_limit, \
+           storage_limit, failed, internal, burn_tez, timestamp_op, \
+           op_level, op_block_hash, distance_level, network, timestamp_block) \
+           VALUES($hash, $source, $tz1, $fee, $counter, $manager, $delegate, \
+           $?sc_code, $?sc_storage, $spendable, $delegatable, $balance, $gas_limit, \
+           $storage_limit, $failed, $internal, $burn, $timestamp_op, \
+           $?op_level, $?op_block_hash, $?distance_level, $?network, $?timestamp_block)";
+        PGSQL(dbh)
+          "INSERT INTO origination_all \
+           (hash, source, tz1, fee, counter, manager, delegate, script_code, \
+           script_storage_type, spendable, delegatable, balance, gas_limit, \
+           storage_limit, failed, internal, burn_tez, timestamp_op, \
+           op_level, op_block_hash, distance_level, network, timestamp_block) \
+           VALUES($hash, $source, $tz1, $fee, $counter, $manager, $delegate, \
+           $?sc_code, $?sc_storage, $spendable, $delegatable, $balance, $gas_limit, \
+           $storage_limit, $failed, $internal, $burn, $timestamp_op, \
+           $?op_level, $?op_block_hash, $?distance_level, $?network, $?timestamp_block)";
         begin match origination.node_or_metadata with
         | None -> ()
         | Some metadata ->
@@ -676,7 +710,29 @@ let rec register_operation_type ?(internal=false) ?extra_info
            VALUES \
            ($hash, $source, $pubkey, $fee, $counter, $delegate, \
            $gas_limit, $storage_limit, $failed, $internal) \
-           ON CONFLICT DO NOTHING"
+           ON CONFLICT DO NOTHING";
+        let op_level, op_block_hash, distance_level, network, timestamp_block =
+          match extra_info with
+          | Some (op_level, _priority, op_block_hash, network, timestamp_block) ->
+            Some (Int64.of_int op_level), Some op_block_hash, Some (-1l), Some network,
+            Some timestamp_block
+          | _ -> None, None, None, None, None in
+        PGSQL(dbh)
+          "INSERT INTO delegation_last \
+           (hash, source, fee, counter, delegate, gas_limit, storage_limit, \
+           failed, internal, timestamp_op, op_level, op_block_hash, distance_level, \
+           network, timestamp_block) \
+           VALUES($hash, $source, $fee, $counter, $delegate, $gas_limit, \
+           $storage_limit, $failed, $internal, $timestamp_op, \
+           $?op_level, $?op_block_hash, $?distance_level, $?network, $?timestamp_block)";
+        PGSQL(dbh)
+          "INSERT INTO delegation_all \
+           (hash, source, fee, counter, delegate, gas_limit, storage_limit, \
+           failed, internal, timestamp_op, op_level, op_block_hash, distance_level, \
+           network, timestamp_block) \
+           VALUES($hash, $source, $fee, $counter, $delegate, $gas_limit, \
+           $storage_limit, $failed, $internal, $timestamp_op, \
+           $?op_level, $?op_block_hash, $?distance_level, $?network, $?timestamp_block)"
 
       (* Reveal *)
       | NReveal reveal ->
@@ -697,8 +753,29 @@ let rec register_operation_type ?(internal=false) ?extra_info
            VALUES \
            ($hash, $source, $fee, $counter, $pubkey, \
            $gas_limit, $storage_limit, $failed, $internal) \
-           ON CONFLICT DO NOTHING"
-
+           ON CONFLICT DO NOTHING";
+        let op_level, op_block_hash, distance_level, network, timestamp_block =
+          match extra_info with
+          | Some (op_level, _priority, op_block_hash, network, timestamp_block) ->
+            Some (Int64.of_int op_level), Some op_block_hash, Some (-1l), Some network,
+            Some timestamp_block
+          | _ -> None, None, None, None, None in
+        PGSQL(dbh)
+          "INSERT INTO reveal_last \
+           (hash, source, fee, counter, pubkey, gas_limit, storage_limit, \
+           failed, internal, timestamp_op, op_level, op_block_hash, distance_level, \
+           network, timestamp_block) \
+           VALUES($hash, $source, $fee, $counter, $pubkey, $gas_limit, \
+           $storage_limit, $failed, $internal, $timestamp_op, \
+           $?op_level, $?op_block_hash, $?distance_level, $?network, $?timestamp_block)";
+        PGSQL(dbh)
+          "INSERT INTO reveal_all \
+           (hash, source, fee, counter, pubkey, gas_limit, storage_limit, \
+           failed, internal, timestamp_op, op_level, op_block_hash, distance_level, \
+           network, timestamp_block) \
+           VALUES($hash, $source, $fee, $counter, $pubkey, $gas_limit, \
+           $storage_limit, $failed, $internal, $timestamp_op, \
+           $?op_level, $?op_block_hash, $?distance_level, $?network, $?timestamp_block)"
       | NActivate
       | NActivate_testnet -> ())
     operations
@@ -769,40 +846,266 @@ let register_flat_operation kind op_level op_block_hash network tsp_block op =
           Int64.(mul paid (of_int Tezos_constants.Constants.cost_per_byte)) in
         let op_level = Int64.of_int op_level in
         let timestamp_op = CalendarLib.Calendar.now () in
-        begin match kind with
-          | "new_flat_operation" ->
-            PGSQL(dbh)
-              "INSERT INTO transaction_all \
-               (hash, source, destination, fee, counter, amount, parameters, \
-               gas_limit, storage_limit, failed, internal, timestamp_op, burn_tez, \
-               op_level, op_block_hash, distance_level, network, timestamp_block) \
-               VALUES \
-               ($op_hash, $source, $dst, $fee, $counter, $amount, $?parameters, \
-               $gas_limit, $storage_limit, $failed, false, $timestamp_op, $burn, \
-               $op_level, $op_block_hash, -1, $network, $tsp_block)";
-            PGSQL(dbh)
-              "INSERT INTO transaction_last \
-               (hash, source, destination, fee, counter, amount, parameters, \
-               gas_limit, storage_limit, failed, internal, timestamp_op, burn_tez, \
-               op_level, op_block_hash, distance_level, network, timestamp_block) \
-               VALUES \
-               ($op_hash, $source, $dst, $fee, $counter, $amount, $?parameters, \
-               $gas_limit, $storage_limit, $failed, false, $timestamp_op, $burn, \
-               $op_level, $op_block_hash, -1, $network, $tsp_block)"
-          | "update_flat_operation" ->
-            PGSQL(dbh)
-              "UPDATE transaction_all SET \
-               op_level = $op_level, op_block_hash = $op_block_hash, \
-               distance_level = -1, network = $network, \
-               timestamp_block = $tsp_block WHERE \
-               hash = $op_hash";
-            PGSQL(dbh)
-              "UPDATE transaction_last SET \
-               op_level = $op_level, op_block_hash = $op_block_hash, \
-               distance_level = -1, network = $network, \
-               timestamp_block = $tsp_block WHERE \
-               hash = $op_hash"
-          | _ -> () end
+        if kind = "new_flat_operation" then (
+          PGSQL(dbh)
+            "INSERT INTO transaction_all \
+             (hash, source, destination, fee, counter, amount, parameters, \
+             gas_limit, storage_limit, failed, internal, timestamp_op, burn_tez, \
+             op_level, op_block_hash, distance_level, network, timestamp_block) \
+             VALUES \
+             ($op_hash, $source, $dst, $fee, $counter, $amount, $?parameters, \
+             $gas_limit, $storage_limit, $failed, false, $timestamp_op, $burn, \
+             $op_level, $op_block_hash, -1, $network, $tsp_block)";
+          PGSQL(dbh)
+            "INSERT INTO transaction_last \
+             (hash, source, destination, fee, counter, amount, parameters, \
+             gas_limit, storage_limit, failed, internal, timestamp_op, burn_tez, \
+             op_level, op_block_hash, distance_level, network, timestamp_block) \
+             VALUES \
+             ($op_hash, $source, $dst, $fee, $counter, $amount, $?parameters, \
+             $gas_limit, $storage_limit, $failed, false, $timestamp_op, $burn, \
+             $op_level, $op_block_hash, -1, $network, $tsp_block)")
+        else if kind = "update_flat_operation" then (
+          PGSQL(dbh)
+            "UPDATE transaction_all SET \
+             op_level = $op_level, op_block_hash = $op_block_hash, \
+             distance_level = -1, network = $network, \
+             timestamp_block = $tsp_block WHERE \
+             hash = $op_hash";
+          PGSQL(dbh)
+            "UPDATE transaction_last SET \
+             op_level = $op_level, op_block_hash = $op_block_hash, \
+             distance_level = -1, network = $network, \
+             timestamp_block = $tsp_block WHERE \
+             hash = $op_hash")
+      | NOrigination origination ->
+        debug "[Writer]  register flat origination %s\n%!" op_hash;
+        let source = origination.node_or_src in
+        let counter = Z.to_int64 origination.node_or_counter in
+        let fee = origination.node_or_fee in
+        let gas_limit = Z.to_int64 origination.node_or_gas_limit in
+        let storage_limit = Z.to_int64 origination.node_or_storage_limit in
+        register_tezos_user source;
+        let manager = origination.node_or_manager in
+        register_tezos_user manager;
+        let delegate =
+          match origination.node_or_delegate with
+            None -> "" | Some delegate -> delegate in
+        register_tezos_user delegate ;
+        let spendable = origination.node_or_spendable in
+        let delegatable = origination.node_or_delegatable in
+        let balance = origination.node_or_balance in
+        let tz1 =
+          match origination.node_or_metadata with
+          | None -> Blake2b.originated_TZ1 op_hash
+          | Some meta ->
+            match meta.manager_meta_operation_result with
+            | None -> assert false
+            | Some meta ->
+              match meta.meta_op_originated_contracts with
+              | None | Some [] -> Blake2b.originated_TZ1 op_hash
+              | Some (hd :: _ ) -> hd in
+        let failed =
+          get_status_from_manager_metadata origination.node_or_metadata in
+        let paid =
+          get_paid_storage_diff_size_from_manager_metadata
+            origination.node_or_metadata in
+        let burn =
+          Int64.
+            (add
+               (get_internal_burn origination.node_or_metadata)
+               (add
+                  (mul paid (of_int Tezos_constants.Constants.cost_per_byte))
+                  Tezos_constants.Constants.origination_burn)) in
+        debug "[Writer] tz1 %S originated by %S\n%!" tz1 source ;
+        register_tezos_user tz1;
+        let sc_code, sc_storage =
+        match origination.node_or_script with
+          | None -> None, None
+          | Some sc -> Some sc.sc_code, Some sc.sc_storage in
+        let op_level = Int64.of_int op_level in
+        let timestamp_op = CalendarLib.Calendar.now () in
+        if kind = "new_flat_operation" then (
+          PGSQL(dbh)
+            "INSERT INTO origination_last \
+             (hash, source, tz1, fee, counter, manager, delegate, script_code, \
+             script_storage_type, spendable, delegatable, balance, gas_limit, \
+             storage_limit, failed, internal, burn_tez, timestamp_op, \
+             op_level, op_block_hash, distance_level, network, timestamp_block) \
+             VALUES($op_hash, $source, $tz1, $fee, $counter, $manager, $delegate, \
+             $?sc_code, $?sc_storage, $spendable, $delegatable, $balance, $gas_limit, \
+             $storage_limit, $failed, false, $burn, $timestamp_op, \
+             $op_level, $op_block_hash, -1, $network, $tsp_block)";
+          PGSQL(dbh)
+            "INSERT INTO origination_all \
+             (hash, source, tz1, fee, counter, manager, delegate, script_code, \
+             script_storage_type, spendable, delegatable, balance, gas_limit, \
+             storage_limit, failed, internal, burn_tez, timestamp_op, \
+             op_level, op_block_hash, distance_level, network, timestamp_block) \
+             VALUES($op_hash, $source, $tz1, $fee, $counter, $manager, $delegate, \
+             $?sc_code, $?sc_storage, $spendable, $delegatable, $balance, $gas_limit, \
+             $storage_limit, $failed, false, $burn, $timestamp_op, \
+             $op_level, $op_block_hash, -1, $network, $tsp_block)")
+        else if kind = "update_flat_operation" then (
+          PGSQL(dbh)
+            "UPDATE origination_all SET \
+             op_level = $op_level, op_block_hash = $op_block_hash, \
+             distance_level = -1, network = $network, \
+             timestamp_block = $tsp_block WHERE \
+             hash = $op_hash";
+          PGSQL(dbh)
+            "UPDATE origination_last SET \
+             op_level = $op_level, op_block_hash = $op_block_hash, \
+             distance_level = -1, network = $network, \
+             timestamp_block = $tsp_block WHERE \
+             hash = $op_hash" )
+      | NDelegation delegation ->
+        let source = delegation.node_del_src in
+        let counter = Z.to_int64 delegation.node_del_counter in
+        let fee = delegation.node_del_fee in
+        let gas_limit = Z.to_int64 delegation.node_del_gas_limit in
+        let storage_limit = Z.to_int64 delegation.node_del_storage_limit in
+        debug "[Writer]  delegation %s\n%!" op_hash;
+        register_tezos_user source;
+        let delegate = delegation.node_del_delegate in
+        let failed =
+          get_status_from_manager_metadata delegation.node_del_metadata in
+        register_tezos_user delegate;
+        let op_level = Int64.of_int op_level in
+        let timestamp_op = CalendarLib.Calendar.now () in
+        if kind = "new_flat_operation" then (
+          PGSQL(dbh)
+            "INSERT INTO delegation_last \
+             (hash, source, fee, counter, delegate, gas_limit, storage_limit, \
+             failed, internal, timestamp_op, op_level, op_block_hash, distance_level, \
+             network, timestamp_block) \
+             VALUES($op_hash, $source, $fee, $counter, $delegate, $gas_limit, \
+             $storage_limit, $failed, false, $timestamp_op, \
+             $op_level, $op_block_hash, -1, $network, $tsp_block)";
+          PGSQL(dbh)
+            "INSERT INTO delegation_all \
+             (hash, source, fee, counter, delegate, gas_limit, storage_limit, \
+             failed, internal, timestamp_op, op_level, op_block_hash, distance_level, \
+             network, timestamp_block) \
+             VALUES($op_hash, $source, $fee, $counter, $delegate, $gas_limit, \
+             $storage_limit, $failed, false, $timestamp_op, \
+             $op_level, $op_block_hash, -1, $network, $tsp_block)")
+        else if kind = "update_flat_operation" then (
+          PGSQL(dbh)
+            "UPDATE delegation_all SET \
+             op_level = $op_level, op_block_hash = $op_block_hash, \
+             distance_level = -1, network = $network, \
+             timestamp_block = $tsp_block WHERE \
+             hash = $op_hash";
+          PGSQL(dbh)
+            "UPDATE delegation_last SET \
+             op_level = $op_level, op_block_hash = $op_block_hash, \
+             distance_level = -1, network = $network, \
+             timestamp_block = $tsp_block WHERE \
+             hash = $op_hash")
+      | NReveal reveal ->
+        let source = reveal.node_rvl_src in
+        let counter = Z.to_int64 reveal.node_rvl_counter in
+        let fee = reveal.node_rvl_fee in
+        let gas_limit = Z.to_int64 reveal.node_rvl_gas_limit in
+        let storage_limit = Z.to_int64 reveal.node_rvl_storage_limit in
+        register_tezos_user source;
+        let pubkey = reveal.node_rvl_pubkey in
+        let failed =
+          get_status_from_manager_metadata reveal.node_rvl_metadata in
+        let op_level = Int64.of_int op_level in
+        let timestamp_op = CalendarLib.Calendar.now () in
+        if kind = "new_flat_operation" then (
+          PGSQL(dbh)
+            "INSERT INTO reveal_last \
+             (hash, source, fee, counter, pubkey, gas_limit, storage_limit, \
+             failed, internal, timestamp_op, op_level, op_block_hash, distance_level, \
+             network, timestamp_block) \
+             VALUES($op_hash, $source, $fee, $counter, $pubkey, $gas_limit, \
+             $storage_limit, $failed, false, $timestamp_op, \
+             $op_level, $op_block_hash, -1, $network, $tsp_block)";
+          PGSQL(dbh)
+            "INSERT INTO reveal_all \
+             (hash, source, fee, counter, pubkey, gas_limit, storage_limit, \
+             failed, internal, timestamp_op, op_level, op_block_hash, distance_level, \
+             network, timestamp_block) \
+             VALUES($op_hash, $source, $fee, $counter, $pubkey, $gas_limit, \
+             $storage_limit, $failed, false, $timestamp_op, \
+             $op_level, $op_block_hash, -1, $network, $tsp_block)")
+        else if kind = "update_flat_operation" then (
+          PGSQL(dbh)
+            "UPDATE reveal_all SET \
+             op_level = $op_level, op_block_hash = $op_block_hash, \
+             distance_level = -1, network = $network, \
+             timestamp_block = $tsp_block WHERE \
+             hash = $op_hash";
+          PGSQL(dbh)
+            "UPDATE reveal_last SET \
+             op_level = $op_level, op_block_hash = $op_block_hash, \
+             distance_level = -1, network = $network, \
+             timestamp_block = $tsp_block WHERE \
+             hash = $op_hash")
+      | NActivation act ->
+        let pkh = act.node_act_pkh in
+        let secret = act.node_act_secret in
+        let balance =
+          begin match act.node_act_metadata with
+          | None -> None
+          | Some meta ->
+            begin match meta.meta_op_balance_updates with
+              | None -> Some 0L
+              | Some l ->
+                begin match l with
+                  | [ bu ] ->
+                    begin match bu with
+                      | Contract (acc, amount) when acc = pkh -> Some amount
+                      | _ ->
+                        debug
+                          "[Writer] Weird balance_updates type for \
+                           activation %S\n%!"
+                          op_hash;
+                        Some 0L
+                    end
+                  | _ ->
+                    debug
+                      "[Writer] Unexpected balance_updates length for \
+                       activation %S - %S\n%!"
+                      op_hash @@
+                    String.concat
+                      " " (List.map Utils.string_of_balance_update l);
+                    None
+                end
+            end
+        end in
+        register_tezos_user pkh;
+        let op_level = Int64.of_int op_level in
+        let timestamp_op = CalendarLib.Calendar.now () in
+        if kind = "new_flat_operation" then (
+          PGSQL(dbh)
+            "INSERT INTO activation_last \
+             (hash, pkh, secret, balance, timestamp_op, op_level, op_block_hash, \
+             distance_level, network, timestamp_block) \
+             VALUES($op_hash, $pkh, $secret, $?balance, $timestamp_op, $op_level, \
+             $op_block_hash, -1, $network, $tsp_block)";
+          PGSQL(dbh)
+            "INSERT INTO activation_all \
+             (hash, pkh, secret, balance, timestamp_op, op_level, op_block_hash, \
+             distance_level, network, timestamp_block) \
+             VALUES($op_hash, $pkh, $secret, $?balance, $timestamp_op, $op_level, \
+             $op_block_hash, -1, $network, $tsp_block)")
+        else if kind = "update_flat_operation" then (
+          PGSQL(dbh)
+            "UPDATE activation_all SET \
+             op_level = $op_level, op_block_hash = $op_block_hash, \
+             distance_level = -1, network = $network, \
+             timestamp_block = $tsp_block WHERE \
+             hash = $op_hash";
+          PGSQL(dbh)
+            "UPDATE activation_last SET \
+             op_level = $op_level, op_block_hash = $op_block_hash, \
+             distance_level = -1, network = $network, \
+             timestamp_block = $tsp_block WHERE \
+             hash = $op_hash")
       | NEndorsement endorsement ->
         let src, slots =
           match endorsement.node_endorse_metadata with
@@ -1732,6 +2035,14 @@ let update_distance_level_alt level =
   PGSQL(dbh) "UPDATE endorsement_last SET distance_level = -1 WHERE op_level > $level";
   PGSQL(dbh) "UPDATE transaction_all SET distance_level = -1 WHERE op_level > $level" ;
   PGSQL(dbh) "UPDATE transaction_last SET distance_level = -1 WHERE op_level > $level";
+  PGSQL(dbh) "UPDATE origination_all SET distance_level = -1 WHERE op_level > $level" ;
+  PGSQL(dbh) "UPDATE origination_last SET distance_level = -1 WHERE op_level > $level";
+  PGSQL(dbh) "UPDATE delegation_all SET distance_level = -1 WHERE op_level > $level" ;
+  PGSQL(dbh) "UPDATE delegation_last SET distance_level = -1 WHERE op_level > $level";
+  PGSQL(dbh) "UPDATE activation_all SET distance_level = -1 WHERE op_level > $level" ;
+  PGSQL(dbh) "UPDATE activation_last SET distance_level = -1 WHERE op_level > $level";
+  PGSQL(dbh) "UPDATE reveal_all SET distance_level = -1 WHERE op_level > $level" ;
+  PGSQL(dbh) "UPDATE reveal_last SET distance_level = -1 WHERE op_level > $level";
   let level32= Int64.to_int32 level in
   let bad_bal_updt =
     PGSQL(dbh) "SELECT hash,diff,frozen,update_type FROM balance_updates \
@@ -1755,14 +2066,16 @@ let update_balances level block_hash =
 let reset_main_chain count start_level level64 =
   debug "[Writer] [reset_main_chain] %d %Ld\n%!" start_level level64 ;
   if count then
-    begin match PGSQL(dbh) "SELECT hash, level, predecessor  FROM block \
-                            WHERE distance_level = 0 \
+    begin match PGSQL(dbh) "SELECT hash, level FROM block WHERE distance_level = 0 \
                             ORDER BY level DESC LIMIT 1" with
-    | [ hash, level, pred ] ->
+    | [ hash, level ] ->
       let rec aux hash level =
         if level > level64 then (
           update_counts ~force:true hash (-1L) ;
-          aux pred (Int64.pred level)) in
+          match PGSQL(dbh) "SELECT predecessor FROM block \
+                            WHERE hash = $hash" with
+          | [ pred ] -> aux pred (Int64.pred level)
+          | _ -> ()) in
       aux hash level
     | _ -> () end;
   update_distance_level_alt level64;
@@ -1808,6 +2121,14 @@ let update_distance_level_main count hash =
   PGSQL(dbh) "UPDATE endorsement_last SET distance_level = 0 WHERE op_block_hash = $hash";
   PGSQL(dbh) "UPDATE transaction_all SET distance_level = 0 WHERE op_block_hash = $hash";
   PGSQL(dbh) "UPDATE transaction_last SET distance_level = 0 WHERE op_block_hash = $hash";
+  PGSQL(dbh) "UPDATE origination_all SET distance_level = 0 WHERE op_block_hash = $hash";
+  PGSQL(dbh) "UPDATE origination_last SET distance_level = 0 WHERE op_block_hash = $hash";
+  PGSQL(dbh) "UPDATE delegation_all SET distance_level = 0 WHERE op_block_hash = $hash";
+  PGSQL(dbh) "UPDATE delegation_last SET distance_level = 0 WHERE op_block_hash = $hash";
+  PGSQL(dbh) "UPDATE activation_all SET distance_level = 0 WHERE op_block_hash = $hash";
+  PGSQL(dbh) "UPDATE activation_last SET distance_level = 0 WHERE op_block_hash = $hash";
+  PGSQL(dbh) "UPDATE reveal_all SET distance_level = 0 WHERE op_block_hash = $hash";
+  PGSQL(dbh) "UPDATE reveal_last SET distance_level = 0 WHERE op_block_hash = $hash";
   PGSQL(dbh) "UPDATE balance_updates SET distance_level = 0 WHERE block_hash = $hash";
   if count then update_counts ~force:true hash 1L
 
@@ -1997,11 +2318,11 @@ let register_crawler_activity name delay =
               VALUES ($name, $timestamp, $delay) ON CONFLICT (name) \
               DO UPDATE SET timestamp = $timestamp, delay = $delay"
 
-let update_alias hash alias =
+let update_alias ?(verbose=true) hash alias =
   let query_user = PGSQL(dbh) "SELECT alias FROM user_alias WHERE tz = $hash" in
-  let user_has_alias = match query_user with
-    | [ _ ] -> true
-    | _ -> false in
+  let user_has_alias, old_alias = match query_user with
+    | [ old_alias ] -> true, old_alias
+    | _ -> false, "" in
   let alias_in_use_by =
     match alias with
     | None -> ""
@@ -2012,19 +2333,19 @@ let update_alias hash alias =
       | [ user ] -> user
       | _ -> "" in
   if alias_in_use_by <> "" then
-    debug "[Writer] alias already in use by %s\n%!" alias_in_use_by
+    (if verbose then debug "[Writer] alias already in use by %s\n%!" alias_in_use_by)
   else
     match user_has_alias, alias with
     | false, Some alias when String.length alias > 0 ->
       PGSQL(dbh) "INSERT INTO user_alias (tz, alias) VALUES ($hash, $alias)";
       PGSQL(dbh) "UPDATE tezos_user SET alias = $alias WHERE hash = $hash"
-    | false, _ -> ()
-    | true, Some alias when String.length alias > 0 ->
+    | true, Some alias when String.length alias > 0 && alias <> old_alias ->
       PGSQL(dbh) "UPDATE user_alias SET alias = $alias WHERE tz = $hash";
       PGSQL(dbh) "UPDATE tezos_user SET alias = $alias WHERE hash = $hash"
-    | true, _ ->
+    | true, None | true, Some "" ->
       PGSQL(dbh) "DELETE FROM user_alias WHERE tz = $hash";
       PGSQL(dbh) "UPDATE tezos_user SET alias = NULL WHERE hash = $hash"
+    | _ -> ()
 
 
 (* update highest info and counts if in alternative branch *)

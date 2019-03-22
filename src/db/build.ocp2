@@ -32,7 +32,7 @@ OCaml.library("database-update",
   files = [
     "pg_update.ml"
   ];
-  requires = [ "pgocaml"; "ez-pgocaml" ];
+  requires = [ "ez-pgocaml" ];
  });
 
 OCaml.program("tzscan-db-updater",
@@ -61,7 +61,6 @@ OCaml.library("database-utils-lib",
       "database-update";
       "data-types-lib";
       "database-interface";
-      "pgocaml";
       "calendar";
       "lwt.unix";
       "blake2b";

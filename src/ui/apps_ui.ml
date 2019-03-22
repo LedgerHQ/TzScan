@@ -14,14 +14,23 @@
 (*                                                                      *)
 (************************************************************************)
 
-OCaml.program("test-data-encoding", ocaml+
-  ocaml + {
-    files = [
-      "test_data_encoding.ml";
-    ];
-    requires = [
-      "data-types-lib";
-      "alcotest";
-  ];
-}
-);
+open Ocp_js
+open Html
+open Bootstrap_helpers.Button
+open Bootstrap_helpers.Form
+open Bootstrap_helpers.Icon
+
+let make () =
+  div ~a:[ a_class [form_inline] ] [
+    div ~a:[ a_class [form_group] ] [
+      label ~a:[ a_class [Bootstrap_helpers.Misc.lead] ] [
+        txt "Simple webview app for android: " ];
+      space_icon ();
+      button ~a:[
+        a_button_type `Submit;
+        a_onclick (fun _e ->
+            Dom_html.window##location##href <- Js.string ("/tzscan.apk"); true);
+        a_class [btn; btn_primary] ] [
+        txt "Download" ]
+    ]
+  ]

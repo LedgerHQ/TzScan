@@ -22,13 +22,13 @@ module Date = struct
   let to_string (DATE s) = s
   let from_string s = DATE s
   let pretty_date = function
-      DATE d -> 
+      DATE d ->
        match String.split_on_char 'T' d with
          [] -> "",""
        | hd :: [] -> hd,""
        | date :: time :: _ -> date,(String.sub time 0 (String.length time - 1))
-      
-    
+
+
 end
 
 type block_hash = string
@@ -47,6 +47,12 @@ type voting_period_kind =
   | NTesting_vote
   | NTesting
   | NPromotion_vote
+
+type voting_period_status =
+  | VPS_passed
+  | VPS_wait
+  | VPS_current
+  | VPS_ignored (* period never reached  *)
 
 type chain_status =
   | CSNot_running
@@ -441,4 +447,9 @@ type network_version = {
   v_name : string ;
   v_major : int ;
   v_minor : int ;
+}
+
+type voting_rolls = {
+  vroll_pkh: account_hash;
+  vroll_count: int
 }

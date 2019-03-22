@@ -67,8 +67,9 @@ let s_tzscan_node_balances = ss_ "Node 2 (balances)"
 
 let s_txns = ss_ "Txns"
 let s_block = ss_ "Block"
-let s_ico_ratio = ss_ "ICO ratio"
+let s_ico_ratio = ss_ "ICO Ratio"
 let s_total_supply = ss_ "Total Supply"
+let s_circulating_supply = ss_ "Circulating Supply"
 
 let s_price_usd = ss_"Price $"
 let s_price_btc = ss_ "Price BTC"
@@ -216,6 +217,7 @@ let s_timestamp = ss_ "Timestamp"
 let s_blocks_confirmation = ss_ "Blocks Confirmation"
 let s_market_cap = ss_ "Market Cap"
 let s_seed_nonce_revelation = ss_ "Seed Nonce Revelation"
+let s_nonce_revelation = ss_ "Nonce Revelation"
 let s_nonce = ss_ "Nonce"
 let s_tz1 = ss_ "TZ1"
 let s_secret = ss_ "Secret"
@@ -399,3 +401,54 @@ let s_top_total_frozen_fees = ss_ "Top Total frozen fees"
 let s_top_used_bytes = ss_ "Top Used bytes"
 
 let s_exchanges = ss_ "Exchanges"
+let s_denounciation = ss_ "Denounciation"
+let s_funds_required = ss_ "Funds Required"
+
+let s_export_to_csv = ss_ "Export to CSV"
+let s_kind = ss_ "Kind"
+let s_votes = ss_ "Votes"
+let s_counts = ss_ "Counts"
+let s_ballots = ss_ "Ballots"
+let s_proposal_hash = ss_ "Proposal Hash"
+let s_operation = ss_ "Operation"
+let s_proposal = ss_ "Proposal"
+let s_archive = ss_ "Archive"
+let s_day = ss_ "day"
+let s_days = ss_ "days"
+
+let s_tezos_protocol_amendment_votes = ss_ "Tezos Protocol Amendment Votes"
+let s_exploration = ss_ "Exploration"
+let s_testing = ss_ "Testing"
+let s_promotion = ss_ "Promotion"
+
+
+let s_proposal_description =
+  ss_
+  "Delegates can submit protocol amendment proposals using the \
+   proposals operation. At the end of a proposal period, the proposal \
+   with most supporters is selected and we move to a testing_vote \
+   period. If there are no proposals, or a tie between proposals, a \
+   new proposal period starts. Each delegate can submit a maximum of \
+   20 proposals, including duplicates."
+
+let s_exploration_description =
+  ss_
+    "Delegates can cast one vote to test or not the winning proposal \
+     using the ballot operation. At the end of a testing_vote period \
+     if participation reaches the quorum and the proposal has a \
+     super-majority in favor, we proceed to a testing \
+     period. Otherwise we go back to a proposal period."
+
+let s_testing_description =
+  ss_
+    "A test chain is forked for 48 hours to test a correct migration \
+     of the context. At the end of a testing period we move to a \
+     promotion_vote period."
+
+let s_promotion_description =
+  ss_
+    "Delegates can cast one vote to promote or not the tested proposal \
+     using the ballot operation. At the end of a promotion_vote period \
+     if participation reaches the quorum and the tested proposal has a \
+     super-majority in favor, it is activated as the new \
+     protocol. Otherwise we go back to a proposal period."

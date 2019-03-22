@@ -31,34 +31,42 @@ let address_encoding =
 
 let all_addresses = ref []
 let api_addresses = ref [||]
+let services_filename = ref None
+let secret_key = ref None
+let csv_dir = ref None
 
-type config =
-  {
-    name : string ;
-    crawler : address  list ;
-    api : address list ;
-    data_path : string option ;
-  }
+type config = {
+  name : string ;
+  crawler : address list ;
+  api : address list ;
+  services_filename : string option ;
+  data_path : string option ;
+  recaptcha_secret_key : string option;
+  csv_dir : string option
+}
 
 let config_encoding =
   conv
-    (fun
-      { name ; crawler ; api ; data_path }
-      -> ( name , crawler , api , data_path , None , None )
+    (fun { name ; crawler ; api ; services_filename ; data_path ;
+           recaptcha_secret_key ; csv_dir }
+      -> ( name , crawler , api , services_filename, data_path , None , None ,
+           recaptcha_secret_key, csv_dir ))
+    (fun ( name , crawler , api , services_filename , data_path,
+           _max_default_blocks , _max_default_operations, recaptcha_secret_key ,
+           csv_dir )
+      -> { name ; crawler ; api ; services_filename ; data_path ;
+           recaptcha_secret_key ; csv_dir }
     )
-    (fun
-      ( name , crawler , api , data_path,
-        _max_default_blocks , _max_default_operations )
-      -> { name ; crawler ; api ; data_path }
-    )
-    ( obj6
+    ( obj9
       (req "name" string)
       (req "crawler" (list address_encoding))
       (req "api" (list address_encoding))
+      (opt "services" string)
       (opt "data" string)
       (opt "max_default_blocks" int)
       (opt "max_default_operations" int)
-    )
+      (opt "recaptcha_secret_key" string)
+      (opt "csv_dir" string))
 
 let configs_encoding = list config_encoding
 
@@ -68,7 +76,10 @@ let configs_example = [
     api = [
       { url = "http://another-host"; port = 18732 };
     ];
+    services_filename = None ;
     data_path = None;
+    recaptcha_secret_key = None;
+    csv_dir = None
   }
 ]
 
@@ -134,7 +145,10 @@ let load_config_api file =
       | [] -> crawler_addresses
       | _ -> addresses
     in
+    services_filename := c.services_filename ;
     api_addresses := Array.of_list addresses;
+    secret_key := c.recaptcha_secret_key;
+    csv_dir := c.csv_dir;
     begin
       match !api_addresses with
       | [||] -> error "No node addresses for balance queries"
@@ -162,9 +176,13 @@ let get_config_crawler ~crawler file =
     }
 
 let get_addresses () = !all_addresses
+let get_services_filename () = !services_filename
 let get_api_address () =
   let api_addresses = !api_addresses in
   snd api_addresses.(Random.int (Array.length api_addresses))
+
+let get_secret_key () = !secret_key
+let get_csv_dir () = !csv_dir
 
 (*
 let get_address_pref ?fpref () =

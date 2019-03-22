@@ -14,4 +14,6 @@
 (*                                                                      *)
 (************************************************************************)
 
+val verbose_mode : bool ref
+
 module Reader_generic : Db_intf.READER_GENERIC

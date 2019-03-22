@@ -26,6 +26,6 @@ end
 
 val input :
   ([< Html_types.input_attrib ], [> Html_types.input ])
-    Tyxml_js.Html5.nullary
+    Ocp_js.Html.nullary
 val get_input_value : string -> string
 val set_input_value : string -> string -> unit

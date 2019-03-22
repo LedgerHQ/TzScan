@@ -17,7 +17,10 @@
 val load_config_api : string option -> unit
 val get_addresses : unit -> (string * string) list
 val get_api_address : unit -> string
+val get_services_filename : unit -> string option
 val get_config_crawler :
   crawler:string -> string -> Data_types.config
 val load_json_config : 'a Json_encoding.encoding -> string -> 'a
 val error : string -> 'a
+val get_secret_key : unit -> string option
+val get_csv_dir : unit -> string option

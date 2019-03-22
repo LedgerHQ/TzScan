@@ -36,6 +36,7 @@ struct
   |> register S.accounts H.accounts
   |> register S.nb_accounts H.nb_accounts
   |> register S.account_bonds_rewards H.bonds_rewards
+  |> register S.extra_bonds_rewards H.extra_bonds_rewards
   |> register S.rolls_history H.rolls_history
   |> register S.account_status H.account_status
   (* Operation services *)
@@ -46,6 +47,10 @@ struct
   |> register S.bakings H.bakings
   |> register S.nb_bakings_endorsement H.nb_bakings_endorsement
   |> register S.bakings_endorsement H.bakings_endorsement
+  |> register S.nb_cycle_bakings H.nb_cycle_bakings
+  |> register S.cycle_bakings H.cycle_bakings
+  |> register S.nb_cycle_endorsements H.nb_cycle_endorsements
+  |> register S.cycle_endorsements H.cycle_endorsements
   |> register S.nb_bakings_history H.nb_bakings_history
   |> register S.bakings_history H.bakings_history
   |> register S.nb_endorsements_history H.nb_endorsements_history
@@ -111,9 +116,23 @@ struct
   |> register S.rewards_split_fast H.rewards_split_fast
   |> register S.nb_cycle_delegator_rewards H.nb_cycle_delegator_rewards
   |> register S.delegator_rewards H.delegator_rewards
+  |> register S.delegator_rewards_with_details H.delegator_rewards_with_details
   |> register S.h24_stats H.h24_stats
   |> register S.nb_protocol H.nb_protocol
   |> register S.protocols H.protocols
+  |> register S.voting_period_info H.voting_period_info
+  |> register S.nb_proposals H.nb_proposals
+  |> register S.proposals H.proposals
+  |> register S.testing_proposal H.testing_proposal
+  |> register S.ballots H.ballots
+  |> register S.votes_account H.votes_account
+  |> register S.vote_graphs_account H.vote_graphs_account
+  |> register S.nb_proposal_votes H.nb_proposal_votes
+  |> register S.proposal_votes H.proposal_votes
+  |> register S.total_proposal_votes H.total_proposal_votes
+  |> register S.nb_ballot_votes H.nb_ballot_votes
+  |> register S.ballot_votes H.ballot_votes
+  |> register S.total_voters H.total_voters
   |> register S.transaction_account_csv H.transaction_account_csv
   |> register S.market_prices H.market_prices
   |> register S.api_server_info H.api_server_info
@@ -128,15 +147,11 @@ struct
   |> register S.balance_ranking H.balance_ranking
   |> register S.last_baking_and_endorsement H.last_baking_and_endorsement
   |> register S.next_baking_and_endorsement H.next_baking_and_endorsement
+  |> register S.blocks_with_pred_fitness H.blocks_with_pred_fitness
+  |> register S.heads_with_pred_fitness H.heads_with_pred_fitness
 
   (* not used in website *)
   |> register S.roll_number H.roll_number
-  |> register S.deleguees_count H.deleguees_count
-  |> register S.deleguees H.deleguees
-  |> register S.deleguees_count_by_cycle_count H.deleguees_count_by_cycle_count
-  |> register S.deleguees_count_by_cycle H.deleguees_count_by_cycle
-  |> register S.all_deleguees_count_by_cycle_count H.all_deleguees_count_by_cycle_count
-  |> register S.all_deleguees_count_by_cycle H.all_deleguees_count_by_cycle
   |> register S.total_bakings H.total_bakings
   |> register S.total_endorsements H.total_endorsements
   |> register S.cycle_baker_rights H.cycle_baker_rights
@@ -153,6 +168,7 @@ end
 
 module V1 = MakeRegisterer(Service.V1)(Handler.V1)
 module V2 = MakeRegisterer(Service.V2)(Handler.V1)
+module V3 = MakeRegisterer(Service.V3)(Handler.V1)
 
 let services =
-  EzAPIServer.empty |> V1.register |> V2.register
+  EzAPIServer.empty |> V1.register |> V2.register |> V3.register

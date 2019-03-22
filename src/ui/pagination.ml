@@ -14,13 +14,14 @@
 (*                                                                      *)
 (************************************************************************)
 
-open Data_types
-open Tyxml_js.Html5
+open Ocp_js
+open Html
 open Js_utils
 open Bootstrap_helpers.Icon
 open Bootstrap_helpers.Grid
 open Bootstrap_helpers.Panel
-open Common (* redefines Xhr for EzAPI urls *)
+open Data_types
+open Common
 
 (* a [request] is [url, handler] for Xhr.get *)
 type request = EzAPI.url * (string -> unit)
@@ -121,25 +122,25 @@ let paginate container_id
     let items = List.map (function
         | Some p, true ->
           li ~a:[a_class ["active"]]
-            [a [ pcdata @@ string_of_int (p+1) ]]
+            [a [ txt @@ string_of_int (p+1) ]]
         | Some p, false ->
           li [a ~a:[mk_onclick p; a_class ["hidden-xs"; "hidden-sm"]]
-                [ pcdata @@ string_of_int (p+1) ]]
+                [ txt @@ string_of_int (p+1) ]]
         | None, _ ->
           li ~a:[a_class ["disabled"; "hidden-xs"; "hidden-sm"]]
-            [a [ pcdata "..." ]]
+            [a [ txt "..." ]]
       ) pages in
     let prev =
       if page = 0 then
-        li ~a:[a_class ["disabled"]] [a [pcdata "«"]]
+        li ~a:[a_class ["disabled"]] [a [txt "«"]]
       else
-        li [a ~a:[ a_id prev_id; mk_onclick (page-1) ] [pcdata "«"]]
+        li [a ~a:[ a_id prev_id; mk_onclick (page-1) ] [txt "«"]]
     in
     let next =
       if page + 1 = nb_pages then
-        li ~a:[a_class ["disabled"]] [a [pcdata "»"]]
+        li ~a:[a_class ["disabled"]] [a [txt "»"]]
       else
-        li [a ~a:[ a_id next_id; mk_onclick (page+1); ] [pcdata "»"]]
+        li [a ~a:[ a_id next_id; mk_onclick (page+1); ] [txt "»"]]
     in
     ul ~a:[a_class ["pagination"; "pagination-sm"]; a_id pagine_id] ( prev :: items @ [next] )
 
@@ -151,7 +152,7 @@ let make_pagination_header ?(classes = []) container_id title
     div ~a:[ a_class [ panel_heading ] ] [
       div ~a:[ a_class [ panel_title ] ]
         (if title <> "" then [
-            div [ span [ pcdata title; help ] ]
+            div [ span [ txt title; help ] ]
           ] else [
            div [ span ~a:[ a_class [ "help-no-title" ] ] [ help ] ]
          ])
@@ -161,7 +162,7 @@ let make_pagination_header ?(classes = []) container_id title
       div ~a:[ a_class [ panel_title ] ] [
         div ~a:[ a_class [ row ] ]
           (if title <> "" then [
-              div ~a:[ a_class [ clg6; cxs6 ] ] [ span [ pcdata title; help ]
+              div ~a:[ a_class [ clg6; cxs6 ] ] [ span [ txt title; help ]
                                           ] ;
               div ~a:[ a_class ([ clg6; cxs6 ] @ classes) ] [
                 paginate container_id
@@ -201,7 +202,7 @@ let pagination
       div ~a:[ a_class [ panel_heading ] ] [
         div ~a:[ a_class [ panel_title ] ]
           (if to_update_title <> "" then [
-              div [ span [ pcdata to_update_title; help ] ]
+              div [ span [ txt to_update_title; help ] ]
             ] else [
              div [ span ~a:[ a_class [ "help-no-title" ] ] [ help ] ]
            ])

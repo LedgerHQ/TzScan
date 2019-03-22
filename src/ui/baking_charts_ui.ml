@@ -14,6 +14,8 @@
 (*                                                                      *)
 (************************************************************************)
 
+open Ocp_js
+
 let amcharts3_ready = Amcharts3.ready "/amcharts3"
 
 let rolls_to_data data =
@@ -29,6 +31,7 @@ let make_chart chart_id graph_name left_axis_title _right_axis_title data =
 
       chart##dataProvider <- Amcharts3.Serial.dataProvider2 data;
       chart##marginLeft <- 10;
+      chart##addClassNames <- true;
 
       let categoryAxis = chart##categoryAxis in
       categoryAxis##parseDates <- false;

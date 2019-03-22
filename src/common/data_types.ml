@@ -23,7 +23,7 @@ type account_name = { tz : account_hash; alias : string option }
 type config =
   { nodes : url list ; data_path : string option }
 
-type nonces = int * (operation_hash * (int list)) list
+type nonces = int * (operation_hash option * int * block_hash) list
 
 type block = {
   hash : block_hash ;
@@ -142,6 +142,8 @@ and origination = {
   or_failed : bool ;
   or_internal : bool ;
   or_burn : int64 ;
+  or_op_level : int ;
+  or_timestamp : string
 }
 
 and delegation = {
@@ -153,6 +155,8 @@ and delegation = {
   del_storage_limit : Z.t ;
   del_failed : bool ;
   del_internal : bool ;
+  del_op_level : int ;
+  del_timestamp : string
 }
 
 and reveal = {
@@ -164,11 +168,16 @@ and reveal = {
   rvl_storage_limit : Z.t ;
   rvl_failed : bool ;
   rvl_internal : bool ;
+  rvl_op_level : int ;
+  rvl_timestamp : string
 }
 
 and activation = {
   act_pkh : account_name ;
   act_secret : string ;
+  act_balance : int64 option ;
+  act_op_level : int ;
+  act_timestamp : string
 }
 
 and endorsement = {
@@ -392,6 +401,16 @@ type account_bonds_rewards = {
   acc_e_deposits : int64
 }
 
+type account_extra_rewards ={
+  acc_dn_gain: int64;
+  acc_dn_deposit: int64;
+  acc_dn_rewards: int64;
+  acc_dn_fees: int64;
+  acc_rv_rewards: int64;
+  acc_rv_lost_rewards: int64;
+  acc_rv_lost_fees:int64
+}
+
 type account_status = {
   account_status_hash : account_name ;
   account_status_revelation : operation_hash option ;
@@ -472,11 +491,13 @@ type service = {
   srv_url : string;
   srv_logo : string; (* file name, related to /images/ *)
   srv_logo2 : string option; (* file name, related to /images/ *)
+  srv_logo_payout : string option; (* file name, related to /images/ *)
   srv_descr : string option;
   srv_sponsored : string option;
   srv_page : string option;
   srv_delegations_page : bool ;
   srv_account_page : bool ;
+  srv_aliases: account_name list option
 }
 
 type crawler_activity = {
@@ -538,6 +559,19 @@ type delegator_reward = {
   dor_extra_rewards: int64;
   dor_losses: int64;
   dor_status: rewards_status
+}
+
+type delegator_reward_details = {
+  dor_block_rewards: int64;
+  dor_end_rewards: int64;
+  dor_fees: int64;
+  dor_rv_rewards: int64;
+  dor_dn_gain: int64;
+  dor_rv_lost_rewards: int64;
+  dor_rv_lost_fees: int64;
+  dor_dn_lost_deposit: int64;
+  dor_dn_lost_rewards: int64;
+  dor_dn_lost_fees: int64;
 }
 
 type snapshot = {
@@ -720,6 +754,9 @@ type www_server_info = {
   mutable www_logo : string ;
   mutable www_footer : string ;
   mutable www_networks : ( string * string ) list ; (* name x www_url *)
+  mutable www_themes : (string * string) list ;
+  mutable www_recaptcha_key : string option ;
+  mutable www_csv_server : (string * string) option ;
 }
 
 type gk_coin = {gk_usd: float; gk_btc: float}
@@ -758,4 +795,15 @@ type exchange_info = {
   ex_name: string;
   ex_total_volume: float;
   ex_tickers: ex_ticker list
+}
+
+type proposal = {
+  prop_period: int;
+  prop_period_kind: voting_period_kind;
+  prop_hash: proposal_hash;
+  prop_count: int;
+  prop_votes: int;
+  prop_source: account_name;
+  prop_op: operation_hash option;
+  prop_ballot: ballot_type option
 }

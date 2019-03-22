@@ -36,12 +36,9 @@ OCaml.library("explorer-lib", ocaml+ {
   requires = [
     "tzscan-utils-js";
     "data-types-lib";
-    "js_of_ocaml";
-    "js_of_ocaml.tyxml";
     "js_of_ocaml-lwt";
     "ocplib-utils-js";
     "ocplib-odometer";
-    "api-doc";
     "glossary";
     "omd";
     "ocplib-ammap3-js";
@@ -50,6 +47,7 @@ OCaml.library("explorer-lib", ocaml+ {
     "tzscan-misc";
     "ez-api-js";
     "tezos-explorer-services";
+    "ocplib-recaptcha";
   ] ;
   files = [
     "panel.mli";
@@ -58,14 +56,15 @@ OCaml.library("explorer-lib", ocaml+ {
             [
             "text.ml";
             "common.ml";
+            "redoc.ml";
             "tez.ml";
             "glossary_doc.ml";
             "tabs.ml";
             "panel.ml";
+            "gen.ml";
             "node_state_ui.ml";
             "health_stats_ui.ml";
             "context_stats_ui.ml";
-            "api_doc.ml";
             "home_ui.ml";
             "search.ml";
             "blocks_ui.ml";
@@ -85,8 +84,9 @@ OCaml.library("explorer-lib", ocaml+ {
             "network_stats_ui.ml";
             "charts_ui.ml";
             "protocols_ui.ml";
+            "proposals_ui.ml";
             "account_ui.ml";
-
+            "apps_ui.ml";
             "api_request.ml";
             "www_request.ml";
             "menu.ml";
@@ -94,7 +94,7 @@ OCaml.library("explorer-lib", ocaml+ {
   ]);
  }
  );
- 
+
 OCaml.program("explorer-main", ocaml+ {
   requires = [ "explorer-lib" ] ;
   files = [ "main.ml" ];
@@ -115,4 +115,4 @@ OCaml.program("explorer-main", ocaml+ {
         ]
     }
     ]
-             });
+});

@@ -14,13 +14,14 @@
 (*                                                                      *)
 (************************************************************************)
 
-open Tyxml_js.Html5
+open Ocp_js
+open Html
 open Js_utils
 
-type state = Active | Disabled | Inactive
+type state = Active | Disabled | Inactive | Hidden
 
 type t = {
-  title: int option -> Html_types.flow5_without_interactive Tyxml_js.Html5.elt;
+  title: int option -> Html_types.flow5_without_interactive elt;
   id: string;
   content_id: string;
   _class: string list;
@@ -38,26 +39,34 @@ let make =
 let make_state_class = function
     Active -> [ "active" ]
   | Disabled -> [ "disabled" ]
-  | Inactive -> [ ]
+  | Inactive | Hidden -> [ ]
 
 let make_state_content_class = function
     Active -> [ "active"; "in" ]
-  | Disabled | Inactive -> [ ]
+  | Disabled | Inactive | Hidden -> [ ]
 
 let disable tab =
   let tab_li_id = Common.make_id "li" tab.id in
   Manip.addClass (find_component @@ tab_li_id) "disabled";
-  let comp = Tyxml_js.To_dom.of_element @@ find_component tab.id in
+  let comp = To_dom.of_element @@ find_component tab.id in
   comp##removeAttribute(Js.string "data-toggle");
   comp##removeAttribute(Js.string "href")
 
 let enable tab =
   let tab_li_id = Common.make_id "li" tab.id in
   Manip.removeClass (find_component @@ tab_li_id) "disabled";
-  let comp = Tyxml_js.To_dom.of_element @@ find_component tab.id in
+  let comp = To_dom.of_element @@ find_component tab.id in
   comp##setAttribute(Js.string "data-toggle",Js.string "tab");
   comp##setAttribute(Js.string "href",
                      Js.string @@ Printf.sprintf "#%s" tab.content_id)
+
+let show tab =
+  let tab_li_id = Common.make_id "li" tab.id in
+  show (find_component tab_li_id)
+
+let hide tab =
+  let tab_li_id = Common.make_id "li" tab.id in
+  hide (find_component tab_li_id)
 
 let make_tab tab ?nb state =
   let is_active_class =
@@ -65,8 +74,10 @@ let make_tab tab ?nb state =
       [ a_user_data "toggle" "tab";
         a_href  @@ "#" ^ tab.content_id]
   in
-  li ~a:[ a_class ("nav_item" :: make_state_class state);
-          a_id @@ Common.make_id "li" tab.id ] [
+  let is_hidden_attr =
+    if state <> Hidden then [] else [ a_style "display:none" ] in
+  li ~a:([ a_class ("nav_item" :: make_state_class state);
+          a_id @@ Common.make_id "li" tab.id ] @ is_hidden_attr) [
     a ~a:([ a_id tab.id;
             a_class ("nav-link" :: tab._class);
             Bootstrap_helpers.Attributes.a_role "tab";

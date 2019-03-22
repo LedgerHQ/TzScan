@@ -14,11 +14,12 @@
 (*                                                                      *)
 (************************************************************************)
 
+open Ocp_js
+open Tezos_types
 open Data_types
-open Common (* Warning: redefines Xhr with EzAPI urls *)
 open EzAPI.TYPES
 open Service
-open Tezos_types
+open Common
 
 (* Use our own version of Ezjsonm.from_string to avoid stack overflows *)
 let () = EzEncodingJS.init ()
@@ -134,9 +135,11 @@ module Home = struct
   let marketcap ()  =
     request0 V1.marketcap "Home.marketcap"
       (fun m ->
-         Home_ui.update_leftbox_marketcap
-           m.price_usd m.price_btc m.volume_usd_24 m.percent_change_1
-           m.percent_change_24 m.percent_change_7 m.last_updated)
+         request0 V1.supply "Home.supply"
+           (fun supply_info ->
+              Home_ui.update_leftbox_marketcap
+                m.price_usd m.price_btc m.volume_usd_24 m.percent_change_1
+                m.percent_change_24 m.percent_change_7 m.last_updated supply_info))
 
   let request () =
     heads () ;
@@ -151,11 +154,16 @@ module Home = struct
 
 end
 
-let confirmation update bhash =
+let confirmation ?head_level update bhash =
   level bhash (fun blevel ->
-      head
-        ~log_msg:"Operation+Block.confirmation(head)"
-        (fun head -> update bhash blevel (head.level - blevel)))
+      match head_level with
+      | None ->
+        head
+          ~log_msg:"Operation+Block.confirmation(head)"
+          (fun head -> update bhash blevel (head.level - blevel))
+      | Some head_level ->
+        update bhash blevel (head_level - blevel)
+    )
 
 module Block = struct
 
@@ -204,15 +212,19 @@ module Block = struct
            (fun level_details ->
               request0 V1.snapshot_levels "Block.snapshot_level"
                 (fun snapshots ->
-                   Block_ui.update_block_summary level_details block
-                   (List.mem block.level snapshots);
-                   !Block_ui.update_block_baker block ;
-                   let cycle = level_details.lvl_cycle in
-                   endorsements ~cycle hash block.level ;
-                   block_succ block ;
-                   block_uncles block;
-                   if block.distance_level = 0 then
-                     confirmation Block_ui.update_confirmation hash)
+                   head ~log_msg:"Block.head"
+                     (fun head ->
+                        Block_ui.update_block_summary level_details block
+                          (List.mem block.level snapshots);
+                        !Block_ui.update_block_baker block ;
+                        let cycle = level_details.lvl_cycle in
+                        endorsements ~cycle hash block.level ;
+                        if head.level <> block.level then block_succ block ;
+                        block_uncles block;
+                        if block.distance_level = 0 then
+                          confirmation ~head_level:head.level
+                            Block_ui.update_confirmation hash)
+                )
                ) block.hash)
       ~error:(fun _status _content ->
           let content = Search.not_found hash in
@@ -298,7 +310,11 @@ module Account = struct
 
   let bonds_rewards ?price_usd hash blce =
     request1 V1.account_bonds_rewards "Account.bonds_rewards"
-      (fun br -> Account_ui.update_bonds_rewards ?price_usd hash br blce)
+      (fun br ->
+         request1 V1.extra_bonds_rewards "Account.extra_bonds_rewards"
+           (fun extra ->
+              Account_ui.update_bonds_rewards ?price_usd hash br extra blce)
+           hash)
       hash
 
   let account_details hash on_finish =
@@ -337,6 +353,7 @@ module Account = struct
                                            is_deactivated grace_period
                                            revelations activates
                                            (Some staking_balance) ;
+                                         !Account_ui.update_logo_payout hash;
                                          on_finish
                                            ?price_usd
                                            hash details.acc_balance delegate
@@ -348,6 +365,7 @@ module Account = struct
                                             details.acc_node_timestamp
                                             is_deactivated grace_period
                                             revelations activates None ;
+                                          !Account_ui.update_logo_payout hash;
                                           on_finish
                                             ?price_usd
                                             hash details.acc_balance delegate)
@@ -365,6 +383,7 @@ module Account = struct
                                  details ext details.acc_node_timestamp
                                  false 0
                                  revelations activates None ;
+                               !Account_ui.update_logo_payout hash;
                                on_finish
                                  ?price_usd
                                  hash details.acc_balance delegate
@@ -480,7 +499,17 @@ module Account = struct
                      ) hash
                 ) hash
            ) hash
-      ) hash
+      ) hash;
+    if String.length hash > 1 then
+      match String.sub hash 0 2 with
+      | "tz" ->
+        request1 V1.nb_cycle_rewards "Account.number_cycle_rewards"
+          (fun nrows -> Account_ui.update_account_rewards_status (nrows <> 0)) hash
+      | "TZ" | "KT" ->
+        request1 V1.nb_cycle_delegator_rewards "Account.number_cycle_delegator_rewards"
+          (fun nrows ->
+             Account_ui.update_account_rewards_status (nrows <> 0)) hash
+      | _ -> ()
 
   let bakings ?cycle hash =
     let params = match cycle with
@@ -585,7 +614,8 @@ module Account = struct
         request1 V1.nb_cycle_delegator_rewards "Account.number_cycle_delegator_rewards"
           (fun nrows ->
              Account_ui.update_delegator_rewards_history ~nrows
-               (page_request1 V1.delegator_rewards "Account.delegator_rewards" hash))
+               (page_request1 V1.delegator_rewards_with_details
+                  "Account.delegator_rewards" hash))
           hash
       | _ -> ()
 
@@ -666,17 +696,38 @@ module Account = struct
       )
       hash
 
+  let votes_number hash =
+    request1 V1.vote_graphs_account "Account.vote_graphs"
+      (fun (proposals, ballots) ->
+         let nrows = List.length ballots +
+                     List.fold_left (fun acc (_, n, _) -> acc + n) 0 proposals in
+         Account_ui.update_votes_number nrows)
+      hash
+
+  let votes hash =
+    request1 V1.vote_graphs_account "Account.vote_graphs"
+      (fun (proposals, ballots) ->
+         let nrows = List.length ballots +
+                     List.fold_left (fun acc (_, n, _) -> acc + n) 0 proposals in
+         if nrows > 0 then (
+           (* Account_ui.update_vote_graphs proposals ballots; *)
+           Proposals_ui.update_account_votes ~nrows
+             (page_request1 V1.votes_account "Account.votes" hash))
+      )
+      hash
+
   let request hash filters =
+    transactions_number hash;
+    delegations_number hash;
+    originations_number hash;
+    endorsements_number hash;
+    bakings_status hash;
+    balance_update_number hash;
+    votes_number hash;
     account_details hash (fun ?price_usd hash balance delegate ->
-        transactions_number hash;
-        delegations_number hash;
-        originations_number hash;
-        endorsements_number hash;
-        bakings_status hash;
-        balance_update_number hash;
-        (* roll_number hash (bonds_rewards hash balance) ; *)
         bonds_rewards ?price_usd hash balance ;
         baking_required_balance hash balance delegate
+        (* roll_number hash (bonds_rewards hash balance) ; *)
       );
     let default = Account_ui.default_filter filters in
     Account_ui.update_transactions default hash transactions ;
@@ -685,7 +736,8 @@ module Account = struct
     Account_ui.update_endorsements default hash endorsements ;
     Account_ui.update_bakings default hash bakings_tables ;
     Account_ui.update_balance_updates default hash balance_updates ;
-    Account_ui.update_rewards default hash rewards_tables
+    Account_ui.update_rewards default hash rewards_tables ;
+    Account_ui.update_votes default hash votes
 end
 
 module Blocks = struct
@@ -714,10 +766,11 @@ module Blocks = struct
           (fun snapshots ->
              Blocks_ui.update_blocks ~snapshots ~nrows
                (fun page page_size cont ->
-                  blocks
-                    ~log_msg:"Blocks.blocks"
+                  request0 V1.blocks_with_pred_fitness "Blocks.blocks"
                     ~params:(page_params page page_size)
-                    (fun l -> cont l; List.iter Block.block_uncles l))))
+                    (fun l ->
+                       let blocks = List.map fst l in
+                       cont l; List.iter Block.block_uncles blocks))))
 end
 
 module Accounts = struct
@@ -802,10 +855,10 @@ module Heads = struct
            Blocks_ui.Heads.update ~nrows
              (fun page page_size cont ->
                 request0
-                  V1.heads "Heads.heads"
+                  V1.heads_with_pred_fitness "Heads.heads"
                   ~params:(page_params page page_size)
-                  (fun blocks -> cont blocks;
-                    List.iter Block.block_uncles blocks)
+                  (fun l -> let blocks = List.map fst l in
+                    cont l; List.iter Block.block_uncles blocks)
                   ))
     | Some level ->
       (* we do this to avoid to paginate when showing uncles of a
@@ -813,7 +866,7 @@ module Heads = struct
       request1 V1.nb_uncles "Heads.nb_uncles"
         (fun nrows ->
            Blocks_ui.update_blocks ~alt:true ~level ~nrows
-             (page_request0 V1.heads "Haeds.uncles"
+             (page_request0 V1.heads_with_pred_fitness "Heads.uncles"
                 ~params:[Service.param_level, I level]))
         level
 
@@ -899,10 +952,9 @@ module Operations = struct
 
     let request () =
       request0 V1.nb_cycle "Nonces.nb_cycle"
-        (fun nrows ->           Operations_ui.Nonces.update_nonces ~nrows
+        (fun nrows ->
+           Operations_ui.Nonces.update_nonces ~nrows
              (page_request0 V1.nonces "Nonces.nonces"))
-
-
   end
 
   let update_activation_alert () =
@@ -1087,16 +1139,106 @@ module Search = struct
 end
 
 module Protocols = struct
-  let request () =
+  let protocols_request () =
     request0 V1.nb_protocol "Protocol.nb_protocol"
       (fun nrows ->
          Protocols_ui.update ~nrows
            (page_request0 V1.protocols "Protocol.protocols"))
+
+  let proposals_request args =
+    let period = match List.find_opt (fun (x,_) -> x = "period") args with
+      | None -> None
+      | Some (_, period) -> int_of_string_opt period in
+    let params, current = match period with
+      | None -> [], true
+      | Some period -> [ Service.param_period, I period ], false in
+    request0 V1.voting_period_info "Protocol.voting_period_info" ~params
+      (fun (period, voting_period_kind, cycle, level, period_max, period_status, quorum) ->
+         if period = 0 then
+           Proposals_ui.update_controls ~left:false ~period ()
+         else if current || period_max then
+           Proposals_ui.update_controls ~right:false ~period ();
+         Proposals_ui.update_progress
+           period voting_period_kind cycle level period_status;
+         let params = [ Service.param_period, I period ] in
+         match voting_period_kind with
+         | NProposal ->
+           request1 V1.total_proposal_votes "Protocol.total_proposal_votes"
+             (fun x ->
+                request0 V1.proposals "Protocol.proposals" ~params
+                  (Proposals_ui.update_proposals x)) period
+         | NTesting_vote | NPromotion_vote ->
+           request1 V1.total_voters "Protocol.total_voters"
+             (fun totals ->
+                let params = [
+                  Service.param_period_kind,
+                  S (Tezos_utils.string_of_voting_period_kind voting_period_kind) ] in
+                request1 V1.ballots "Protocol.ballots" ~params
+                  (Proposals_ui.update_ballots period quorum totals) period) period
+         | NTesting ->
+           let params = [
+             Service.param_period_kind,
+             S (Tezos_utils.string_of_voting_period_kind voting_period_kind) ] in
+           request1 V1.testing_proposal "Protocol.testing_proposal" ~params
+             Proposals_ui.update_testing period
+      )
+
+  let all_proposals_request () =
+    request0 V1.nb_proposals "Protocol.nb_proposals"
+      (fun nrows ->
+         Proposals_ui.update_all_proposals ~nrows
+           (page_request0 V1.proposals "Protocol.proposals"))
+
+  let proposal_votes_request ?period hash =
+    let params = match period with
+      | None -> []
+      | Some period -> [Service.param_period, I period] in
+    request1 V1.nb_proposal_votes "Protocol.nb_proposal_votes"
+      (fun (nrows, nvotes) ->
+         Proposals_ui.update_votes ~nrows nvotes
+           (page_request1 V1.proposal_votes "Protocol.proposal_votes" ~params hash) hash
+      ) hash
+
+  let ballot_votes_request ?period ?ballot hash =
+    let params, empty = match ballot, period with
+      | None, _ -> [], "No ballots for this proposal"
+      | Some ballot, None ->
+        [Service.param_ballot, S ballot],
+        Printf.sprintf "No ballot %S for this proposal" ballot
+      | Some ballot, Some period ->
+        [Service.param_ballot, S ballot; Service.param_period, I period],
+        Printf.sprintf "No ballot %S for this proposa at period %d" ballot period
+    in
+    request1 V1.nb_ballot_votes "Protocol.nb_ballot_votes" ~params
+      (fun (nrows, nvotes) ->
+         Proposals_ui.update_votes ~empty ~nrows nvotes
+           (page_request1 V1.ballot_votes "Protocol.ballot_votes" ~params hash) hash
+      ) hash
+
+  let votes_request () =
+    let period = Misc.unoptf None int_of_string_opt (Jsloc.find_arg "period") in
+    match Jsloc.find_arg "proposal" with
+    | None -> ()
+    | Some hash ->
+      match Jsloc.find_arg "vote_kind" with
+      | Some "proposal" -> proposal_votes_request ?period hash
+      | Some "ballot" ->
+        let ballot = Jsloc.find_arg "ballot" in
+        ballot_votes_request ?period ?ballot hash
+      | _ -> ()
+
+
+
 end
 
 module CSV = struct
-  let transactions update hash =
-    request1 V1.transaction_account_csv "CSV.transaction_account"
-      (fun s -> update s ) hash
-
+  let transactions hash update =
+    match Infos.www.www_recaptcha_key, Infos.www.www_csv_server with
+    | Some site_key, Some (csv_api, _) ->
+      Recaptcha.check site_key (fun token ->
+          EzXhr.get1 (base_of_host csv_api)
+            V1.transaction_account_csv "CSV.transaction_account"
+            ~params:[ Service.param_token, S token ]
+            (fun s -> update s ) hash )
+    | _ -> Js_utils.log "No site key or no csv api"
 end

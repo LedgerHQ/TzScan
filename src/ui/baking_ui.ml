@@ -14,7 +14,7 @@
 (*                                                                      *)
 (************************************************************************)
 
-open Tyxml_js.Html5
+open Ocp_js.Html
 open Js_utils
 open Bootstrap_helpers.Grid
 open Bootstrap_helpers.Panel
@@ -25,8 +25,7 @@ let charts_div_id hash = Common.make_id "charts-div-id" hash
 
 let update_chart_div hash rolls =
   let container = find_component @@ charts_div_id hash in
-  if rolls = [] then
-    Js_utils.hide container
+  if rolls = [] then hide container
   else
     let data = Baking_charts_ui.rolls_to_data @@ List.rev rolls in
     let to_update_content =

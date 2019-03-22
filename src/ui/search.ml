@@ -14,14 +14,12 @@
 (*                                                                      *)
 (************************************************************************)
 
-open Data_types
-open Tyxml_js.Html5
+open Ocp_js
+open Html
 open Js_utils
-open Tyxml_js.To_dom
 open Bootstrap_helpers.Grid
 open Bootstrap_helpers.Panel
-
-let input =  Tyxml_js.Html5.input
+open Data_types
 
 let spf = Printf.sprintf
 let current_focus = ref (-1)
@@ -68,9 +66,10 @@ let search_handler ?onclick ?(input_id="search") ?(button_id="search-go")
         show search_list;
         let search_value = Manip.value search_input in
         if is_long_enough_for_completion search_value then
-          request search_value
-        else
+          request (Url.urlencode search_value)
+        else (
           Manip.removeChildren search_list;
+          Manip.setInnerHtml search_go "Go");
         true
       );
 
@@ -80,14 +79,14 @@ let search_handler ?onclick ?(input_id="search") ?(button_id="search-go")
         match length with
         | 0 -> true
         | n ->
-          let child = (of_div (List.nth children (rem !current_focus n))) in
+          let child = (To_dom.of_div (List.nth children (rem !current_focus n))) in
           match e##keyCode with
           | 13 -> Dom.preventDefault e;
             child##click(); true
           | _ -> child##classList##remove(Js.string "autocomplete-active");
             if e##keyCode = 40 then incr current_focus
             else if e##keyCode = 38 then decr current_focus;
-            (of_div (List.nth children (rem !current_focus n)))
+            (To_dom.of_div (List.nth children (rem !current_focus n)))
             ##classList##add(Js.string "autocomplete-active");
             true
       );
@@ -100,13 +99,14 @@ let search_handler ?onclick ?(input_id="search") ?(button_id="search-go")
 
 let update_search ?more_click ?(input_id="search") ?(button_id="search-go")
     ?(list_id="search_list") nb_search hash results =
+  let hash = Url.urldecode hash in
   let search_list = find_component list_id in
   let clear_list () = Manip.removeChildren search_list in
   let search_input = find_component input_id in
   clear_list ();
   let search_go = find_component button_id in
   let more_click =
-    Misc.unopt (fun _ -> (of_button search_go)##click()) more_click in
+    Misc.unopt (fun _ -> (To_dom.of_button search_go)##click()) more_click in
   match nb_search with
   | 0 -> Manip.setInnerHtml search_go "Go"
   | _->
@@ -115,7 +115,7 @@ let update_search ?more_click ?(input_id="search") ?(button_id="search-go")
     let hash_lowercase = String.lowercase_ascii hash in
     List.iteri (fun i (user, kind) ->
         let onclick _ =
-          (of_input search_input)##value <- Js.string user.tz;
+          (To_dom.of_input search_input)##value <- Js.string user.tz;
           clear_list () ;
           more_click user;
           true in
@@ -141,10 +141,10 @@ let update_search ?more_click ?(input_id="search") ?(button_id="search-go")
         let input_i =
           input ~a:[a_value target; a_id input_id; a_input_type `Hidden;] () in
         let div_i = div ~a:[a_onclick onclick]
-            [pcdata text_i_before;
-             strong [pcdata text_i_strong];
-             pcdata text_i_after;
-             pcdata postname;
+            [txt text_i_before;
+             strong [txt text_i_strong];
+             txt text_i_after;
+             txt postname;
              input_i] in
         Manip.appendChild search_list div_i;
       )
@@ -163,10 +163,10 @@ let not_found hash =
       div ~a:[ a_id @@ hash;
                a_class [ panel; panel_primary ]] [
         div ~a:[ a_class [ panel_heading ] ] [
-          h3 ~a:[ a_class [ panel_title ] ] [ pcdata "404" ]
+          h3 ~a:[ a_class [ panel_title ] ] [ txt "404" ]
         ] ;
         div ~a:[ a_class [ panel_body ] ]
-          [ pcdata (spf "%s %s not found" (hash_type hash) hash) ]
+          [ txt (spf "%s %s not found" (hash_type hash) hash) ]
       ] ;
     ]
   ]

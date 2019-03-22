@@ -65,6 +65,10 @@ let unopt def = function
   | None -> def
   | Some x -> x
 
+let convopt f = function
+  | None -> None
+  | Some x -> Some (f x)
+
 let list_index f =
   List.fold_left (fun acc x ->
       let i = fst acc in

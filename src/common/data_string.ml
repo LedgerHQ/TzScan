@@ -33,7 +33,7 @@ let choose_fields header_all fields_all header =
 
 let transaction_header =
   ["transaction"; "block"; "network"; "source"; "destination"; "amount"; "fee";
-   "parameters"; "failed"; "internal"; "burned tez"; "counter"; "gas limit";
+   "date"; "parameters"; "failed"; "internal"; "burned tez"; "counter"; "gas limit";
    "storage limit"]
 
 let transaction header o =
@@ -49,6 +49,7 @@ let transaction header o =
                      tr.tr_dst.tz;
                      Int64.to_string tr.tr_amount;
                      Int64.to_string tr.tr_fee;
+                     tr.tr_timestamp;
                      Misc.unopt "" tr.tr_parameters;
                      string_of_bool tr.tr_failed;
                      string_of_bool tr.tr_internal;

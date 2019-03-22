@@ -14,8 +14,9 @@
 (*                                                                      *)
 (************************************************************************)
 
+open Ocp_js
+open Html
 open Data_types
-open Tyxml_js.Html5
 
 let tez_units = 1_000_000L
 (* let total_supply_cents = 763_306_929.69 (* cents *) *)
@@ -26,7 +27,7 @@ let icon () =
     if sym.[0] = '#' then
       entity sym
     else
-      pcdata sym
+      txt sym
   ]
 
 let dollar () =
@@ -62,7 +63,7 @@ let amount volumeL = (* in mutez *)
       Int64.to_float volumeL
     in
     span
-      [ pcdata @@ (Js.to_string number##toLocaleString()) ^ " ";
+      [ txt @@ (Js.to_string number##toLocaleString()) ^ " ";
         mu_icon ();
         icon ()]
   else
@@ -74,17 +75,17 @@ let amount volumeL = (* in mutez *)
     let s = Printf.sprintf "%s%c%06Ld" tez sep mutez in
     let n = non_zeroes s in
     let s = String.sub s 0 n in
-    span [ pcdata (s ^ " "); icon () ]
+    span [ txt (s ^ " "); icon () ]
 
 let pp_amount ?(precision=6) ?(width=15) ?order ?(icon=icon) volumeL =
-  if volumeL = 0L then span [ pcdata "0 "; icon ()]
+  if volumeL = 0L then span [ txt "0 "; icon ()]
   else
     let sign =
       if volumeL < 0L then "-"
       else "" in
     let volumeL = Int64.abs volumeL in
-    let units = [|mu_icon (); pcdata " m"; pcdata ""; pcdata "K";
-                  pcdata "M"; pcdata "B"; pcdata "T"|] in
+    let units = [|mu_icon (); txt " m"; txt ""; txt "K";
+                  txt "M"; txt "B"; txt "T"|] in
     let ndecimal = String.length (Int64.to_string volumeL) in
     let diff_length = ndecimal - width in
     let order = match order with
@@ -125,12 +126,12 @@ let pp_amount ?(precision=6) ?(width=15) ?order ?(icon=icon) volumeL =
     let n = non_zeroes decimal_str in
     let decimal_str = String.sub decimal_str 0 n in
     span [
-      span ~a:[ a_class ["pp-tez"] ] [ pcdata (sign ^ s) ] ;
+      span ~a:[ a_class ["pp-tez"] ] [ txt (sign ^ s) ] ;
       if decimal <> 0L then
-        span ~a:[ a_class ["pp-tez-decimal"] ] [ pcdata decimal_str ]
+        span ~a:[ a_class ["pp-tez-decimal"] ] [ txt decimal_str ]
       else
         span [ ] ;
-      span [ pcdata " "; units.(max order 0); icon() ] ;
+      span [ txt " "; units.(max order 0); icon() ] ;
     ]
 
 let pp_amount_float ?precision ?width ?order volumef =
@@ -141,7 +142,7 @@ let approx_amount volumeL = (* in mutez *)
     Js.number_of_float @@
     (Int64.to_float volumeL /. Int64.to_float tez_units) in
   span
-    [ pcdata @@ Js.to_string number##toLocaleString() ^ " "; icon ()]
+    [ txt @@ Js.to_string number##toLocaleString() ^ " "; icon ()]
 
 let amount_float volume = amount (Int64.of_float volume)
 
@@ -153,7 +154,7 @@ let amount_float_tez volume =
     Js.number_of_float @@
     Int64.to_float volumeL in
   span
-    [ pcdata @@ Js.to_string number##toLocaleString() ^ " "; icon ()]
+    [ txt @@ Js.to_string number##toLocaleString() ^ " "; icon ()]
 
 (* To print statistics *)
 
@@ -162,7 +163,7 @@ let amount_float_tez volume =
 let amount_100000u f =
   let f = f /. 10_000. in
   if f < 0.01 then
-    span [pcdata "0 "]
+    span [txt "0 "]
   else
     let m =
       if f < 10. then
@@ -188,7 +189,7 @@ let amount_100000u f =
                 else
                   Printf.sprintf "%.0f B" (f /. 1_000_000.)
     in
-    span [pcdata m; icon()]
+    span [txt m; icon()]
 
 let with_usd price_usd xtz =
   match price_usd with
@@ -205,8 +206,8 @@ let with_usd price_usd xtz =
     | Tezos_constants.Betanet ->
       [
         span ~a:[ a_class [ "usd-price" ] ] [
-          pcdata " ($";
-          pcdata @@ Js.to_string number##toLocaleString() ;
-          pcdata ")" ]
+          txt " ($";
+          txt @@ Js.to_string number##toLocaleString() ;
+          txt ")" ]
       ]
     | _ -> []

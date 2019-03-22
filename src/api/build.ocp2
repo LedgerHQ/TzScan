@@ -38,12 +38,15 @@ OCaml.library("tzscan-api-lib", ocaml+
     ];
     requires = [
       "database-reader-lib";
+      "database-writer-lib";
       "data-types-lib";
       "tzscan-config";
       "ez-api-cohttp";
       "ez-api-server";
+      "ez-api-curl";
       "tezos-explorer-services";
       "csv-lwt";
+      "ez-recaptcha";
     ];
   });
 
@@ -54,5 +57,16 @@ OCaml.program("tzscan-api-server", ocaml+
     ];
     requires = [
       "tzscan-api-lib";
+    ];
+  });
+
+OCaml.program("tzscan-openapi", ocaml+
+  {
+    files = [
+      "openapi_specs.ml";
+    ];
+    requires = [
+      "tezos-explorer-services";
+      "ez-api-server";
     ];
   });

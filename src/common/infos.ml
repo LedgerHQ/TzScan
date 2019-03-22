@@ -96,6 +96,9 @@ let www = {
   www_logo = "tzscan-logo.png" ;
   www_footer = "/footer.html" ;
   www_networks = [] ;
+  www_themes = [ "Light", "default"; "Dark", "slate" ] ;
+  www_recaptcha_key = None;
+  www_csv_server = None;
 }
 
 let save_api_config filename =

@@ -1,4 +1,6 @@
 
+open Ocp_js
+
 module IntMap = Map.Make(struct type t = int let compare = compare end)
 module UpdateOnFocus = struct
 
@@ -79,11 +81,11 @@ module UpdateOnFocus = struct
 
 end
 
-let input = Tyxml_js.Html5.input
+let input = Html.input
 
 let find_input input_id =
   let input = Js_utils.find_component input_id in
-  Tyxml_js.To_dom.of_input input
+  To_dom.of_input input
 
 let get_input_value input_id =
   Js.to_string (find_input input_id)##value

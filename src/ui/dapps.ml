@@ -29,7 +29,7 @@ let display container_id dapp_contract =
     try
       let f = Hashtbl.find dapps (dapp_contract : string) in
       let container = find_component container_id in
-      f (container : unit Tyxml_js.Of_dom.elt)
+      f (container : unit Ocp_js.Of_dom.elt)
     with Not_found -> ()
   with _ ->  ()
 

@@ -14,39 +14,19 @@
 (*                                                                      *)
 (************************************************************************)
 
-open Tezos_types
+open Ocp_js
+open Html
 open Js_utils
-open Tyxml_js.Html5
-open Lang (* s_ *)
+open Tezos_types
+open Lang
 
 module TEXT = struct
-  (*
-  let s_year = ss_ "year"
-  let s_years = ss_ "years"
-  let s_month = ss_ "month"
-  let s_months = ss_ "months"
-*)
   let s_day = ss_ "day"
   let s_days = ss_ "days"
-      (*
-  let s_hour = ss_ "hour"
-  let s_hours = ss_ "hours"
-  let s_min = ss_ "min"
-  let s_mins = ss_ "mins"
-*)
 end
 open TEXT
 
-(*
-let years y = if y > 1 then s_years else s_year
-let months m = if m > 1 then s_months else s_month
-*)
 let days d = if d > 1 then s_days else s_day
-(*
-let hours h = if h > 1 then s_hours else s_hour
-let minutes m = if m > 1 then s_mins else s_min
-let seconds _s = "s"
-*)
 
 
 let get_now () =

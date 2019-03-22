@@ -14,11 +14,12 @@
 (*                                                                      *)
 (************************************************************************)
 
-open Data_types
-open Tyxml_js.Html5
+open Ocp_js
+open Html
 open Js_utils
 open Bootstrap_helpers.Grid
 open Bootstrap_helpers.Icon
+open Data_types
 
 let find_url_arg arg =
   Misc.list_find_opt (fun (k, _v) -> k = arg) Url.Current.arguments
@@ -33,7 +34,8 @@ let make_doc ?base_url () =
       List.map (fun section ->
           EzAPI.section_name section,
           EzAPI.md_of_services ~section ?base_url
-            (Api_info.files @ Service_doc.doc)
+            (Api_info.files @
+             (List.map (fun (s1, _, s2) -> (s1, s2)) Service_doc.doc))
         ) (Service.V2.sections @
            (match find_url_arg "doc" with
             | None -> []
@@ -53,22 +55,22 @@ let make_doc ?base_url () =
             let section_name = Filename.remove_extension file in
             li ~a:[ a_class [ "list-group-item" ] ] [
               a ~a:[ a_href ("#" ^ section_name) ] [
-                pcdata (String.capitalize_ascii section_name)
+                txt (String.capitalize_ascii section_name)
               ]
             ])
           documentation ;
         div ~a:[ a_class [ "app-version" ]] [
-          div [ pcdata "Javascript version" ];
-          div [ clock_icon () ; space_icon () ; pcdata TzscanConfig.en_date ];
+          div [ txt "Javascript version" ];
+          div [ clock_icon () ; space_icon () ; txt TzscanConfig.en_date ];
           div [ code_branch_icon () ; space_icon () ;
-                pcdata @@ Printf.sprintf "Commit: %s" TzscanConfig.commit];
+                txt @@ Printf.sprintf "Commit: %s" TzscanConfig.commit];
         ];
         div ~a:[ a_class [ "app-version" ]; a_id "api-version" ] [
-          div [ pcdata "API Server version" ];
+          div [ txt "API Server version" ];
           div [ clock_icon () ; space_icon () ;
-                pcdata Infos.api.api_versions.server_build ];
+                txt Infos.api.api_versions.server_build ];
           div [ code_branch_icon () ; space_icon () ;
-                pcdata (Printf.sprintf "Commit: %s"
+                txt (Printf.sprintf "Commit: %s"
                           Infos.api.api_versions.server_commit) ]
 
         ]
@@ -107,9 +109,9 @@ let make_doc ?base_url () =
                         let id = string_of_int !nbuttons in
                         incr nbuttons;
                         let but = button ~a:[ a_id id ]
-                            [pcdata "Show/Hide"] in
+                            [txt "Show/Hide"] in
                         let div = div [ but ] in
-                        let div = Tyxml_js.Html5.toelt div in
+                        let div = toelt div in
                         Dom.appendChild section_div div;
                         Dom.replaceChild section_div div pre;
                         Dom.appendChild div pre;
@@ -122,7 +124,7 @@ let make_doc ?base_url () =
                               (if !state then "none" else "");
                           Js._true
                         in
-                        (Tyxml_js.To_dom.of_button b)##onclick <-
+                        (To_dom.of_button b)##onclick <-
                           Dom_html.handler handler;
                         pre##style##display <- Js.string "none";
                   with _exn ->

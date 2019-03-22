@@ -14,8 +14,8 @@
 (*                                                                      *)
 (************************************************************************)
 
-open Tyxml_js.Html5
-open Data_types
+open Ocp_js
+open Html
 open Js_utils
 open Bootstrap_helpers.Icon
 open Bootstrap_helpers.Grid
@@ -23,8 +23,9 @@ open Bootstrap_helpers.Panel
 open Bootstrap_helpers.Table
 open Bootstrap_helpers.Color
 open Bootstrap_helpers.Align
-open Lang (* s_ *)
 open Tezos_types
+open Data_types
+open Lang (* s_ *)
 open Text
 
 let activation_alert_id = "activation_alert"
@@ -46,7 +47,7 @@ let update_timestamp op_hash op_block_hash index timestamp =
 let update_level op_hash op_block_hash index level =
   let lvl_span = find_component @@ level_id op_hash op_block_hash index in
   Manip.replaceChildren lvl_span
-    [ a ~a:( Common.a_link op_block_hash ) [ pcdata @@ string_of_int level ]  ]
+    [ a ~a:( Common.a_link op_block_hash ) [ txt @@ string_of_int level ]  ]
 
 let cl_title = Common.responsive_column_title
 let cl_icon = Common.responsive_title
@@ -57,14 +58,14 @@ module GenericOpsDisplay
     (Arg : sig
        val name : string
        val help_doc : Glossary_doc.helpers
-       val theads : unit -> [> Html_types.tr ] Tyxml_js.Html5.elt
+       val theads : unit -> [> Html_types.tr ] Ocp_js.elt
        val to_rows : Data_types.operation list ->
-         [> Html_types.tr ] Tyxml_js.Html5.elt list
+         [> Html_types.tr ] Ocp_js.elt list
      end) :
 sig
 
   val make :
-    ?pending:bool -> unit -> [> Html_types.div ] Tyxml_js.Html5.elt
+    ?pending:bool -> unit -> [> Html_types.div ] Ocp_js.elt
 
   val update :
     pending:bool ->
@@ -77,7 +78,7 @@ end = struct
     let title_span name = Panel.title_nb name ~help:Arg.help_doc
     let theads = Arg.theads
     let page_size = Common.big_panel_number
-    let table_class = "transactions-table"
+    let table_class = "default-table"
   end
 
   module Final =
@@ -140,7 +141,7 @@ module Transactions =
         List.map
           (fun (op_hash, op_block_hash, src, transaction) ->
             let src, arrow, dst =
-              Common.account_w_blockies src,
+              Common.account_w_blockies ~crop_len:12 src,
               (if transaction.tr_failed then
                  td ~a:[ a_title "Fail" ; a_class [ red; text_center ] ]
                    [ cross_icon () ]
@@ -149,10 +150,10 @@ module Transactions =
                  td ~a:[ a_class [ green; text_center ] ] [ right_icon () ]
                else
                  td ~a:[ a_class [ blue; text_center ] ] [ right_left_arrow_icon () ]),
-              Common.account_w_blockies transaction.tr_dst
+              Common.account_w_blockies ~crop_len:12 transaction.tr_dst
             in
             let param = match transaction.tr_parameters with
-                None -> td [ pcdata_t s_no ]
+                None -> td [ txt_t s_no ]
               | Some p ->
                 let template=
                   Printf.sprintf "<div class=\"%s\">%s</div>"
@@ -165,17 +166,17 @@ module Transactions =
                          Bootstrap_helpers.Attributes.a_data_trigger "focus";
                          Bootstrap_helpers.Attributes.a_role "button";
                          a_tabindex 0;
-                         to_attrib @@ Tyxml_js.Xml.string_attrib "container" "body" ;
+                         to_attrib @@ Ocp_js.Xml.string_attrib "container" "body" ;
                          (* Bootstrap_helpers.Attributes.a_data_content hash; *)
                          Bootstrap_helpers.Attributes.a_data_content template;
                        ] [
-                    pcdata_t s_yes ]
+                    txt_t s_yes ]
                 ] in
             let internal_td, cls_internal =
-              if not transaction.tr_internal then td [ pcdata_t s_no ], []
-              else td [ pcdata_t s_yes ], [ "warning" ] in
+              if not transaction.tr_internal then td [ txt_t s_no ], []
+              else td [ txt_t s_yes ], [ "warning" ] in
             tr ~a:[ a_class (Common.failed_class transaction.tr_failed @ cls_internal)] [
-              td [ Common.make_link op_hash ] ;
+              td [ Common.make_link ~crop_len:15 ~crop_limit:md_size op_hash ] ;
               td [ Common.make_link ~path:op_block_hash
                    @@ string_of_int transaction.tr_op_level ] ;
               td [ Format_date.auto_updating_timespan transaction.tr_timestamp ] ;
@@ -184,7 +185,7 @@ module Transactions =
               dst ;
               td [ Tez.pp_amount transaction.tr_amount ] ;
               td [ if transaction.tr_internal
-                   then pcdata Common.bullshit_s
+                   then txt Common.bullshit_s
                    else Tez.pp_amount transaction.tr_fee ] ;
               param ;
               internal_td
@@ -211,26 +212,15 @@ module Activations =
         ]
 
       let to_rows acts =
-        List.mapi (fun i (op_hash, op_block_hash, activation) ->
-            Common.timestamp
-              op_block_hash (update_timestamp op_hash op_block_hash i);
-            Common.level
-              op_block_hash (update_level op_hash op_block_hash i);
-            let pkh = Common.account_w_blockies activation.act_pkh in
-            let secret = td [ pcdata activation.act_secret ] in
-            let lvl, timestamp =
-              if op_block_hash <> Utils.pending_block_hash then
-                Text.s_bullshit, Text.s_bullshit
-              else
-                Text.s_pending, Text.s_pending
-            in
+        List.map (fun (op_hash, op_block_hash, activation) ->
+            let pkh = Common.account_w_blockies ~crop_len:15
+                activation.act_pkh in
+            let secret = td [ txt activation.act_secret ] in
             tr [
-              td [ Common.make_link op_hash ] ;
-              td ~a:[ a_id @@ level_id op_hash op_block_hash i ]
-                [ pcdata_t lvl
-                (* Common.make_link op.op_block_hash *) ] ;
-              td ~a:[ a_id @@ timestamp_id op_hash op_block_hash i ]
-                [ pcdata_t timestamp ] ;
+              td [ Common.make_link ~crop_len:15 ~crop_limit:md_size op_hash ] ;
+              td [ Common.make_link ~path:op_block_hash
+                   @@ string_of_int activation.act_op_level ] ;
+              td [ Format_date.auto_updating_timespan activation.act_timestamp ] ;
               pkh ;
               secret
             ]) @@ Common.get_activations acts
@@ -260,16 +250,16 @@ module Endorsements =
         List.map
           (fun (op_hash, op_block_hash, endorse) ->
              tr [
-               td [ Common.make_link op_hash ] ;
+               td [ Common.make_link ~crop_len:15 ~crop_limit:md_size op_hash ] ;
                td [ Common.make_link ~path:op_block_hash
                     @@ string_of_int endorse.endorse_op_level] ;
                td [ Format_date.auto_updating_timespan endorse.endorse_timestamp] ;
-               Common.account_w_blockies endorse.endorse_src;
-               td [ pcdata @@
+               Common.account_w_blockies ~crop_len:12 endorse.endorse_src;
+               td [ txt @@
                     String.concat ", " @@
                     List.map string_of_int endorse.endorse_slot ] ;
-               td [ Common.make_link endorse.endorse_block_hash ] ;
-               td [ pcdata @@ string_of_int endorse.endorse_priority ] ;
+               td [ Common.make_link ~crop_len:12 endorse.endorse_block_hash ] ;
+               td [ txt @@ string_of_int endorse.endorse_priority ] ;
                ]) @@ Common.get_endorsements txs
     end)
 (* end of Endorsements panels *)
@@ -294,37 +284,27 @@ module Delegations =
         ]
 
       let to_rows txs =
-        List.mapi (fun i (op_hash, op_block_hash, src, del) ->
-            Common.timestamp
-              op_block_hash (update_timestamp op_hash op_block_hash i);
-            Common.level
-              op_block_hash (update_level op_hash op_block_hash i);
-            let lvl, timestamp =
-              if op_block_hash <> Utils.pending_block_hash then
-                Text.s_bullshit, Text.s_bullshit
-              else
-                Text.s_pending, Text.s_pending
-            in
+        List.map (fun (op_hash, op_block_hash, src, del) ->
             let td_delegate, td_arrow = match del.del_delegate with
-              | {tz = ""; _ } -> td [ pcdata "unset" ],
+              | {tz = ""; _ } -> td [ txt "unset" ],
                       td ~a:[ a_class [ blue ; "center" ] ]
                         [ span ~a:[ a_class [ "fa"; "fa-arrow-down" ] ] [] ]
-              | _ -> Common.account_w_blockies del.del_delegate,
+              | _ -> Common.account_w_blockies
+                       ~crop_len:12 del.del_delegate,
                      td ~a:[ a_class [ green ; text_center ] ] [ right_icon () ] in
             let internal_td, cls_internal =
-              if not del.del_internal then td [ pcdata_t s_no ], []
-              else td [ pcdata_t s_yes ], [] in
+              if not del.del_internal then td [ txt_t s_no ], []
+              else td [ txt_t s_yes ], [] in
             tr ~a:[ a_class (Common.failed_class del.del_failed @ cls_internal)] [
-              td [ Common.make_link op_hash ] ;
-              td ~a:[ a_id @@ level_id op_hash op_block_hash i ]
-                [ pcdata_t lvl ] ;
-              td ~a:[ a_id @@ timestamp_id op_hash op_block_hash i ]
-                [ pcdata_t timestamp ] ;
-              Common.account_w_blockies src ;
+              td [ Common.make_link ~crop_len:15 ~crop_limit:md_size op_hash ] ;
+              td [ Common.make_link ~path:op_block_hash
+                    @@ string_of_int del.del_op_level] ;
+              td [ Format_date.auto_updating_timespan del.del_timestamp] ;
+              Common.account_w_blockies ~crop_len:12 src ;
               td_arrow ;
               td_delegate ;
               td [ if del.del_internal
-                   then pcdata Common.bullshit_s else Tez.pp_amount del.del_fee ] ;
+                   then txt Common.bullshit_s else Tez.pp_amount del.del_fee ] ;
               internal_td
             ]) @@ Common.get_delegations txs
 
@@ -353,33 +333,22 @@ module Originations =
         ]
 
       let to_rows txs =
-        List.mapi (fun i (op_hash, op_block_hash, src, orig) ->
-            Common.timestamp
-              op_block_hash (update_timestamp op_hash op_block_hash i);
-            Common.level
-              op_block_hash (update_level op_hash op_block_hash i);
-            let lvl, timestamp =
-              if op_block_hash <> Utils.pending_block_hash then
-                Text.s_bullshit, Text.s_bullshit
-              else
-                Text.s_pending, Text.s_pending
-            in
+        List.map (fun (op_hash, op_block_hash, src, orig) ->
             let burn = orig.or_burn in
             let internal_td, cls_internal =
-              if not orig.or_internal then td [ pcdata_t s_no ], []
-              else td [ pcdata_t s_yes ], [ "warning" ] in
+              if not orig.or_internal then td [ txt_t s_no ], []
+              else td [ txt_t s_yes ], [ "warning" ] in
             tr ~a:[ a_class (Common.failed_class orig.or_failed @ cls_internal)] [
-              td [ Common.make_link op_hash ] ;
-              td ~a:[ a_id @@ level_id op_hash op_block_hash i ] [
-                pcdata_t lvl ] ;
-              td ~a:[ a_id @@ timestamp_id op_hash op_block_hash i ] [
-                pcdata_t timestamp ] ;
-              Common.account_w_blockies orig.or_tz1 ;
+              td [ Common.make_link ~crop_len:15 op_hash ] ;
+              td [ Common.make_link ~path:op_block_hash
+                    @@ string_of_int orig.or_op_level] ;
+              td [ Format_date.auto_updating_timespan orig.or_timestamp] ;
+              Common.account_w_blockies ~crop_len:12 orig.or_tz1 ;
               td [ Tez.pp_amount orig.or_balance ] ;
-              Common.account_w_blockies src;
-              Common.account_w_blockies orig.or_manager ;
+              Common.account_w_blockies ~crop_len:12 src;
+              Common.account_w_blockies ~crop_len:12 orig.or_manager ;
               td [ if orig.or_internal
-                   then pcdata_t Text.s_bullshit else Tez.pp_amount orig.or_fee ] ;
+                   then txt_t Text.s_bullshit else Tez.pp_amount orig.or_fee ] ;
               td [ Tez.pp_amount burn ] ;
               internal_td
             ]) @@ Common.get_originations txs
@@ -402,21 +371,19 @@ module Nonces = struct
   let nb_revelations ~cst =
     cst.blocks_per_cycle / cst.blocks_per_commitment
 
-  let generate_nonces ~cst ops =
-    let revealed i =
-      let tmp = List.find_opt (fun (lvl, _op) ->
-          ((lvl - 1) mod cst.blocks_per_cycle) / cst.blocks_per_commitment = i) ops in
-      match tmp with
+  let generate_nonces nonces =
+    let revealed (op_hash, _level, bl_hash) =
+      match op_hash with
       | None ->
-        td ~a:[a_class [cxs2; "slot-gray"]] [ div [ space_icon () ] ]
-      | Some (_lvl, op) ->
-        td ~a:[a_class [cxs2; "slot-green"]] [
-          a ~a:( Common.a_link op ) [ div [ space_icon () ] ] ] in
+        td ~a:[a_class [cxs2; "bg-red"]] [
+          a ~a:( Common.a_link bl_hash ) [ div [ space_icon () ] ] ]
+      | Some op_hash ->
+        td ~a:[a_class [cxs2; "bg-green"]] [
+          a ~a:( Common.a_link op_hash ) [ div [ space_icon () ] ] ] in
 
-    let nonces = Array.init (nb_revelations ~cst) revealed in
     div ~a:[ a_class [ row ; "nonces" ] ] [
       tablex ~a:[ a_class [ btable; btable_bordered; clg12 ] ]
-        [ tbody [ tr (Array.to_list nonces) ] ]
+        [ tbody [ tr (List.map revealed nonces) ] ]
     ]
 
   let make () =
@@ -427,17 +394,18 @@ module Nonces = struct
   let to_rows nonces_list =
     List.map (fun (cycle, nonces) ->
         let cst = Infos.constants ~cycle in
-        let ops = List.fold_left (fun acc (op_hash, levels) ->
-            acc @ List.map (fun lvl -> (lvl, op_hash)) levels) [] nonces in
+        let n_revelations =
+          List.fold_left (fun i (op_hash, _, _) ->
+              if op_hash <> None then i+1 else i) 0 nonces in
         make_panel
           ~panel_title_content:(
             div ~a:[ a_class [ panel_title ] ] [
-              pcdata @@ Printf.sprintf "%.0f%% %s %d"
-                (float_of_int (List.length ops) /.
+              txt @@ Printf.sprintf "%.0f%% %s %d"
+                (float_of_int n_revelations /.
                  float_of_int (nb_revelations ~cst) *. 100.)
                 (t_ s_nonces_revelation_for_cycle)
                 cycle ])
-          ~panel_body_content:[ generate_nonces ~cst ops ]
+          ~panel_body_content:[ generate_nonces nonces ]
           ()
       ) nonces_list
 
@@ -483,11 +451,11 @@ module Double_Bakings =
               let args = [ "level", level ] in
               Common.make_link level ~path ~args in
             tr [
-              td [ Common.make_link op_hash ] ;
+              td [ Common.make_link ~crop_len:15 op_hash ] ;
               td ~a:[ a_id @@ level_id op_hash op_block_hash i ] [
-                pcdata_t lvl] ;
+                txt_t lvl] ;
               td ~a:[ a_id @@ timestamp_id op_hash op_block_hash i ] [
-                pcdata_t timestamp ] ;
+                txt_t timestamp ] ;
               Common.account_w_blockies ~crop_len:15 dbe.double_baking_denouncer ;
               td [ Tez.pp_amount ~precision:2 dbe.double_baking_gain_rewards ] ;
               Common.account_w_blockies ~crop_len:15 dbe.double_baking_accused ;
@@ -535,7 +503,7 @@ module Double_Endorsements =
             | Some endorse1, Some endorse2 ->
               let level = string_of_int endorse1.endorse_block_level in
               let level_link =
-                a ~a:( Common.a_link op_block_hash ) [ pcdata level ] in
+                a ~a:( Common.a_link op_block_hash ) [ txt level ] in
               let block1_link =
                 Common.make_link endorse1.endorse_block_hash in
               let block2_link =
@@ -543,9 +511,9 @@ module Double_Endorsements =
               tr [
                 td [ Common.make_link op_hash ] ;
                 td ~a:[ a_id @@ level_id op_hash op_block_hash i ] [
-                  pcdata_t lvl] ;
+                  txt_t lvl] ;
                 td ~a:[ a_id @@ timestamp_id op_hash op_block_hash i ] [
-                  pcdata_t timestamp ] ;
+                  txt_t timestamp ] ;
                 td [ level_link ] ;
                 td [ block1_link ] ;
                 td [ block2_link ] ;
@@ -554,12 +522,12 @@ module Double_Endorsements =
               tr [
                 td [ Common.make_link op_hash ] ;
                 td ~a:[ a_id @@ level_id op_hash op_block_hash i ] [
-                  pcdata_t s_cant_recover ] ;
+                  txt_t s_cant_recover ] ;
                 td ~a:[ a_id @@ timestamp_id op_hash op_block_hash i ] [
-                  pcdata_t s_cant_recover ] ;
-                td [ pcdata_t s_cant_recover ] ;
-                td [ pcdata_t s_cant_recover ] ;
-                td [ pcdata_t s_cant_recover ] ;
+                  txt_t s_cant_recover ] ;
+                td [ txt_t s_cant_recover ] ;
+                td [ txt_t s_cant_recover ] ;
+                td [ txt_t s_cant_recover ] ;
               ]) @@ Common.get_double_endorsements_evidence txs
 
     end)
@@ -568,7 +536,7 @@ module Double_Endorsements =
 let make_activation_alert () =
   div ~a:[ a_id activation_alert_id; a_class [ clg12 ] ] [
     div ~a:[ a_class [ "alert" ] ] [
-      strong [ pcdata_t s_loading ]
+      strong [ txt_t s_loading ]
     ]
   ]
 
@@ -576,10 +544,10 @@ let update_activation_alert balances =
   let container = find_component activation_alert_id in
   let content =
     div ~a:[ a_class [ "alert"; "alert-info" ] ] [
-      strong [ pcdata (Printf.sprintf "%s: "
+      strong [ txt (Printf.sprintf "%s: "
                          (t_ s_total_activated_balances)) ] ;
       Tez.approx_amount balances ;
-      pcdata @@ Printf.sprintf " (%Ld%% %s)"
+      txt @@ Printf.sprintf " (%Ld%% %s)"
           (Int64.div (Int64.mul balances 100L)
              Infos.api.api_config.conf_ico.ico_contributors_tokens)
           (t_ s_of_total_allocations);

@@ -14,16 +14,18 @@
 (*                                                                      *)
 (************************************************************************)
 
-open Lang
-open Tyxml_js.Html5
-open Data_types
+open Ocp_js
+open Html
 open Js_utils
-open Common
 open Bootstrap_helpers.Icon
 open Bootstrap_helpers.Button
 open Bootstrap_helpers.Color
+open Bootstrap_helpers.Grid
 open Tezos_types
+open Data_types
+open Lang
 open Text
+open Common
 
 let blocks_id = "blocks"
 let heads_id = "heads"
@@ -50,7 +52,7 @@ module BlocksTable = struct
     ]
 
   let page_size = 20
-  let table_class = "blocks-table"
+  let table_class = "default-table"
 end
 
 let s_blocks = ss_ "Blocks"
@@ -68,7 +70,7 @@ let make_blocks () = BlocksPanel.make_clg12 ~footer:true ()
 module UnclesPanel = struct
 
   let uncles_title_span level _nb =
-    span [ pcdata
+    span [ txt
              (Printf.sprintf "Blocks at level %d" level) ;
            Glossary_doc.(help HAlternatives) (* TODO ? *)
          ]
@@ -81,23 +83,29 @@ module UnclesPanel = struct
 end
 
 let to_rows ?(snapshots=[]) ?(uncles=false) blocks =
-  List.map (fun block ->
+  List.map (fun (block, pred_fitness) ->
       let timestamp_str = Date.to_string block.timestamp in
       let td_timestamp = td [ ] in
       Manip.appendChild td_timestamp
         (Format_date.auto_updating_timespan timestamp_str);
-      let td_priority = td [ pcdata @@ string_of_int block.priority ] in
+      let td_priority = td [ txt @@ string_of_int block.priority ] in
       let td_baker_version =
         let version = "0x" ^ String.sub block.pow_nonce 0 8  in
-        if int_of_string version = baker_version then
-          td ~a:[ a_title @@ Printf.sprintf "%S: up to date" block.pow_nonce ] [
-            span ~a:[ a_class [ green ] ] [ check_icon () ]
-          ]
-        else
-          td ~a:[ a_title (Printf.sprintf "%S: not running the \
-                                           latest version of the baker."
-                             block.pow_nonce) ] [
-            span ~a:[ a_class [ "yellow" ] ] [ exclamation_icon ()  ]
+        match int_of_string_opt version with
+        | Some version ->
+          if version =  baker_version then
+            td ~a:[ a_title @@ Printf.sprintf "%S: up to date" block.pow_nonce ] [
+              span ~a:[ a_class [ green ] ] [ check_icon () ]
+            ]
+          else
+            td ~a:[ a_title (Printf.sprintf "%S: not running the \
+                                             latest version of the baker."
+                               block.pow_nonce) ] [
+              span ~a:[ a_class [ "yellow" ] ] [ exclamation_icon ()  ]
+            ]
+        | None ->
+          td ~a:[ a_title (Printf.sprintf "No version found.") ] [
+            span ~a:[ a_class [ "red" ] ] [ cross_icon ()  ]
           ] in
       let is_snapshot = List.mem block.level snapshots in
       let camera = if is_snapshot then [space_icon (); camera_icon ()] else [] in
@@ -114,24 +122,28 @@ let to_rows ?(snapshots=[]) ?(uncles=false) blocks =
         if block.distance_level = 0 then
           string_of_int block.level
         else block.hash in
+      let fitness, pred_fitness =
+        get_fitness block.fitness, get_fitness pred_fitness in
+      let diff_fitness = fitness - pred_fitness in
       tr ~a:cls
          [
-          td (Common.make_link h_link ~path:link :: camera) ;
+          td (make_link h_link ~path:link :: camera) ;
           td_timestamp ;
           td_priority ;
-          td [ pcdata @@ string_of_int block.nb_operations ] ;
+          td [ txt @@ string_of_int block.nb_operations ] ;
           td [Tez.pp_amount ~width:6 block.volume] ;
           td [Tez.pp_amount block.fees] ;
-          td [ pcdata @@ string_of_int @@ Common.get_fitness block.fitness ] ;
+          td [ txt @@ Printf.sprintf "%d (+%d)" fitness diff_fitness ];
           begin
             if uncles then
-              td [ Common.pcdata_ () ]
+              td [ txt_ () ]
             else
-              td ~a:[ a_id @@ Common.block_uncles_id block.hash ]
-                 [ Common.pcdata_ () ]
+              td ~a:[ a_id @@ block_uncles_id block.hash ]
+                 [ txt_ () ]
           end;
-          Common.account_w_blockies ~aclass:["no-overflow"] block.baker;
-          td [ pcdata block.protocol.proto_name ] ;
+          account_w_blockies ~aclass:["no-overflow"]
+            ~crop_len:20 ~crop_limit:md_size block.baker;
+          td [ txt (crop_hash ~crop_len:10 block.protocol.proto_name) ] ;
           td_baker_version ;
     ]) blocks
 
@@ -179,7 +191,7 @@ module SnapshotBlocksPanel =
                     ]
 
                   let page_size = 20
-                  let table_class = "blocks-table"
+                  let table_class = "default-table"
                 end)
 
 let make_snapshot_blocks () = SnapshotBlocksPanel.make ()
@@ -189,10 +201,10 @@ let snapshots_to_rows snapshots =
       let level_str = string_of_int snapshot.snap_level in
       tr
         [
-          td [ pcdata @@ string_of_int snapshot.snap_cycle] ;
-          td (Common.make_link level_str :: [space_icon (); camera_icon ()]) ;
-          td [ pcdata @@ string_of_int snapshot.snap_index ] ;
-          td [ pcdata @@ string_of_int snapshot.snap_rolls ] ;
+          td [ txt @@ string_of_int snapshot.snap_cycle] ;
+          td (make_link level_str :: [space_icon (); camera_icon ()]) ;
+          td [ txt @@ string_of_int snapshot.snap_index ] ;
+          td [ txt @@ string_of_int snapshot.snap_rolls ] ;
         ]) snapshots
 
 let update_snapshot_blocks ?nrows xhr =
@@ -201,11 +213,11 @@ let update_snapshot_blocks ?nrows xhr =
 (* Baking Rights Page *)
 let columns () =
   tr [
-    th [ Lang.pcdata_t s_level ] ;
-    th [ Lang.pcdata_t s_first_priority ] ;
-    th [ Lang.pcdata_t s_second_priority ] ;
-    th [ Lang.pcdata_t s_third_priority ] ;
-    th [ Lang.pcdata_t s_fourth_priority ] ;
+    th [ Lang.txt_t s_level ] ;
+    th [ Lang.txt_t s_first_priority ] ;
+    th [ Lang.txt_t s_second_priority ] ;
+    th [ Lang.txt_t s_third_priority ] ;
+    th [ Lang.txt_t s_fourth_priority ] ;
   ]
 
 module BakingRightsPanel =
@@ -214,7 +226,7 @@ module BakingRightsPanel =
     let title_span nb = Panel.title_nb s_baking_rights nb
     let page_size = 10
     let theads = columns
-    let table_class = "blocks-table"
+    let table_class = "default-table"
   end)
 
 module PassedBakingRightsPanel =
@@ -223,7 +235,7 @@ module PassedBakingRightsPanel =
     let title_span nb = Panel.title_nb  s_passed_baking_rights nb
     let page_size = 10
     let theads = columns
-    let table_class = "blocks-table"
+    let table_class = "default-table"
   end)
 
 let to_rows_priorities prs =
@@ -240,20 +252,22 @@ let to_rows_priorities prs =
 
       let baker_td = match list_index_opt 0 priorities prio with
         | None when prio = baked_prio ->
-          Common.account_w_blockies ~after:[space_icon (); cookie_icon ()] baker
+          account_w_blockies ~after:[space_icon (); cookie_icon ()] baker
         | None -> td []
         | Some i ->
           begin match List.nth_opt bkrs i with
             | _ when prio = baked_prio ->
-              Common.account_w_blockies ~after:[space_icon (); cookie_icon ()] baker
+              account_w_blockies
+                ~crop_len:15 ~crop_limit:md_size
+                ~after:[space_icon (); cookie_icon ()] baker
             | None -> td []
             | Some bk ->
-              Common.account_w_blockies bk
+              account_w_blockies ~crop_len:15 ~crop_limit:md_size bk
           end in
       baker_td :: mk_bakers  (prio - 1) bkrs priorities baked in
   List.map (fun pr ->
       tr (
-        (td [ pcdata @@ string_of_int pr.r_level ]) ::
+        (td [ txt @@ string_of_int pr.r_level ]) ::
         (List.rev @@ mk_bakers 3 pr.r_bakers pr.r_bakers_priority pr.r_baked))
       ) prs
 
@@ -261,12 +275,12 @@ let make_baking_rights () =
   div [
     form ~a:[ a_id "filter-form"; a_autocomplete false; a_role ["search"]] [
       div ~a:[ a_class ["autocomplete"] ] [
-        Tyxml_js.Html5.input ~a:[ a_id "filter"; a_class ["form-control"; "search-input"];
+        input ~a:[ a_id "filter"; a_class ["form-control"; "search-input"];
                                   a_placeholder (t_ s_account_hash_alias);
                                   a_input_type `Search;
                  a_name "q"] ()];
       button ~a:[ a_id "filter-button"; a_class [btn; btn_default] ]
-        [ pcdata_t s_filter]];
+        [ txt_t s_filter]];
     BakingRightsPanel.make_clg12 ();
     PassedBakingRightsPanel.make_clg12 ();
   ]

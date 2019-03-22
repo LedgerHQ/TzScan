@@ -14,6 +14,7 @@
 (*                                                                      *)
 (************************************************************************)
 
+open Ocp_js
 open Data_types
 
 module Services = struct

@@ -14,16 +14,15 @@
 (*                                                                      *)
 (************************************************************************)
 
-open Lang
 open StringCompat
-open Data_types
-open Tezos_types
-open Tyxml_js.Html5
-open Js
+open Ocp_js
+open Html
 open Js_utils
 open Bootstrap_helpers.Table
 open Bootstrap_helpers.Form
-open EzAPI.TYPES
+open Tezos_types
+open Data_types
+open Lang
 open Text
 
 let do_and_update_every = Misc_js.UpdateOnFocus.update_every
@@ -87,7 +86,6 @@ let redraw () =
   end
 
 
-
 let () =
   Random.self_init ();
   Lang.init redraw
@@ -96,7 +94,7 @@ let () =
 
 let api_host = ref None
 
-let base_of_host host = BASE (Jsloc.proto() ^ host)
+let base_of_host host = EzAPI.TYPES.BASE (Jsloc.proto() ^ host)
 let set_api_host host = api_host := Some (base_of_host host)
 
 let set_api_node () =
@@ -140,9 +138,9 @@ let api s = match !api_host with
   | Some api_host -> api_host
 
 module OptionsStorage = JsStorage.MakeLocal(struct
-                             type t = string StringMap.t
-                             let name = "options"
-                           end)
+    type t = string StringMap.t
+    let name = "options"
+  end)
 
 let options = match OptionsStorage.get () with
   | None -> StringMap.empty
@@ -182,7 +180,7 @@ let stop_update_delay = 3. *. 60. *. 1000. (* 3 minutes *)
 let () =
   Dom_html.window##onblur <-
     Dom_html.handler (fun _ ->
-        window_focused := Blurred_since (jsnew date_now ())##valueOf();
+        window_focused := Blurred_since (jsnew Js.date_now ())##valueOf();
         Js._true);
   Dom_html.window##onfocus <-
     Dom_html.handler (fun _ ->
@@ -190,15 +188,15 @@ let () =
         Js._true)
 
 (* ****************** *)
-let loading () = span [ pcdata_t s_loading ]
+let loading () = span [ txt_t s_loading ]
 let bullshit_s = "--"
 let bullshit_d = ~-1
-let pcdata_ () = pcdata "--"
+let txt_ () = txt "--"
 
 (* The two functions below can probably be used in operation_ui to
    refactor some code *)
 let mk_row_lbl clg lbl =
-  div ~a:[ a_class [ clg; "lbl" ] ] [ Jslang.pcdata_s lbl ]
+  div ~a:[ a_class [ clg; "lbl" ] ] [ Jslang.txt_s lbl ]
 
 let mk_row_val clg v =
   div ~a:[ a_class [ clg; "value" ] ] v
@@ -226,7 +224,7 @@ let responsive_title icon title =
       icon ()
     ];
     span ~a:[ a_class [ "hidden-xs"; "hidden-sm" ] ] [
-      pcdata title
+      txt title
     ]
   ]
 
@@ -236,7 +234,7 @@ let responsive_title_xs icon title =
       icon ()
     ];
     span ~a:[ a_class [ "hidden-xs" ] ] [
-      pcdata title
+      txt title
     ]
   ]
 
@@ -253,10 +251,10 @@ let responsive_title_fun icon title value =
 let responsive_column_title title abbrev =
   [
     span ~a:[ a_class [ "visible-xs-inline"; "visible-sm-inline" ] ] [
-      pcdata abbrev
+      txt abbrev
     ];
     span ~a:[ a_class [ "hidden-xs"; "hidden-sm" ] ] [
-      pcdata title
+      txt title
     ]
   ]
 
@@ -323,6 +321,7 @@ let a_link ?(args=[]) ?(aclass=[]) path =
                Js.some (Js.string path));
              Jsloc.set_args args;
              dispatch (OcpString.split_simplify path '/');
+             Dom_html.window##scroll(0,0);
              let nav_bar = find_component "mainNavBar" in
              Manip.removeClass nav_bar "in";
              false);
@@ -358,26 +357,26 @@ let set_children id v =
   Js_utils.Manip.removeChildren td;
   Js_utils.Manip.appendChildren td v
 
-let crop_hash ?crop_len hash =
+let crop_hash ?crop_len ?(crop_limit=max_int) hash =
   match crop_len with
-  | Some crop_len ->
+  | Some crop_len when Dom_html.window##screen##width < crop_limit ->
     let len = String.length hash in
     if len < crop_len then hash
     else
       String.sub hash 0 crop_len ^ "..."
-  | None -> hash
+  | _ -> hash
 
-let make_link ?crop_len ?(args=[]) ?(aclass=[]) ?path content =
+let make_link ?crop_len ?crop_limit ?(args=[]) ?(aclass=[]) ?path content =
   let path = match path with
     | None -> content
     | Some path -> path
   in
-  a ~a:( a_link ~args ~aclass path ) [ pcdata @@ crop_hash ?crop_len content ]
+  a ~a:( a_link ~args ~aclass path ) [ txt @@ crop_hash ?crop_len ?crop_limit content ]
 
-let make_link_account ?crop_len ?args account =
+let make_link_account ?crop_len ?crop_limit ?args account =
   make_link ?args
     (match account.alias with
-     | None -> crop_hash ?crop_len account.tz
+     | None -> crop_hash ?crop_len ?crop_limit account.tz
      | Some alias -> alias)
     ~path:account.tz
 
@@ -388,24 +387,24 @@ let make_link_level ?args hash level =
 let legend () =
   div ~a:[ a_class [ "legend" ] ] [
     div [
-      div ~a:[ a_class [ "slot-green"; "slot-legend" ] ] [ ] ;
-      span [ pcdata "Current Block" ] ;
+      div ~a:[ a_class [ "bg-green"; "slot-legend" ] ] [ ] ;
+      span [ txt "Current Block" ] ;
     ] ;
     div [
       div ~a:[ a_class [ "slot-legend" ] ] [ ] ;
-      span[ pcdata "No Endorsement" ] ;
+      span[ txt "No Endorsement" ] ;
     ];
     div [
-      div ~a:[ a_class [ "slot-red"; "slot-legend" ] ] [ ] ;
-      span [ pcdata "Another Block" ] ;
+      div ~a:[ a_class [ "bg-red"; "slot-legend" ] ] [ ] ;
+      span [ txt "Another Block" ] ;
     ];
     div [
       div ~a:[ a_class [ "slot-double"; "slot-legend" ] ] [ ] ;
-      span[ pcdata "Double Endorsement" ] ;
+      span[ txt "Double Endorsement" ] ;
     ];
     div [
-      div ~a:[ a_class [ "slot-gray"; "slot-legend" ] ] [ ] ;
-      span[ pcdata "Pending Endorsement" ] ;
+      div ~a:[ a_class [ "bg-grey"; "slot-legend" ] ] [ ] ;
+      span[ txt "Pending Endorsement" ] ;
     ];
   ]
 
@@ -417,7 +416,7 @@ let is_double_endorsement i operations =
   | _ :: [] -> false
   | _ -> true
 
-let make_slot i = div [ pcdata @@ string_of_int i ]
+let make_slot i = div [ txt @@ string_of_int i ]
 
 let make_slots nb =
   Array.to_list @@
@@ -459,11 +458,11 @@ let update_endorsements_slots bhash slots operations =
             Js_utils.Manip.addClass row "slot-double"
           else if op_block_hash = Utils.pending_block_hash
                   && e.endorse_block_hash = bhash then
-            Js_utils.Manip.addClass row "slot-gray"
+            Js_utils.Manip.addClass row "bg-gray"
           else if e.endorse_block_hash = bhash then
-            Js_utils.Manip.addClass row "slot-green"
+            Js_utils.Manip.addClass row "bg-green"
           else
-            Js_utils.Manip.addClass row "slot-red" ;
+            Js_utils.Manip.addClass row "bg-red" ;
           row
         with Not_found -> row
       end) slots
@@ -477,9 +476,7 @@ let replace_div_by_id id list =
     Manip.replaceChildren div list
 
 let update_main_content div =
-  replace_div_by_id "content" [div];
-     (* Hack for scrollbar *)
-  ignore (Js.Unsafe.eval_string "jQuery('.scrollbar-macosx').scrollbar();")
+  replace_div_by_id "content" [div]
 
 let get_fitness raw_fitness =
   match String.split_on_char ' ' raw_fitness with
@@ -487,8 +484,6 @@ let get_fitness raw_fitness =
      (* TODO: do something with version ? *)
      int_of_float @@ float_of_string @@ "0x" ^ fitness
   | _ -> 0
-
-module Xhr = EzXhr
 
 let request_xhr ?error s = EzXhr.get1 ?error (api "request_xhr") s
 
@@ -558,7 +553,7 @@ let page_range page nb_pages =
     prefix @ pages @ suffix
   | _ -> assert false
 
-let make_fetching () =  Lang.pcdata_t s_fetching_data
+let make_fetching () =  Lang.txt_t s_fetching_data
 
 let cl_title = responsive_column_title
 let cl_icon = responsive_title
@@ -578,18 +573,18 @@ let get_div_by_id = get_ele_by_id Dom_html.CoerceTo.div
 let get_img_by_id = get_ele_by_id Dom_html.CoerceTo.img
 
 let account_w_blockies ?(scale=2) ?(aclass=[]) ?(before=[]) ?(after=[])
-    ?crop_len ?args account =
+    ?crop_len ?crop_limit ?args account =
     td ~a:[a_class ("account-w-blockies" :: aclass)]
       (before @ [ Base58Blockies.create ~scale account.tz;
-        make_link_account ?crop_len ?args account ] @ after)
+        make_link_account ?crop_len ?crop_limit ?args account ] @ after)
 
 let account_w_blockies_no_link ?(scale=2) ?(tdaclass=[]) ?(txtaclass=[])hash =
     td ~a:[a_class ("account-w-blockies" :: tdaclass)]
       [ Base58Blockies.create ~scale hash;
-        span ~a:[ a_class txtaclass] [ pcdata hash ] ]
+        span ~a:[ a_class txtaclass] [ txt hash ] ]
 
 let get_transactions ops =
-  List.fold_left (fun acc op ->
+  List.rev @@ List.fold_left (fun acc op ->
       match op.op_type with
       | Anonymous _ -> acc
       | Sourced sop ->
@@ -606,7 +601,7 @@ let get_transactions ops =
     ) [] ops
 
 let get_delegations ops =
-  List.fold_left (fun acc op ->
+  List.rev @@ List.fold_left (fun acc op ->
       match op.op_type with
       | Anonymous _ -> acc
       | Sourced sop ->
@@ -623,7 +618,7 @@ let get_delegations ops =
     ) [] ops
 
 let get_originations ops =
-  List.fold_left (fun acc op ->
+  List.rev @@ List.fold_left (fun acc op ->
       match op.op_type with
       | Anonymous _ -> acc
       | Sourced sop ->
@@ -660,7 +655,7 @@ let get_endorsements ops =
     ) [] ops
 
 let get_activations ops =
-  List.fold_left (fun acc op ->
+  List.rev @@ List.fold_left (fun acc op ->
       match op.op_type with
       | Anonymous list ->
          List.fold_left (fun acc aop ->
@@ -726,8 +721,8 @@ let choose_name account = match account.alias with
 
 let local_aliases = Hashtbl.create 11
 
-let pcdata_account account =
-  pcdata (match account.alias with
+let txt_account account =
+  txt (match account.alias with
       | Some alias -> alias
       | None ->
         try
@@ -736,26 +731,26 @@ let pcdata_account account =
     )
 
 let a_account s =
-  a ~a:(a_link s.tz) [pcdata_account s]
+  a ~a:(a_link s.tz) [txt_account s]
 
 let hash_to_name ?alias tz = {tz; alias}
 
 let time_diff timestamp =
-  let now = jsnew date_now () in
-  let timestamp_f = date##parse (Js.string timestamp) in
-  timestamp_f -. date##parse(now##toString())
+  let now = jsnew Js.date_now () in
+  let timestamp_f = Js.date##parse (Js.string timestamp) in
+  timestamp_f -. Js.date##parse(now##toString())
 
 let make_options ?(title="Cycle:") id_container arr update =
   let container = find_component id_container in
   let n = Array.length arr in
   let options =
     Array.to_list @@ Array.mapi (fun i s ->
-        if i=0 then option ~a:[ a_selected () ] (pcdata s)
-        else option (pcdata s)) arr in
+        if i=0 then option ~a:[ a_selected () ] (txt s)
+        else option (txt s)) arr in
   let select_elt =
     select ~a:[ a_class [form_control] ] options in
   Manip.Ev.onchange_select select_elt (fun _e ->
-      let select_eltjs = Tyxml_js.To_dom.of_select select_elt in
+      let select_eltjs = To_dom.of_select select_elt in
       let opt = select_eltjs##options##item(select_eltjs##selectedIndex) in
       let selection =
         Js.Opt.case opt
@@ -767,7 +762,7 @@ let make_options ?(title="Cycle:") id_container arr update =
       true);
   let content = form ~a:[ a_class [ form_inline ] ] [
       div ~a:[ a_class [ form_group ] ] [
-        label [ pcdata title; Bootstrap_helpers.Icon.space_icon () ] ;
+        label [ txt title; Bootstrap_helpers.Icon.space_icon () ] ;
         select_elt ] ] in
   Manip.removeChildren container ;
   Manip.appendChild container content ;
@@ -783,16 +778,26 @@ let update_by_class ?(attr="data-value") cl f =
   let l = Manip.by_class cl in
   List.iter (update_from_attr ~attr f) l
 
-let download_button elt xhr =
-  button ~a:[ a_button_type `Submit; a_onclick (fun _e ->
+let parse_attr_value s =
+  List.fold_left (fun acc s ->
+      let l = String.split_on_char '=' s in
+      match l with
+      | [ k; v ] -> (k, v) :: acc
+      | _ -> acc) [] (String.split_on_char ',' s)
+
+let download_button ?(btn_class=[]) ?btn_title elt src xhr =
+  let btn_title = match btn_title with
+    | None -> []
+    | Some title -> [ a_title title ] in
+  button ~a:([ a_button_type `Submit; a_class btn_class; a_onclick (fun _e ->
       xhr (fun s ->
-          Dom_html.window##location##href <- Js.string ("/download/" ^ s));
-      true) ] elt
+          Dom_html.window##location##href <- Js.string (src ^ s));
+      true) ] @ btn_title) elt
 
 let div_of_html html =
   let content = Dom_html.createDiv Dom_html.window##document in
   content##innerHTML <- Js.string html ;
-  Tyxml_js.Of_dom.of_div content
+  Of_dom.of_div content
 
 let compute_fees manager_ops =
   List.fold_left (fun acc op ->
@@ -806,3 +811,36 @@ let compute_fees manager_ops =
 let img_path logo =
   if String.length logo >= 7 && String.sub logo 0 7 = "http://" then logo
   else Printf.sprintf "/images/%s" logo
+
+let is_input_checked input_id =
+  match Manip.by_id input_id with
+  | None -> false
+  | Some input_elt ->
+    let input_obj = To_dom.of_input input_elt in
+    Js.to_bool input_obj##checked
+
+let change_theme theme =
+  let l = Manip.by_tag "link" in
+  List.iter (fun elt ->
+      let elt = To_dom.of_link elt in
+      let rel = elt##getAttribute(Js.string "rel") in
+      Js.Opt.case rel
+        (fun () -> ())
+        (fun rel ->
+           let rel = Js.to_string rel in
+           if rel = "stylesheet" ||
+              rel = "alternate stylesheet" then (
+             let title = elt##getAttribute(Js.string "title") in
+             Js.Opt.case title
+               (fun () -> ())
+               (fun title ->
+                  let title = Js.to_string title in
+                  elt##disabled <- Js._true;
+                  if title = ("color-" ^ theme) ||
+                     title = ("bootstrap-" ^ theme) then
+                    elt##disabled <- Js._false;
+               )))) l
+
+let txtf fmt =
+  Format.kfprintf (fun _fmt -> txt @@ Format.flush_str_formatter () )
+    Format.str_formatter fmt

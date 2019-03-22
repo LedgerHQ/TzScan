@@ -96,14 +96,9 @@ let block_of_tuple_noop
      commited_nonce_hash, pow_nonce,
      distance_level, nb_operations,
      validation_pass, proto, data, signature,
-     volume, fees,
-     protocol_name, test_protocol_name) =
-  let block_protocol =
-    { proto_name = protocol_name;
-      proto_hash = protocol; } in
-  let test_protocol =
-    { proto_name = test_protocol_name;
-      proto_hash = test_protocol; } in
+     volume, fees, _voting_period_kind) =
+  let block_protocol = { proto_name = protocol; proto_hash = protocol } in
+  let test_protocol = { proto_name = test_protocol; proto_hash = test_protocol } in
   let level = Int64.to_int level in
   let timestamp = date_of_cal timestamp in
   { hash; predecessor_hash; fitness; baker = Alias.to_name baker;
@@ -132,8 +127,7 @@ let block_of_tuple_ignore_op
      commited_nonce_hash, pow_nonce,
      distance_level, nb_operations,
      validation_pass, proto, data, signature,
-     volume, fees,
-     protocol_name, test_protocol_name,
+     volume, fees, voting_period_kind,
      _op_hash, _op_type) =
   block_of_tuple_noop
     (hash, predecessor_hash, fitness, baker, timestamp,
@@ -145,8 +139,7 @@ let block_of_tuple_ignore_op
      commited_nonce_hash, pow_nonce,
      distance_level, nb_operations,
      validation_pass, proto, data, signature,
-     volume, fees,
-     protocol_name, test_protocol_name)
+     volume, fees, voting_period_kind)
 
 let op_hash_to_bop_hash op_hash = (op_hash, "", "")
 
@@ -160,8 +153,7 @@ let block_op_get_op_hash
      _commited_nonce_hash, _pow_nonce,
      _distance_level, _nb_operations,
      _validation_pass, _proto, _data, _signature,
-     _volume, _fees,
-     _protocol_name, _test_protocol_name,
+     _volume, _fees, _voting_period_kind,
      op_hash, _op_type) = op_hash
 
 let unoption_op_hash = function
@@ -178,9 +170,32 @@ let block_op_get_hash
      _commited_nonce_hash, _pow_nonce,
      _distance_level, _nb_operations,
      _validation_pass, _proto, _data, _signature,
-     _volume, _fees,
-     _protocol_name, _test_protocol_name,
+     _volume, _fees, _voting_periond_kind,
      _op_hash, _op_type) = hash
+
+let block_with_pred_fitness
+    (hash, predecessor, fitness, baker, timestamp,
+     protocol, test_protocol,
+     network, test_network, test_network_expiration,
+     level, level_position, priority,
+     cycle, cycle_position,
+     voting_period, voting_period_position,
+     commited_nonce_hash, pow_nonce,
+     distance_level, nb_operations,
+     validation_pass, proto, data, signature,
+     volume, fees, voting_period_kind, pred_fitness) =
+  block_of_tuple_noop (
+    hash, predecessor, fitness, baker, timestamp,
+    protocol, test_protocol,
+    network, test_network, test_network_expiration,
+    level, level_position, priority,
+    cycle, cycle_position,
+    voting_period, voting_period_position,
+    commited_nonce_hash, pow_nonce,
+    distance_level, nb_operations,
+    validation_pass, proto, data, signature,
+    volume, fees, voting_period_kind), pred_fitness
+
 
 let block_op_get_ops x =
   List.map (fun x -> op_hash_to_bop_hash (noop x))
@@ -191,10 +206,14 @@ let block_of_tuple_with_ops x =
     operations = block_op_get_ops x }
 
 let activation_from_db rows =
-  List.map (fun  (_, act_pkh, act_secret) ->
-      let act_pkh = Alias.to_name act_pkh in
-      let act = { act_pkh; act_secret } in
-      Activation act)
+  List.map
+    (fun  (_, act_pkh, act_secret, act_balance, act_op_level, act_timestamp) ->
+       let act_pkh = Alias.to_name act_pkh in
+       let act_op_level = Misc.unoptf (-1) Int64.to_int act_op_level in
+       let act_timestamp = string_of_cal act_timestamp in
+       let act = { act_pkh; act_secret; act_balance; act_op_level;
+                   act_timestamp } in
+       Activation act)
     rows
 
 let dee_from_db
@@ -324,20 +343,22 @@ let origination_from_db rows =
   match rows with
   | [] -> "", []
   | _ ->
-    try
-      let (_, source, _tz1, _fee, _counter, _manager, _delegate,
-           _script_code, _script_storage_ty, _spendable,
-           _delegatable, _balance, _gas_limit, _st_limit,
-           _failed, _internal, _burn) =
-        List.find
-          (fun (_, _, _, _, _, _, _, _, _, _, _, _, _, _, _,
-                internal, _) -> not internal)  rows in
+    match
+      List.find_opt
+        (fun (_, _source, _tz1, _fee, _counter, _manager, _delegate,
+              _script_code, _script_storage_ty, _spendable,
+              _delegatable, _balance, _gas_limit, _st_limit,
+              _failed, internal, _burn, _op_level, _tsp) -> not internal) rows with
+    | Some (_, source, _tz1, _fee, _counter, _manager, _delegate,
+              _script_code, _script_storage_ty, _spendable,
+              _delegatable, _balance, _gas_limit, _st_limit,
+              _failed, _internal, _burn, _op_level, _tsp) ->
       source,
       List.map
         (fun (_, or_src, or_tz1, or_fee, or_counter, or_manager, or_delegate,
               sc_code, sc_storage, or_spendable,
               or_delegatable, or_balance, gas_limit, storage_limit,
-              or_failed, or_internal, or_burn) ->
+              or_failed, or_internal, or_burn, or_op_level, or_timestamp) ->
           let or_delegate =
             match or_delegate with
             | None -> Alias.to_name or_src
@@ -361,28 +382,31 @@ let origination_from_db rows =
             match storage_limit with
             | None -> Z.zero
             | Some storage_limit -> Z.of_int64 storage_limit in
+          let or_op_level = Misc.unoptf (-1) Int64.to_int or_op_level in
+          let or_timestamp = string_of_cal or_timestamp in
           let origi = {
             or_src; or_tz1; or_manager; or_delegate; or_script;
             or_spendable; or_delegatable; or_balance ; or_counter ;
             or_fee ; or_gas_limit ; or_storage_limit ;
             or_failed ; or_internal ;
-            or_burn } in
-          Origination origi)
-        rows
-    with _ -> "", []
+            or_burn; or_op_level; or_timestamp } in
+          Origination origi) rows
+    | None -> "", []
 
 let delegation_from_db rows =
   match rows with
   | [] ->  "", []
   |  _ ->
-    try
-      let (_, source, _pubkey, _fee, _counter, _delegate, _gas_limit, _st_limit,
-           _failed, _internal) = List.find
-          (fun (_, _, _, _, _, _, _, _, _, internal) -> not internal) rows in
+    match
+      List.find_opt
+        (fun (_, _source, _fee, _counter, _delegate, _gas_limit, _st_limit,
+              _failed, internal, _op_level, _tsp) -> not internal) rows with
+    | Some (_, source, _fee, _counter, _delegate, _gas_limit, _st_limit,
+            _failed, _internal, _op_level, _tsp) ->
       source,
-      List.map (fun (_, del_src, _del_pubkey, del_fee, del_counter,
-                     del_delegate, gas_limit,
-                     storage_limit, del_failed, del_internal) ->
+      List.map (fun (_, del_src, del_fee, del_counter, del_delegate,
+                     gas_limit, storage_limit, del_failed, del_internal,
+                     del_op_level, del_timestamp ) ->
                  let del_delegate = match del_delegate with
                    | None -> Alias.to_name ""
                    | Some tz -> Alias.to_name tz in
@@ -396,23 +420,28 @@ let delegation_from_db rows =
                    match storage_limit with
                    | None -> Z.zero
                    | Some storage_limit -> Z.of_int64 storage_limit in
+                 let del_op_level = Misc.unoptf (-1) Int64.to_int del_op_level in
+                 let del_timestamp = string_of_cal del_timestamp in
                  Delegation { del_src ; del_delegate ; del_counter ;
                               del_fee ; del_gas_limit ; del_storage_limit ;
-                              del_failed ; del_internal }) rows
-    with _ -> "", []
+                              del_failed ; del_internal; del_op_level;
+                              del_timestamp }) rows
+    | None -> "", []
 
 let reveal_from_db rows =
   match rows with
   | [] -> "", []
   | _ ->
-    try
-      let (_, source, _fee, _counter, _delegate,
-           _gas_limit, _st_limit, _failed, _internal) =
-        List.find
-          (fun (_, _, _, _, _, _, _, _, internal) -> not internal) rows in
+    match
+      List.find_opt
+        (fun (_, _source, _fee, _counter, _pubkey, _gas_limit, _st_limit,
+              _failed, internal, _op_level, _tsp) -> not internal) rows with
+    | Some (_, source, _fee, _counter, _pubkey, _gas_limit, _st_limit,
+            _failed, _internal, _op_level, _tsp) ->
       source,
       List.map (fun (_, rvl_src, rvl_fee, rvl_counter, rvl_pubkey, gas_limit,
-                     storage_limit, rvl_failed, rvl_internal ) ->
+                     storage_limit, rvl_failed, rvl_internal, rvl_op_level,
+                     rvl_timestamp) ->
                  let rvl_pubkey = match rvl_pubkey with None -> ""| Some s -> s in
                  let rvl_src = Alias.to_name rvl_src in
                  let rvl_counter = Int64.to_int32 rvl_counter in
@@ -424,10 +453,13 @@ let reveal_from_db rows =
                    match storage_limit with
                    | None -> Z.zero
                    | Some storage_limit -> Z.of_int64 storage_limit in
+                 let rvl_op_level = Misc.unoptf (-1) Int64.to_int rvl_op_level in
+                 let rvl_timestamp = string_of_cal rvl_timestamp in
                  Reveal { rvl_src ; rvl_pubkey ; rvl_counter ;
                           rvl_fee ; rvl_gas_limit ; rvl_storage_limit ;
-                          rvl_failed ; rvl_internal }) rows
-    with _ -> "", []
+                          rvl_failed ; rvl_internal;
+                          rvl_op_level; rvl_timestamp }) rows
+    | None -> "", []
 
 let op_type_from_db_row row =
   let ( _op_hash, _op_block_hash, _op_network_hash, op_type, _op_level,
@@ -766,13 +798,14 @@ let operation_from_db rows =
                       or_counter, or_manager,
                       or_delegate, sc_code, sc_storage, or_spendable,
                       or_delegatable, or_balance, or_failed,
-                      or_internal, or_burn with
+                      or_internal, or_burn, op_level with
                 | Some or_src, Some or_tz1, Some or_fee, Some gas_limit,
                   Some storage_limit, Some or_counter, Some or_manager,
                   or_delegate, sc_code, sc_storage,
                   Some or_spendable,
                   Some or_delegatable, Some or_balance,
-                  Some or_failed, Some or_internal, Some or_burn ->
+                  Some or_failed, Some or_internal, Some or_burn,
+                  Some or_op_level ->
                   let or_delegate =
                     match or_delegate with None -> src | Some del -> del in
                   let sc_code = match sc_code with
@@ -789,40 +822,43 @@ let operation_from_db rows =
                     or_src; or_tz1; or_manager; or_delegate; or_script;
                     or_spendable; or_delegatable; or_balance ;
                     or_counter ; or_fee ; or_gas_limit ; or_storage_limit ;
-                    or_failed ; or_internal ; or_burn } in
+                    or_failed ; or_internal ; or_burn;
+                    or_op_level = Int64.to_int or_op_level;
+                    or_timestamp = ""} in
                   Origination origi :: acc_tr
                 | _ -> acc_tr in
               let acc_del =
                 match del_src, del_pubkey, del_fee, del_gas_limit,
                       del_storage_limit, del_counter,
-                      del_delegate, del_failed, del_internal with
+                      del_delegate, del_failed, del_internal, op_level with
                 | Some del_src, Some _del_pubkey, Some del_fee,
                   Some gas_limit, Some storage_limit,
                   Some del_counter, del_delegate,
-                  Some del_failed, Some del_internal ->
+                  Some del_failed, Some del_internal, Some del_op_level ->
                   let del_delegate = Utils.unopt del_delegate ~default:(Alias.to_name "") in
                   let del_gas_limit = Z.of_int64 gas_limit in
                   let del_storage_limit = Z.of_int64 storage_limit in
                   let del_counter = Int64.to_int32 del_counter in
-                  Delegation { del_src ; del_delegate ;
-                               del_counter ; del_fee ; del_gas_limit ;
-                               del_storage_limit ;
-                               del_failed ; del_internal } :: acc_ori
+                  Delegation {
+                    del_src; del_delegate; del_counter; del_fee; del_gas_limit;
+                    del_storage_limit; del_failed; del_internal;
+                    del_op_level = Int64.to_int del_op_level;
+                    del_timestamp = "" } :: acc_ori
                 | _ -> acc_ori in
               let acc =
                 match rvl_src, rvl_fee, rvl_gas_limit, rvl_storage_limit,
-                      rvl_counter, rvl_pubkey, rvl_failed, rvl_internal with
+                      rvl_counter, rvl_pubkey, rvl_failed, rvl_internal, op_level with
                 | Some rvl_src, Some rvl_fee, Some gas_limit,
                   Some storage_limit, Some rvl_counter,
-                  rvl_pubkey, Some rvl_failed, Some rvl_internal ->
+                  rvl_pubkey, Some rvl_failed, Some rvl_internal, Some rvl_op_level ->
                   let rvl_pubkey = match rvl_pubkey with None -> ""| Some s -> s in
                   let rvl_gas_limit = Z.of_int64 gas_limit in
                   let rvl_storage_limit = Z.of_int64 storage_limit in
                   let rvl_counter = Int64.to_int32 rvl_counter in
-                  Reveal { rvl_src ; rvl_pubkey ;
-                           rvl_counter ; rvl_fee ; rvl_gas_limit ;
-                           rvl_storage_limit ; rvl_failed ;
-                           rvl_internal } :: acc_del
+                  Reveal { rvl_src; rvl_pubkey; rvl_counter; rvl_fee; rvl_gas_limit;
+                           rvl_storage_limit; rvl_failed; rvl_internal;
+                           rvl_op_level = Int64.to_int rvl_op_level;
+                           rvl_timestamp = "" } :: acc_del
                 | _ -> acc_del in
               acc)
           [] rows in
@@ -848,7 +884,7 @@ let operation_from_db rows =
       let ops =
         List.fold_left (fun acc row -> match row with
             | ( _op_hash, _op_block_hash, _op_network_hash,
-                _op_type, _op_level,
+                _op_type, op_level,
                 (* Nonce *)
                 _, s_level, s_nonce,
                 (* Activation *)
@@ -877,10 +913,13 @@ let operation_from_db rows =
                   let seed = { seed_level; seed_nonce; } in
                   Seed_nonce_revelation seed :: acc
                 | None, None, Some act_pkh, Some act_secret ->
-                  let act = { act_pkh; act_secret } in
+                  let act = { act_pkh; act_secret; act_balance = None;
+                              act_op_level = Misc.unoptf 0 Int64.to_int op_level;
+                              act_timestamp = ""} in
                   Activation act :: acc
                 | _ -> acc
-              end) [] rows in
+              end
+            ) [] rows in
       Some
         { op_hash; op_block_hash;
           op_network_hash;
@@ -1049,8 +1088,9 @@ let delegation_from_db_list rows =
     (fun acc row ->
        match row with
        | ( op_hash, Some op_block_hash, Some op_network_hash,
-           del_src, Some _del_pubkey, del_fee, del_counter, Some del_delegate,
-           gas_limit, storage_limit, del_failed, del_internal ) ->
+           del_src, del_fee, del_counter, Some del_delegate,
+           gas_limit, storage_limit, del_failed, del_internal,
+           Some del_op_level, Some del_timestamp ) ->
          let del_src = Alias.to_name del_src in
          let del_counter = Int64.to_int32 del_counter in
          let del_delegate = Alias.to_name del_delegate in
@@ -1062,9 +1102,12 @@ let delegation_from_db_list rows =
            match storage_limit with
            | None -> Z.zero
            | Some storage_limit -> Z.of_int64 storage_limit in
+         let del_op_level = Int64.to_int del_op_level in
+         let del_timestamp = string_of_cal del_timestamp in
          let del =
            { del_src ; del_delegate ; del_counter ; del_fee ; del_gas_limit ;
-             del_storage_limit; del_failed ; del_internal } in
+             del_storage_limit; del_failed ; del_internal; del_op_level;
+             del_timestamp } in
          let ops = [ Delegation del ] in
          { op_hash; op_block_hash;
            op_network_hash;
@@ -1080,9 +1123,9 @@ let reveal_from_db_list rows =
   List.fold_left
     (fun acc row ->
        match row with
-       | ( op_hash, Some op_block_hash, Some op_network_hash,
-           rvl_src, rvl_fee, rvl_counter, Some rvl_pubkey,
-           gas_limit, storage_limit, rvl_failed, rvl_internal ) ->
+       | ( op_hash, Some op_block_hash, Some op_network_hash, rvl_src, rvl_fee,
+           rvl_counter, Some rvl_pubkey, gas_limit, storage_limit, rvl_failed,
+           rvl_internal, Some rvl_op_level, Some rvl_timestamp ) ->
          let rvl_src = Alias.to_name rvl_src in
          let rvl_gas_limit =
            match gas_limit with
@@ -1093,10 +1136,12 @@ let reveal_from_db_list rows =
            | None -> Z.zero
            | Some storage_limit -> Z.of_int64 storage_limit in
          let rvl_counter = Int64.to_int32 rvl_counter in
-         let ops = [ Reveal
-                       { rvl_src ; rvl_pubkey ; rvl_counter ; rvl_fee ;
-                         rvl_gas_limit ; rvl_storage_limit ;
-                         rvl_failed ; rvl_internal } ] in
+         let rvl_op_level = Int64.to_int rvl_op_level in
+         let rvl_timestamp = string_of_cal rvl_timestamp in
+         let ops = [
+           Reveal { rvl_src; rvl_pubkey; rvl_counter; rvl_fee; rvl_gas_limit;
+                    rvl_storage_limit; rvl_failed; rvl_internal; rvl_op_level;
+                    rvl_timestamp } ] in
          { op_hash; op_block_hash;
            op_network_hash;
            op_type =
@@ -1111,13 +1156,16 @@ let activation_from_db_list rows =
     (fun acc row ->
        match row with
        | ( op_hash, Some op_block_hash, Some op_network_hash,
-           act_pkh, act_secret ) ->
+           act_pkh, act_secret, act_balance, Some act_op_level, Some act_timestamp ) ->
          let act_pkh = Alias.to_name act_pkh in
-         let ops = [ Activation { act_pkh ; act_secret } ] in
+         let act_op_level = Int64.to_int act_op_level in
+         let act_timestamp = string_of_cal act_timestamp in
+         let ops =
+           [ Activation
+               { act_pkh ; act_secret; act_balance; act_op_level; act_timestamp } ] in
          { op_hash; op_block_hash;
            op_network_hash;
-           op_type =
-             Anonymous ops } :: acc
+           op_type = Anonymous ops } :: acc
        | _ -> acc)
     [] rows
 
@@ -1147,7 +1195,7 @@ let origination_from_db_list rows =
            or_src, or_tz1, or_fee, or_counter, or_manager, or_delegate,
            sc_code, sc_storage, or_spendable, or_delegatable, or_balance,
            gas_limit, storage_limit, or_failed, or_internal,
-           or_burn) ->
+           or_burn, Some or_op_level, Some or_timestamp) ->
          let or_src = Alias.to_name or_src in
          let or_counter = Int64.to_int32 or_counter in
          let or_delegate =
@@ -1168,11 +1216,13 @@ let origination_from_db_list rows =
            match storage_limit with
            | None -> Z.zero
            | Some storage_limit -> Z.of_int64 storage_limit in
+         let or_op_level = Int64.to_int or_op_level in
+         let or_timestamp = string_of_cal or_timestamp in
          let ops = [ Origination {
              or_src; or_tz1; or_manager; or_delegate; or_script;
              or_spendable; or_delegatable; or_balance ;
              or_counter ; or_fee ; or_gas_limit ; or_storage_limit ; or_failed ;
-             or_internal ; or_burn
+             or_internal ; or_burn; or_op_level; or_timestamp
            } ] in
          { op_hash; op_block_hash;
            op_network_hash;

@@ -18,12 +18,12 @@ for the latest sources, issues and contributions:
 
 ## Copyright and license
 
-Copyright OCamlPro 2017-2018. This code is licensed under the terms
+Copyright OCamlPro 2017-2019. This code is licensed under the terms
 of the GNU Public License version 3 (GPL v3).
 
 ## Building
 
-You need OCaml 4.06.1.
+You need OCaml 4.07.1.
 
 Update submodules:
 
@@ -65,40 +65,34 @@ opam install
 
 ```
 opam install\
-     camlp4\
-     re.1.7.3\
-     ocplib-json-typed\
-     ocurl\
-     js_of_ocaml\
-     js_of_ocaml-ppx\
-     js_of_ocaml-camlp4\
-     js_of_ocaml-tyxml\
-     js_of_ocaml-lwt\
-     omd\
-     cohttp-lwt\
-     cohttp-lwt-unix\
-     base64\
-     ezjsonm\
-     ocplib-endian\
-     geoip\
-     ocp-build\
-     nocrypto\
-     sodium\
-     lru\
-     alcotest\
-     calendar \
+     base64.2.3.0 \
+     camlp4 \
+     cohttp-lwt \
+     cohttp-lwt-unix \
+     csv-lwt \
+     ezjsonm \
+     geoip \
+     js_of_ocaml \
+     js_of_ocaml-lwt \
+     js_of_ocaml-ppx \
+     js_of_ocaml-tyxml \
      lwt_log \
-     csv-lwt
-```
-
-You will also need some development versions:
-```
-opam pin --dev ocplib-json-typed
-opam install ocplib-json-typed
+     nocrypto \
+     ocamlfind \
+     ocplib-endian \
+     ocurl \
+     omd \
+     sodium \
+     zarith \
+     ocp-build \
+     ocplib-json-typed \
+     re \
+     calendar \
+     alcotest
 ```
 
 One last dependency is pgocaml.
-The OPAM version is not compatible with tz-scan, also you should install from
+The OPAM version is not compatible with tzscan, also you should install from
 the sources:
 https://github.com/darioteixeira/pgocaml
 ```
@@ -141,6 +135,7 @@ WITH_VERSION=true
 API_HOST:=localhost
 API_PORT:=8080
 NEED_PARSEXP=true
+BASE64_3:=false
 ```
 
 The options are:
@@ -151,6 +146,7 @@ The options are:
 * WITH_VERSION: set to false to avoid recompiling everything everytime
 * API_HOST & API_PORT: if you want to use localhost instead of api.tzscan.io
 * NEED_PARSEXP: if you use sexplib (>= v0.11), then set it to true
+* BASE64_3: if you use base64 (v>=3.0.0), then set it to true
 
 ### Building
 
@@ -237,7 +233,7 @@ Create a file `config.json` containing :
 
 Start the crawler:
 ```
-./_tzscan-crawler config.json
+./tzscan-crawler config.json
 ```
 
 It should immediately connect to the Tezos node, and rewind the chain

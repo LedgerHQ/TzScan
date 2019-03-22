@@ -14,11 +14,12 @@
 (*                                                                      *)
 (************************************************************************)
 
-open Data_types
-open Tyxml_js.Html5
+open Ocp_js
+open Html
 open Js_utils
 open Bootstrap_helpers.Grid
 open Bootstrap_helpers.Form
+open Data_types
 open Text
 
 let spf = Printf.sprintf
@@ -36,15 +37,15 @@ module Balance_ranking_table =
         let theads =
           Panel.theads_of_strings [ s_ranking, 1; s_account, 2; s_balance, 1 ]
         let title_span = Panel.title_nb s_top_balances
-        let table_class = "blocks-table"
+        let table_class = "default-table"
         let page_size = 20
       end)
 
 let make_table ranking_list =
   List.map
     (fun ((pos : int),owner_hash,balance) ->
-      tr [td [Lang.pcdata_s @@ spf "%i" pos];
-          Common.account_w_blockies owner_hash;
+      tr [td [Lang.txt_s @@ spf "%i" pos];
+          Common.account_w_blockies ~crop_len:20 ~crop_limit:xs_size owner_hash;
           td [ Tez.pp_amount balance ];
     ]) ranking_list
 
@@ -134,7 +135,7 @@ let top_kind_to_printer = function
   | _ ->
     (fun ?(precision=6) ?(width=15) ?(order=0) ?icon i ->
        ignore (precision, width, order, icon) ;
-       span [ pcdata @@ Int64.to_string i ])
+       span [ txt @@ Int64.to_string i ])
 
 (* mika : add piechart on top of table  *)
 (* let update_tops_accounts kind nrows total tops =
@@ -151,13 +152,13 @@ let top_kind_to_printer = function
  *           s_percent, 1;
  *         ]
  *       let title_span = Panel.title_nb title_str
- *       let table_class = "blocks-table"
+ *       let table_class = "default-table"
  *       let page_size = 20
  *     end) in
  *   let content = Top.make ~footer:true () in
  *   Manip.removeChildren container ;
  *   Manip.appendChild container content ;
- * 
+ *
  *   let tops2, tops_total, _ =
  *     List.fold_left (fun (acc_tops, acc_total, acc_count) (tz1, value) ->
  *         if acc_count < 10 then
@@ -166,32 +167,32 @@ let top_kind_to_printer = function
  *           acc_count + 1
  *         else acc_tops, acc_total, acc_count
  *       ) ([], 0L, 0) tops.top_list in
- * 
+ *
  *   let tops2 =
  *     let remaining = Int64.sub total tops_total in
  *     if remaining > 0L then
  *       let str = Printf.sprintf "%s" (t_ s_others) in
  *       (str, Int64.to_int remaining) :: tops2
  *     else tops2 in
- * 
+ *
  *   let data = Array.of_list tops2 in
- * 
+ *
  *   (\* Table Panel *\)
  *   let rows = Array.map (fun r ->
  *       let owner_hash = fst r
  *       and nb_tops = snd r in
  *       tr [
- *         td [ pcdata owner_hash ] ;
- *         td [ pcdata @@ spf "%Ld" nb_tops ];
- *         td [ pcdata @@ spf "%.2f %%" (
+ *         td [ txt owner_hash ] ;
+ *         td [ txt @@ spf "%Ld" nb_tops ];
+ *         td [ txt @@ spf "%.2f %%" (
  *             (Int64.to_float nb_tops) /. (Int64.to_float total) *. 100. )];
  *       ]) (Array.of_list tops.top_list) in
  *   Top.paginate_all rows;
- * 
+ *
  *   (\* Display a pie *\)
  *   let balloon =
  *     "[[title]]<br><span style='font-size:14px'><b>[[value]] tops</b> ([[percents]]%)</span>" in
- * 
+ *
  *   amcharts3_ready (fun () ->
  *       (\* Hack : pie##theme not working *\)
  *       ignore @@ Js.Unsafe.eval_string "AmCharts.theme = AmCharts.themes.light";
@@ -215,7 +216,7 @@ let top_kind_to_printer = function
  *           legend##valueText <- Js.string "[[percents]]%";
  *           pie##legend <- legend
  *         end;
- * 
+ *
  *       pie##export <- export ;
  *       pie##write (Js.string tops_accounts_chart_id);
  *       let div = Common.get_div_by_id tops_accounts_chart_id in
@@ -237,7 +238,7 @@ let update nrows kind level total xhr_request =
     | Some level ->
       let date =
         div ~a:[ a_class [ "alert"; "alert-info" ] ] [
-          strong [ pcdata "Data collected at " ] ;
+          strong [ txt "Data collected at " ] ;
           Common.make_link @@ string_of_int level.Tezos_types.lvl_level
         ] in
 
@@ -255,7 +256,7 @@ let update nrows kind level total xhr_request =
           s_percent, 1;
         ]
       let title_span = Panel.title_nb title_str
-      let table_class = "blocks-table"
+      let table_class = "default-table"
       let page_size = 20
     end) in
   let content = Top.make ~footer:true () in
@@ -269,7 +270,7 @@ let update nrows kind level total xhr_request =
         tr [
           Common.account_w_blockies hash;
           td [ printer value ];
-          td [ pcdata @@ spf "%.2f %%" (
+          td [ txt @@ spf "%.2f %%" (
               (Int64.to_float value) /. (Int64.to_float total) *. 100. )]
       ]) accs.top_list
   in
@@ -277,18 +278,18 @@ let update nrows kind level total xhr_request =
 
 let update_cmd update =
   let optg1 = optgroup ~label:"Real Time" [] in
-  let opt1 = option ~a:[ a_selected () ] (pcdata "Balances") in
+  let opt1 = option ~a:[ a_selected () ] (txt "Balances") in
   let optg2 = optgroup ~label:"Context Data" [] in
-  let opt2 = option (pcdata "Frozen balances" ) in
-  let opt3 = option (pcdata "Frozen deposits" ) in
-  let opt4 = option (pcdata "Frozen rewards" ) in
-  let opt5 = option (pcdata "Paid bytes" ) in
-  let opt6 = option (pcdata "Staking balances" ) in
-  let opt7 = option (pcdata "Total balances" ) in
-  let opt8 = option (pcdata "Total delegated" ) in
-  let opt9 = option (pcdata "Total delegators" ) in
-  let opt10 = option (pcdata "Total frozen fees" ) in
-  let opt11 = option (pcdata "Used bytes" ) in
+  let opt2 = option (txt "Frozen balances" ) in
+  let opt3 = option (txt "Frozen deposits" ) in
+  let opt4 = option (txt "Frozen rewards" ) in
+  let opt5 = option (txt "Paid bytes" ) in
+  let opt6 = option (txt "Staking balances" ) in
+  let opt7 = option (txt "Total balances" ) in
+  let opt8 = option (txt "Total delegated" ) in
+  let opt9 = option (txt "Total delegators" ) in
+  let opt10 = option (txt "Total frozen fees" ) in
+  let opt11 = option (txt "Used bytes" ) in
   let id_container = tops_cmd_id in
   let container = find_component id_container in
   let n = 11 in
@@ -310,7 +311,7 @@ let update_cmd update =
   let select_elt =
     select ~a:[ a_class [form_control] ] options in
   Manip.Ev.onchange_select select_elt (fun _e ->
-      let select_eltjs = Tyxml_js.To_dom.of_select select_elt in
+      let select_eltjs = To_dom.of_select select_elt in
       let opt = select_eltjs##options##item(select_eltjs##selectedIndex) in
       let selection =
         Js.Opt.case opt
@@ -322,7 +323,7 @@ let update_cmd update =
       true);
   let content = form ~a:[ a_class [ form_inline ] ] [
       div ~a:[ a_class [ form_group ] ] [
-        label [ pcdata "Kind :"; Bootstrap_helpers.Icon.space_icon () ] ;
+        label [ txt "Kind :"; Bootstrap_helpers.Icon.space_icon () ] ;
         select_elt ] ] in
   Manip.removeChildren container ;
   Manip.appendChild container content ;

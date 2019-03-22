@@ -16,7 +16,7 @@
 
 (** Active: tab open by default
     Disabled: tab cannot be accessed *)
-type state = Active | Disabled | Inactive
+type state = Active | Disabled | Inactive | Hidden
 
 (**
    A tab is represented by its title and the content associated.
@@ -28,26 +28,30 @@ type state = Active | Disabled | Inactive
    - _class: the class applied on the <li> element
 *)
 type t = {
-  title: int option -> Html_types.flow5_without_interactive Tyxml_js.Html5.elt;
+  title: int option -> Html_types.flow5_without_interactive Ocp_js.elt;
   id: string;
   content_id: string;
   _class: string list;
 }
 
-(* Takes a function for `title` and a list of string for `_class`. 
-   Generates fresh ids. *) 
+(* Takes a function for `title` and a list of string for `_class`.
+   Generates fresh ids. *)
 val make :
-  (int option -> Html_types.flow5_without_interactive Tyxml_js.Html5.elt) ->
+  (int option -> Html_types.flow5_without_interactive Ocp_js.elt) ->
   string list ->
   t
 
 val update_tab_title : t -> int option -> unit
 
 val disable : t -> unit
-  
+
 val enable : t -> unit
 
-val set_on_show : t -> (unit -> unit) -> unit 
+val show : t -> unit
+
+val hide : t -> unit
+
+val set_on_show : t -> (unit -> unit) -> unit
 
 type tabs_kind = Pills | Tabs
 
@@ -55,9 +59,9 @@ type tabs_kind = Pills | Tabs
    respective state. *)
 val make_tabs :
   ?fills:bool -> ?_class:string list -> tabs_kind -> (t * state) list
-  -> [> Html_types.ul ] Tyxml_js.Html5.elt
+  -> [> Html_types.ul ] Ocp_js.elt
 
 (* Generates the container associated to the tab *)
 val make_content_panel :
-  ?_class:string list -> t -> state -> [< Html_types.div_content_fun ] Tyxml_js.Html5.elt
-  -> [> Html_types.div ] Tyxml_js.Html5.elt
+  ?_class:string list -> t -> state -> [< Html_types.div_content_fun ] Ocp_js.elt
+  -> [> Html_types.div ] Ocp_js.elt

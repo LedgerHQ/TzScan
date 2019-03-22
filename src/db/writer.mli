@@ -40,7 +40,7 @@ val register_pending :
 
 val register_init_balance :
     string -> int64 -> Date.t-> int -> unit
-  
+
 val register_operations :
   node_block -> node_operation list -> unit
 
@@ -53,7 +53,7 @@ val register_network_stats : network_stats list -> unit
 
 val register_crawler_activity : string -> int -> unit
 
-val update_alias : account_hash -> string option -> unit
+val update_alias : ?verbose:bool -> account_hash -> string option -> unit
 
 val counts_downup : int -> int -> unit
 

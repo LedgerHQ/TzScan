@@ -1,5 +1,6 @@
 (* Uses JS library blockies https://github.com/ethereum/blockies *)
 
+open Js_of_ocaml
 open Js_utils
 
 let alphabet =

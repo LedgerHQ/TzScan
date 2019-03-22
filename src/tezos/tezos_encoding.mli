@@ -41,7 +41,7 @@ module Encoding : sig
   end
   module Contracts : sig
     val encoding : string list Json_encoding.encoding
-  end 
+  end
   module Network : sig
     val encoding : Tezos_types.network_stats list Json_encoding.encoding
     val versions : Tezos_types.network_version Json_encoding.encoding
@@ -93,6 +93,12 @@ module Encoding : sig
       Tezos_types.balance_updates Json_encoding.encoding
     val encoding :
       Tezos_types.balance_updates list Json_encoding.encoding
+  end
+  module Voting_period_repr : sig
+    val kind_encoding : Tezos_types.voting_period_kind Json_encoding.encoding
+  end
+  module Votes : sig
+    val voting_rolls_encodings : Tezos_types.voting_rolls list Json_encoding.encoding
   end
 end
 

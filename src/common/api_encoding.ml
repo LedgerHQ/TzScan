@@ -18,13 +18,19 @@ open Json_encoding
 open Data_types
 open Tezos_types
 
-let float = Json_encoding.float
+let definitions_path = "/components/schemas/"
+
 let int64 = EzEncoding.int64
 let tez = EzEncoding.int64
+let int = EzEncoding.int
 
 let z_encoding = Tezos_encoding.z_encoding
 
 let account_name_encoding =
+  def ~definitions_path "account_name" @@
+  describe
+    ~title:"Account Name"
+    ~description:"Address and alias of an account" @@
   conv
     (fun {tz; alias} -> (tz, alias))
     (fun (tz, alias) -> {tz; alias})
@@ -39,6 +45,9 @@ module V1 = struct
   module Op = struct
 
     let transaction_encoding =
+      describe
+        ~title:"Transaction"
+        ~description:"Tezos transaction" @@
       conv
         (fun { tr_src; tr_amount; tr_counter ; tr_fee ; tr_gas_limit ; tr_storage_limit ;
                tr_dst; tr_parameters ; tr_failed ;
@@ -47,14 +56,11 @@ module V1 = struct
             | None -> None
             | Some p -> Some p in
           ("transaction", tr_src, tr_amount, tr_dst, None, tr_parameters,
-           tr_failed, tr_internal, tr_burn),
-          (tr_counter, tr_fee, tr_gas_limit, tr_storage_limit, tr_op_level,
-           tr_timestamp))
-        (fun
-          ((_k, tr_src, tr_amount, tr_dst, p, str_p,
-            tr_failed, tr_internal, tr_burn),
-           (tr_counter, tr_fee, tr_gas_limit, tr_storage_limit, tr_op_level,
-            tr_timestamp)) ->
+           tr_failed, tr_internal, tr_burn, tr_counter, tr_fee, tr_gas_limit,
+           tr_storage_limit, tr_op_level, tr_timestamp))
+        (fun (_k, tr_src, tr_amount, tr_dst, p, str_p, tr_failed, tr_internal,
+              tr_burn, tr_counter, tr_fee, tr_gas_limit, tr_storage_limit,
+              tr_op_level, tr_timestamp) ->
           let tr_parameters =  match p, str_p with
             | None, None -> None
             | Some mic, None -> Some (Micheline.encode mic)
@@ -63,39 +69,41 @@ module V1 = struct
           { tr_src; tr_amount; tr_counter ; tr_fee ; tr_gas_limit ; tr_storage_limit ;
             tr_dst; tr_parameters; tr_failed ; tr_internal ; tr_burn; tr_op_level;
             tr_timestamp })
-        (merge_objs
-           (obj9
-              (req "kind" string)
-              (req "src" account_name_encoding)
-              (req "amount" tez)
-              (req "destination" account_name_encoding)
-              (opt "parameters" Micheline.script_expr_encoding)
-              (opt "str_parameters" string)
-              (req "failed" bool)
-              (req "internal" bool)
-              (req "burn" tez))
-           (obj6
-              (req "counter" int32)
-              (req "fee" int64)
-              (req "gas_limit" z_encoding)
-              (req "storage_limit" z_encoding)
-              (req "op_level" int)
-              (req "timestamp" string)))
+        (EzEncoding.obj15
+           (req "kind" string)
+           (req "src" account_name_encoding)
+           (req "amount" tez)
+           (req "destination" account_name_encoding)
+           (opt "parameters" Micheline.script_expr_encoding)
+           (opt "str_parameters" string)
+           (req "failed" bool)
+           (req "internal" bool)
+           (req "burn" tez)
+           (req "counter" int32)
+           (req "fee" int64)
+           (req "gas_limit" z_encoding)
+           (req "storage_limit" z_encoding)
+           (req "op_level" int)
+           (req "timestamp" string))
 
     let reveal_encoding =
-      (conv
-         (fun { rvl_src; rvl_pubkey ; rvl_counter ; rvl_fee ;
-                rvl_gas_limit ; rvl_storage_limit ;
-                rvl_failed ; rvl_internal } ->
-           ("reveal", rvl_src, rvl_pubkey, rvl_counter, rvl_fee,
-            rvl_gas_limit, rvl_storage_limit, rvl_failed, rvl_internal))
-         (fun (_k, rvl_src, rvl_pubkey, rvl_counter, rvl_fee,
-               rvl_gas_limit, rvl_storage_limit,
-               rvl_failed, rvl_internal) ->
-           { rvl_src ; rvl_pubkey ; rvl_counter ; rvl_fee ;
-             rvl_gas_limit ; rvl_storage_limit ;
-             rvl_failed ; rvl_internal}))
-        (obj9
+      describe
+        ~title:"Reveal"
+        ~description:"Tezos reveal" @@
+      conv
+        (fun { rvl_src; rvl_pubkey; rvl_counter; rvl_fee; rvl_gas_limit;
+               rvl_storage_limit; rvl_failed; rvl_internal; rvl_op_level;
+               rvl_timestamp }
+          -> ("reveal", rvl_src, rvl_pubkey, rvl_counter, rvl_fee, rvl_gas_limit,
+              rvl_storage_limit, rvl_failed, rvl_internal, rvl_op_level,
+              rvl_timestamp))
+        (fun (_k, rvl_src, rvl_pubkey, rvl_counter, rvl_fee, rvl_gas_limit,
+              rvl_storage_limit, rvl_failed, rvl_internal, rvl_op_level,
+              rvl_timestamp)
+          -> { rvl_src; rvl_pubkey; rvl_counter; rvl_fee; rvl_gas_limit;
+               rvl_storage_limit; rvl_failed; rvl_internal; rvl_op_level;
+               rvl_timestamp })
+        (EzEncoding.obj11
            (req "kind" string)
            (req "src" account_name_encoding)
            (req "public_key" string)
@@ -104,99 +112,101 @@ module V1 = struct
            (req "gas_limit" z_encoding)
            (req "storage_limit" z_encoding)
            (req "failed" bool)
-           (req "internal" bool))
+           (req "internal" bool)
+           (req "op_level" int)
+           (req "timestamp" string))
 
     let origination_encoding =
-      (conv
-         (fun { or_src ; or_manager ; or_delegate ; or_script ; or_spendable ;
-                or_delegatable ; or_balance ; or_counter ; or_fee ;
-                or_gas_limit ; or_storage_limit ; or_tz1 ;
-                or_failed ; or_internal ; or_burn } ->
-           let str_script = match or_script with
-             | None -> None
-             | Some code ->
-               Some (code.sc_code,
-                     code.sc_storage) in
-           let or_delegate =
-             if or_delegate.tz = "" then None else Some or_delegate in
-           (("origination", or_src, or_manager, or_balance, Some or_spendable,
-             Some or_delegatable, or_delegate, None, Some or_tz1, str_script),
-            (or_failed, or_internal, or_burn,
-             or_counter, or_fee, or_gas_limit, or_storage_limit)))
-         (fun ((_k, or_src, or_manager, or_balance, or_spendable,
-                or_delegatable,  or_delegate, script, or_tz1, str_script),
-               (or_failed, or_internal, or_burn,
-                or_counter, or_fee, or_gas_limit, or_storage_limit)) ->
-           let or_tz1 = Utils.unopt or_tz1 ~default:{tz="";alias=None} in
-           let or_delegate = Utils.unopt or_delegate ~default:{tz="";alias=None} in
-           let or_spendable = Utils.unopt or_spendable ~default:false in
-           let or_delegatable = Utils.unopt or_delegatable ~default:false in
-           let or_script = match script, str_script with
-             | None, None -> None
-             | Some (sc_code, sc_storage), None ->
-               (* Orignation from Tezos Node *)
-               let sc_code = Micheline.encode sc_code in
-               let sc_storage = Micheline.encode sc_storage in
-               Some { Tezos_types.sc_code ;
-                      Tezos_types.sc_storage }
-             | None, Some (sc_code, sc_storage) ->
-               Some { Tezos_types.sc_code ;
-                      Tezos_types.sc_storage }
-             | _, _ -> assert false
-           in
-           { or_src;
-             or_manager ;
-             or_delegate ;
-             or_script ;
-             or_spendable ;
-             or_delegatable ;
-             or_balance ;
-             or_counter ;
-             or_fee ;
-             or_gas_limit ;
-             or_storage_limit ;
-             or_tz1 ;
-             or_failed ;
-             or_internal ;
-             or_burn })
-         (merge_objs
-            (obj10
-               (req "kind" string)
-               (req "src" account_name_encoding)
-               (req "managerPubkey" account_name_encoding)
-               (req "balance" tez)
-               (opt "spendable" bool)
-               (opt "delegatable" bool)
-               (opt "delegate" account_name_encoding)
-               (opt "script" Micheline.script_encoding)
-               (* ocp field *)
-               (opt "tz1" account_name_encoding)
-               (opt "str_script" Micheline.script_str_encoding)
-            )
-            (obj7
-               (req "failed" bool)
-               (req "internal" bool)
-               (req "burn_tez" tez)
-               (req "counter" int32)
-               (req "fee" int64)
-               (req "gas_limit" z_encoding)
-               (req "storage_limit" z_encoding))))
+      describe
+        ~title:"Origination"
+        ~description:"Tezos origination" @@
+      conv
+        (fun { or_src ; or_manager ; or_delegate ; or_script ; or_spendable ;
+               or_delegatable ; or_balance ; or_counter ; or_fee ;
+               or_gas_limit ; or_storage_limit ; or_tz1 ;
+               or_failed ; or_internal ; or_burn; or_op_level;
+               or_timestamp } ->
+          let str_script = match or_script with
+            | None -> None
+            | Some code ->
+              Some (code.sc_code,
+                    code.sc_storage) in
+          let or_delegate =
+            if or_delegate.tz = "" then None else Some or_delegate in
+          ("origination", or_src, or_manager, or_balance, Some or_spendable,
+           Some or_delegatable, or_delegate, None, Some or_tz1, str_script,
+           or_failed, or_internal, or_burn,
+           or_counter, or_fee, or_gas_limit, or_storage_limit,
+           or_op_level, or_timestamp))
+        (fun (_k, or_src, or_manager, or_balance, or_spendable,
+              or_delegatable, or_delegate, script, or_tz1, str_script,
+              or_failed, or_internal, or_burn,
+              or_counter, or_fee, or_gas_limit, or_storage_limit,
+              or_op_level, or_timestamp) ->
+          let or_tz1 = Utils.unopt or_tz1 ~default:{tz="";alias=None} in
+          let or_delegate = Utils.unopt or_delegate ~default:{tz="";alias=None} in
+          let or_spendable = Utils.unopt or_spendable ~default:false in
+          let or_delegatable = Utils.unopt or_delegatable ~default:false in
+          let or_script = match script, str_script with
+            | None, None -> None
+            | Some (sc_code, sc_storage), None ->
+              (* Orignation from Tezos Node *)
+              let sc_code = Micheline.encode sc_code in
+              let sc_storage = Micheline.encode sc_storage in
+              Some { Tezos_types.sc_code ;
+                     Tezos_types.sc_storage }
+            | None, Some (sc_code, sc_storage) ->
+              Some { Tezos_types.sc_code ;
+                     Tezos_types.sc_storage }
+            | _, _ -> assert false
+          in
+          { or_src; or_manager; or_delegate; or_script; or_spendable;
+            or_delegatable; or_balance; or_counter; or_fee; or_gas_limit;
+            or_storage_limit; or_tz1; or_failed; or_internal; or_burn;
+            or_op_level; or_timestamp})
+        (EzEncoding.obj19
+           (req "kind" string)
+           (req "src" account_name_encoding)
+           (req "managerPubkey" account_name_encoding)
+           (req "balance" tez)
+           (opt "spendable" bool)
+           (opt "delegatable" bool)
+           (opt "delegate" account_name_encoding)
+           (opt "script" Micheline.script_encoding)
+           (* ocp field *)
+           (opt "tz1" account_name_encoding)
+           (opt "str_script" Micheline.script_str_encoding)
+           (req "failed" bool)
+           (req "internal" bool)
+           (req "burn_tez" tez)
+           (req "counter" int32)
+           (req "fee" int64)
+           (req "gas_limit" z_encoding)
+           (req "storage_limit" z_encoding)
+           (req "op_level" int)
+           (req "timestamp" string))
 
-    let delegation_encoding =
-      (conv
-         (fun { del_src ; del_delegate ; del_counter ; del_fee ;
-                del_gas_limit ; del_storage_limit ;
-                del_failed ; del_internal } ->
-           let del_delegate =
-             if del_delegate.tz = "" then None else Some del_delegate in
-           ("delegation", del_src, del_delegate, del_counter, del_fee,
-            del_gas_limit, del_storage_limit, del_failed, del_internal ))
-         (fun (_k, del_src, del_delegate, del_counter, del_fee, del_gas_limit,
-               del_storage_limit, del_failed, del_internal) ->
-           let del_delegate = Utils.unopt del_delegate ~default:{tz="";alias=None} in
-           { del_src ; del_delegate ; del_counter ; del_fee ; del_gas_limit ;
-             del_storage_limit ; del_failed ; del_internal }))
-        (obj9
+let delegation_encoding =
+  describe
+        ~title:"Delegation"
+        ~description:"Tezos delegation" @@
+      conv
+        (fun { del_src ; del_delegate ; del_counter ; del_fee ;
+               del_gas_limit ; del_storage_limit ;
+               del_failed ; del_internal; del_op_level; del_timestamp } ->
+          let del_delegate =
+            if del_delegate.tz = "" then None else Some del_delegate in
+          ("delegation", del_src, del_delegate, del_counter, del_fee,
+           del_gas_limit, del_storage_limit, del_failed, del_internal,
+           del_op_level, del_timestamp))
+        (fun (_k, del_src, del_delegate, del_counter, del_fee, del_gas_limit,
+              del_storage_limit, del_failed, del_internal, del_op_level,
+              del_timestamp) ->
+          let del_delegate = Utils.unopt del_delegate ~default:{tz="";alias=None} in
+          { del_src ; del_delegate ; del_counter ; del_fee ; del_gas_limit ;
+            del_storage_limit ; del_failed ; del_internal; del_op_level;
+            del_timestamp })
+        (EzEncoding.obj11
            (req "kind" string)
            (req "src" account_name_encoding)
            (opt "delegate" account_name_encoding)
@@ -205,9 +215,14 @@ module V1 = struct
            (req "gas_limit" z_encoding)
            (req "storage_limit" z_encoding)
            (req "failed" bool)
-           (req "internal" bool))
+           (req "internal" bool)
+           (req "op_level" int)
+           (req "timestamp" string))
 
     let endorsement_encoding =
+      describe
+        ~title:"Endorsement"
+        ~description:"Tezos endorsement" @@
       conv
         (fun { endorse_src ; endorse_block_hash; endorse_block_level;
                endorse_slot; endorse_op_level; endorse_priority; endorse_timestamp }
@@ -230,12 +245,18 @@ module V1 = struct
            (req "timestamp" string))
 
     let proposal_encoding =
+      describe
+        ~title:"Proposal"
+        ~description:"Tezos proposal" @@
       (obj3
          (req "kind" string)
          (req "period" int32)
          (req "proposals" (list string)))
 
     let ballot_encoding =
+      describe
+        ~title:"Ballot"
+        ~description:"Tezos ballot" @@
       (obj4
          (req "kind" string)
          (req "period" int32)
@@ -243,25 +264,39 @@ module V1 = struct
          (req "ballot" string))
 
     let seed_nonce_revelation_encoding =
-      (conv
+      describe
+        ~title:"Nonce Revelation"
+        ~description:"Tezos seed nonce revelation" @@
+      conv
          (fun { seed_level; seed_nonce } -> ("nonce", seed_level, seed_nonce))
-         (fun (_k, seed_level, seed_nonce) -> { seed_level; seed_nonce } ))
-        (obj3
-           (req "kind" string)
-           (req "level" int)
-           (req "nonce" string))
+         (fun (_k, seed_level, seed_nonce) -> { seed_level; seed_nonce } )
+         (obj3
+            (req "kind" string)
+            (req "level" int)
+            (req "nonce" string))
 
     let activation_encoding =
-      (conv
-         (fun { act_pkh; act_secret } ->
-            ("activation", act_pkh, act_secret))
-         (fun (_, act_pkh, act_secret) -> { act_pkh ; act_secret }))
-        (obj3
+      describe
+        ~title:"Activation"
+        ~description:"Tezos activation" @@
+      conv
+        (fun { act_pkh; act_secret; act_balance; act_op_level; act_timestamp }
+          -> ("activation", act_pkh, act_secret, act_balance, act_op_level,
+              act_timestamp))
+        (fun (_, act_pkh, act_secret, act_balance, act_op_level, act_timestamp)
+          -> { act_pkh ; act_secret; act_balance; act_op_level; act_timestamp })
+        (obj6
            (req "kind" string)
            (req "pkh" account_name_encoding)
-           (req "secret" string))
+           (req "secret" string)
+           (opt "balance" tez)
+           (req "op_level" int)
+           (req "timestamp" string))
 
     let double_baking_evidence_encoding =
+      describe
+        ~title:"Double baking evidence"
+        ~description:"Tezos double baking evidence" @@
       conv
         (fun {double_baking_header1; double_baking_header2;
               double_baking_main ; double_baking_accused ;
@@ -296,6 +331,9 @@ module V1 = struct
            (req "gain_rewards" int64))
 
     let double_endorsement_evidence_encoding op_encoding =
+      describe
+        ~title:"Double endorsement evidence"
+        ~description:"Tezos double endorsement evidence" @@
       conv
         (fun {double_endorsement1; double_endorsement2} ->
            ("double_endorsement_evidence", double_endorsement1, double_endorsement2))
@@ -307,6 +345,9 @@ module V1 = struct
            (req "op2" op_encoding))
 
     let manager_encoding =
+      describe
+        ~title:"Manager operation"
+        ~description:"Tezos manager operation" @@
       (obj3
          (req "kind" string)
          (req "source" account_name_encoding)
@@ -336,23 +377,35 @@ module V1 = struct
     let consensus_encoding = endorsement_encoding
 
     let amendment_encoding =
+      describe
+        ~title:"Amendment"
+        ~description:"Tezos amendment" @@
       merge_objs
         (obj1 (req "source" account_name_encoding))
         (union [
             case proposal_encoding
-              (fun _ -> None)
+              (function
+                | Proposal {prop_voting_period ; prop_proposals } ->
+                  Some ("Proposal", prop_voting_period, prop_proposals)
+                | _ -> None)
               (fun (_k, prop_voting_period, prop_proposals) ->
                  Proposal { prop_voting_period ; prop_proposals }) ;
             case ballot_encoding
-              (fun _ -> None)
+              (function
+                | Ballot { ballot_voting_period ; ballot_proposal ; ballot_vote } ->
+                  Some ("Ballot", ballot_voting_period, ballot_proposal, Tezos_utils.string_of_ballot_vote ballot_vote)
+                | _ -> None)
               (fun (_k, ballot_voting_period,
                     ballot_proposal, ballot_vote) ->
                 let ballot_vote = Tezos_utils.ballot_of_string ballot_vote in
                 Ballot
                   {  ballot_voting_period ; ballot_proposal ; ballot_vote })
-          ])
+             ])
 
     let dictator_encoding =
+      describe
+        ~title:"Dictator operation"
+        ~description:"Tezos dictator operation" @@
       let activate_encoding =
         obj2
           (req "chain" string) (* needs to be "activate" *)
@@ -371,6 +424,9 @@ module V1 = struct
       ]
 
     let signed_operation_encoding =
+      describe
+        ~title:"Signed operation"
+        ~description:"Tezos signed operation" @@
       union [
         case consensus_encoding
           (function
@@ -383,7 +439,10 @@ module V1 = struct
             | _ -> None)
           (fun m -> Manager m) ;
         case amendment_encoding
-          (fun _ -> None)
+          (function
+            | Amendment (source, am) -> Some (source, am)
+
+            | _ -> None)
           (fun (source, am) -> Amendment (source, am)) ;
         case dictator_encoding
           (fun _ -> None)
@@ -391,6 +450,9 @@ module V1 = struct
       ]
 
     let unsigned_operation_encoding encoding =
+      describe
+        ~title:"Unsigned operation"
+        ~description:"Tezos unsigned operation" @@
       obj1
         (req "operations"
            (list
@@ -418,6 +480,9 @@ module V1 = struct
 
 
     let proto_operation_encoding encoding =
+      describe
+        ~title:"Proto operation"
+        ~description:"Tezos proto operation" @@
       union [
         case (unsigned_operation_encoding encoding)
           (function
@@ -461,7 +526,11 @@ module V1 = struct
 
 
   module Protocol = struct
+
     let encoding =
+      describe
+        ~title:"Protocol"
+        ~description:"Tezos protocol" @@
       (conv
          (fun { proto_name; proto_hash } -> ( proto_name, proto_hash ))
          (fun ( proto_name, proto_hash ) -> { proto_name; proto_hash } )
@@ -473,6 +542,10 @@ module V1 = struct
   module BakeOp = struct
 
     let encoding =
+      def ~definitions_path "baked_block" @@
+      describe
+        ~title:"Baking"
+        ~description:"Tezos baking" @@
       conv
         (fun {bk_block_hash; bk_baker_hash; bk_level; bk_cycle ; bk_priority ;
               bk_missed_priority; bk_distance_level; bk_fees; bk_bktime;
@@ -505,6 +578,10 @@ module V1 = struct
   module BakeEndorsementOp = struct
 
     let encoding =
+      def ~definitions_path "endorsed_block" @@
+      describe
+        ~title:"Endorsing"
+        ~description:"Tezos endorsing" @@
       conv
         (fun {ebk_block; ebk_source; ebk_level; ebk_cycle; ebk_priority;
               ebk_dist; ebk_slots; ebk_lr_nslot; ebk_tsp}
@@ -531,6 +608,9 @@ module V1 = struct
   module CycleBakeOp = struct
 
     let count_encoding =
+      describe
+        ~title:"Baking count"
+        ~description:"Different counter for baking" @@
       conv
         (fun {cnt_all; cnt_miss; cnt_steal} ->
            (cnt_all, cnt_miss, cnt_steal))
@@ -542,6 +622,9 @@ module V1 = struct
            (req "count_steal" int64))
 
     let tez_encoding =
+      describe
+        ~title:"Baking Money"
+        ~description:"Fees, rewards and deposits for baking" @@
       conv
         (fun {tez_fee; tez_reward; tez_deposit} -> (tez_fee, tez_reward, tez_deposit))
         (fun (tez_fee, tez_reward, tez_deposit) -> {tez_fee; tez_reward; tez_deposit})
@@ -551,6 +634,9 @@ module V1 = struct
            (req "deposit" int64))
 
     let encoding =
+      describe
+        ~title:"Cycle Baking"
+        ~description:"Summary of bakings for a cycle" @@
       conv
         (fun {cbk_cycle; cbk_depth; cbk_count; cbk_tez; cbk_priority; cbk_bktime}
           -> (cbk_cycle, cbk_depth, cbk_count, cbk_tez, cbk_priority, cbk_bktime))
@@ -570,6 +656,9 @@ module V1 = struct
   module CycleEndorsementOp = struct
 
     let encoding =
+      describe
+        ~title:"Cycle Endorsing"
+        ~description:"Summary of endorsings for a cycle" @@
       conv
         (fun {ced_cycle; ced_depth; ced_slots; ced_tez; ced_priority}
           -> (ced_cycle, ced_depth, ced_slots, ced_tez, ced_priority))
@@ -588,6 +677,9 @@ module V1 = struct
   module Rights = struct
 
     let encoding =
+      describe
+        ~title:"Baking/Endorsing Rights"
+        ~description:"Baking and endorsing rights for a level" @@
       conv
         (fun ({ r_level; r_bakers; r_endorsers ; r_bakers_priority; r_baked})
           -> (r_level, r_bakers, r_endorsers, r_bakers_priority, r_baked))
@@ -607,16 +699,19 @@ module V1 = struct
   module BakerRights = struct
 
     let encoding =
-      (conv
-         (fun ({ br_level; br_cycle; br_priority; br_depth }) ->
-            ( br_level, br_cycle, br_priority, br_depth ))
-         (fun ( br_level, br_cycle, br_priority, br_depth ) ->
-            ({ br_level; br_cycle; br_priority; br_depth }))
-         (obj4
-            (req "level" int)
-            (req "cycle" int)
-            (req "priority" int)
-            (req "depth" int)))
+      describe
+        ~title:"Baking Rights"
+        ~description:"Baking rights for a level" @@
+      conv
+        (fun ({ br_level; br_cycle; br_priority; br_depth }) ->
+           ( br_level, br_cycle, br_priority, br_depth ))
+        (fun ( br_level, br_cycle, br_priority, br_depth ) ->
+           ({ br_level; br_cycle; br_priority; br_depth }))
+        (obj4
+           (req "level" int)
+           (req "cycle" int)
+           (req "priority" int)
+           (req "depth" int))
 
     let rights = list encoding
 
@@ -625,16 +720,19 @@ module V1 = struct
   module EndorserRights = struct
 
     let encoding =
-      (conv
-         (fun ({ er_level; er_cycle; er_nslot; er_depth }) ->
-            ( er_level, er_cycle, er_nslot, er_depth ))
-         (fun ( er_level, er_cycle, er_nslot, er_depth ) ->
-            ({ er_level; er_cycle; er_nslot; er_depth }))
-         (obj4
-            (req "level" int)
-            (req "cycle" int)
-            (req "nslot" int)
-            (req "depth" int)))
+      describe
+        ~title:"Endorsing Rights"
+        ~description:"Endorsing rights for a level" @@
+      conv
+        (fun ({ er_level; er_cycle; er_nslot; er_depth }) ->
+           ( er_level, er_cycle, er_nslot, er_depth ))
+        (fun ( er_level, er_cycle, er_nslot, er_depth ) ->
+           ({ er_level; er_cycle; er_nslot; er_depth }))
+        (obj4
+           (req "level" int)
+           (req "cycle" int)
+           (req "nslot" int)
+           (req "depth" int))
 
     let rights = list encoding
 
@@ -642,15 +740,18 @@ module V1 = struct
 
   module CycleRights = struct
     let encoding =
-      (conv
-         (fun { cr_cycle; cr_nblocks; cr_priority} ->
-            ( cr_cycle, cr_nblocks, cr_priority ))
-         (fun ( cr_cycle, cr_nblocks, cr_priority ) ->
-            { cr_cycle; cr_nblocks; cr_priority})
-         (obj3
-            (req "cycle" int)
-            (req "nblocks" int)
-            (req "priority" float)))
+      describe
+        ~title:"Cycle Rights"
+        ~description:"Summary of rights for a cycle" @@
+      conv
+        (fun { cr_cycle; cr_nblocks; cr_priority} ->
+           ( cr_cycle, cr_nblocks, cr_priority ))
+        (fun ( cr_cycle, cr_nblocks, cr_priority ) ->
+           { cr_cycle; cr_nblocks; cr_priority})
+        (obj3
+           (req "cycle" int)
+           (req "nblocks" int)
+           (req "priority" float))
 
     let rights = list encoding
   end
@@ -658,6 +759,9 @@ module V1 = struct
   module Block = struct
 
     let operation_encoding =
+      describe
+        ~title:"Block operation"
+        ~description:"Operation in a block" @@
       obj3
         (req "hash" string)
         (req "branch" string)
@@ -696,38 +800,42 @@ module V1 = struct
           (req "fees" tez)
           (req "distance_level" int)
       in
-      (conv
-         (fun { hash; predecessor_hash; fitness; baker;
-                timestamp; validation_pass; operations; protocol; nb_operations ;
-                test_protocol; network; test_network;
-                test_network_expiration; priority; level;
-                commited_nonce_hash; pow_nonce; proto; data; signature;
-                volume; fees; distance_level }
-           ->
-             let timestamp = Date.to_string timestamp in
-             ((hash, predecessor_hash, fitness,
-               timestamp, validation_pass, [ operations ], protocol,
-               test_protocol, network, test_network),
-              (test_network_expiration,
-               baker, nb_operations, priority, level, commited_nonce_hash,
-               pow_nonce, proto, data, signature)), (volume, fees, distance_level))
-         (fun (((hash, predecessor_hash, fitness,
-                 timestamp, validation_pass, operations, protocol,
-                 test_protocol, network, test_network),
-                (test_network_expiration,
-                 baker, nb_operations, priority, level, commited_nonce_hash,
-                 pow_nonce, proto, data, signature)),
-               (volume, fees, distance_level))
-           ->
-             let timestamp = Date.from_string timestamp in
-             { hash; predecessor_hash; fitness; baker ;
-               nb_operations ;
-               timestamp; validation_pass ;
-               operations = List.flatten operations ; protocol;
+      def ~definitions_path "block" @@
+      describe
+        ~title:"Block"
+        ~description:"Tezos block" @@
+      conv
+        (fun { hash; predecessor_hash; fitness; baker;
+               timestamp; validation_pass; operations; protocol; nb_operations ;
                test_protocol; network; test_network;
                test_network_expiration; priority; level;
                commited_nonce_hash; pow_nonce; proto; data; signature;
-               volume; fees; distance_level } ))
+               volume; fees; distance_level }
+          ->
+            let timestamp = Date.to_string timestamp in
+            ((hash, predecessor_hash, fitness,
+              timestamp, validation_pass, [ operations ], protocol,
+              test_protocol, network, test_network),
+             (test_network_expiration,
+              baker, nb_operations, priority, level, commited_nonce_hash,
+              pow_nonce, proto, data, signature)), (volume, fees, distance_level))
+        (fun (((hash, predecessor_hash, fitness,
+                timestamp, validation_pass, operations, protocol,
+                test_protocol, network, test_network),
+               (test_network_expiration,
+                baker, nb_operations, priority, level, commited_nonce_hash,
+                pow_nonce, proto, data, signature)),
+              (volume, fees, distance_level))
+          ->
+            let timestamp = Date.from_string timestamp in
+            { hash; predecessor_hash; fitness; baker ;
+              nb_operations ;
+              timestamp; validation_pass ;
+              operations = List.flatten operations ; protocol;
+              test_protocol; network; test_network;
+              test_network_expiration; priority; level;
+              commited_nonce_hash; pow_nonce; proto; data; signature;
+              volume; fees; distance_level } )
         (merge_objs
            (merge_objs block1 block2)
            block3)
@@ -738,10 +846,14 @@ module V1 = struct
 
   module Nonce_hash = struct
     let encoding =
+      describe
+        ~title:"Nonces"
+        ~description:"Nonces" @@
       let op =
-        obj2
-          (req "operation_hash" string)
-          (req "levels" (list int)) in
+        obj3
+          (opt "operation_hash" string)
+          (req "level" int)
+          (req "block_hash" string) in
       obj2
         (req "cycle" int)
         (req "nonces" (list op))
@@ -761,23 +873,29 @@ module V1 = struct
 
 
     let encoding =
-      (conv
-         (fun { lvl_level; lvl_level_position;
-                lvl_cycle; lvl_cycle_position;
-                lvl_voting_period; lvl_voting_period_position }
-           -> (lvl_level, lvl_level_position, lvl_cycle, lvl_cycle_position,
-               lvl_voting_period, lvl_voting_period_position, false))
-         (fun (lvl_level, lvl_level_position, lvl_cycle, lvl_cycle_position,
-               lvl_voting_period, lvl_voting_period_position, _) ->
-           { lvl_level; lvl_level_position;
-             lvl_cycle; lvl_cycle_position;
-             lvl_voting_period; lvl_voting_period_position } ))
+      describe
+        ~title:"Level"
+        ~description:"Level detailed information" @@
+      conv
+        (fun { lvl_level; lvl_level_position;
+               lvl_cycle; lvl_cycle_position;
+               lvl_voting_period; lvl_voting_period_position }
+          -> (lvl_level, lvl_level_position, lvl_cycle, lvl_cycle_position,
+              lvl_voting_period, lvl_voting_period_position, false))
+        (fun (lvl_level, lvl_level_position, lvl_cycle, lvl_cycle_position,
+              lvl_voting_period, lvl_voting_period_position, _) ->
+          { lvl_level; lvl_level_position;
+            lvl_cycle; lvl_cycle_position;
+            lvl_voting_period; lvl_voting_period_position } )
         level_encoding
 
   end
 
   module Health = struct
     let encoding =
+      describe
+        ~title:"Health"
+        ~description:"Information about the health of the chain" @@
       conv
         (fun ({ cycle_start_level ; cycle_end_level ;
                 cycle_volume ; cycle_fees ;
@@ -789,26 +907,26 @@ module V1 = struct
                 alternative_heads_number ; switch_number ;
                 longest_switch_depth ; mean_priority ; score_priority ;
                 biggest_block_volume ; biggest_block_fees ; top_baker})
-          -> (((cycle_start_level, cycle_end_level,
-                cycle_volume, cycle_fees,
-                cycle_bakers, cycle_endorsers,
-                endorsements_rate, main_endorsements_rate,
-                alt_endorsements_rate, empty_endorsements_rate),
-               (double_endorsements, main_revelation_rate,
-                alternative_heads_number, switch_number,
-                longest_switch_depth, mean_priority, score_priority,
-                biggest_block_volume, biggest_block_fees, top_baker )),
-              (cycle_date_start, cycle_date_end)))
-        (fun (((cycle_start_level, cycle_end_level,
-                cycle_volume, cycle_fees,
-                cycle_bakers, cycle_endorsers,
-                endorsements_rate, main_endorsements_rate,
-                alt_endorsements_rate, empty_endorsements_rate),
-               (double_endorsements, main_revelation_rate,
-                alternative_heads_number, switch_number,
-                longest_switch_depth, mean_priority, score_priority,
-                biggest_block_volume, biggest_block_fees, top_baker )),
-              (cycle_date_start, cycle_date_end)) ->
+          -> (cycle_start_level, cycle_end_level,
+              cycle_volume, cycle_fees,
+              cycle_bakers, cycle_endorsers,
+              endorsements_rate, main_endorsements_rate,
+              alt_endorsements_rate, empty_endorsements_rate,
+              double_endorsements, main_revelation_rate,
+              alternative_heads_number, switch_number,
+              longest_switch_depth, mean_priority, score_priority,
+              biggest_block_volume, biggest_block_fees, top_baker,
+              cycle_date_start, cycle_date_end))
+        (fun (cycle_start_level, cycle_end_level,
+              cycle_volume, cycle_fees,
+              cycle_bakers, cycle_endorsers,
+              endorsements_rate, main_endorsements_rate,
+              alt_endorsements_rate, empty_endorsements_rate,
+              double_endorsements, main_revelation_rate,
+              alternative_heads_number, switch_number,
+              longest_switch_depth, mean_priority, score_priority,
+              biggest_block_volume, biggest_block_fees, top_baker,
+              cycle_date_start, cycle_date_end) ->
           { cycle_start_level ; cycle_end_level ; cycle_volume ; cycle_fees ;
             cycle_bakers ; cycle_endorsers ; cycle_date_start ; cycle_date_end ;
             endorsements_rate ;
@@ -818,33 +936,29 @@ module V1 = struct
             switch_number ; longest_switch_depth ; mean_priority ;
             score_priority ; biggest_block_volume ;
             biggest_block_fees; top_baker })
-        (merge_objs
-           (merge_objs
-              (obj10
-                 (req "cycle_start_level" int)
-                 (req "cycle_end_level" int)
-                 (req "cycle_volume" tez)
-                 (req "cycle_fees" tez)
-                 (req "cycle_bakers" int)
-                 (req "cycle_endorsers" int)
-                 (req "endorsements_rate" float)
-                 (req "main_endorsements_rate" float)
-                 (req "alt_endorsements_rate" float)
-                 (req "empty_endorsements_rate" float))
-              (obj10
-                 (req "double_endorsements" int)
-                 (req "main_revelation_rate" float)
-                 (req "alternative_heads_number" int)
-                 (req "switch_number" int)
-                 (req "longest_switch_depth" int)
-                 (req "mean_priority" float)
-                 (req "score_priority" float)
-                 (req "big_block_volume" (tup2 string int))
-                 (req "big_block_fees" (tup2 string int))
-                 (req "top_baker" account_name_encoding)))
-           (obj2
-              (req "cycle_date_start" (tup3 int int int))
-              (req "cycle_date_end" (tup3 int int int))))
+        (EzEncoding.obj22
+           (req "cycle_start_level" int)
+           (req "cycle_end_level" int)
+           (req "cycle_volume" tez)
+           (req "cycle_fees" tez)
+           (req "cycle_bakers" int)
+           (req "cycle_endorsers" int)
+           (req "endorsements_rate" float)
+           (req "main_endorsements_rate" float)
+           (req "alt_endorsements_rate" float)
+           (req "empty_endorsements_rate" float)
+           (req "double_endorsements" int)
+           (req "main_revelation_rate" float)
+           (req "alternative_heads_number" int)
+           (req "switch_number" int)
+           (req "longest_switch_depth" int)
+           (req "mean_priority" float)
+           (req "score_priority" float)
+           (req "big_block_volume" (tup2 string int))
+           (req "big_block_fees" (tup2 string int))
+           (req "top_baker" account_name_encoding)
+           (req "cycle_date_start" (tup3 int int int))
+           (req "cycle_date_end" (tup3 int int int)))
 
   end
 
@@ -900,52 +1014,55 @@ module V1 = struct
 
     let encoding =
       let peer_encoding =
-        (conv
-           (fun (
-              { peer_id; country; score ; trusted ; conn_metadata ;
-                state ; id_point ; stat ;
-                last_failed_connection ; last_rejected_connection ;
-                last_established_connection ; last_disconnection ;
-                last_seen ; last_miss })
-              ->
-                let point_id = peer_to_string id_point in
-                let state =
-                  match state with
-                    Accepted -> "accepted" | Running -> "running" | Disconnected -> "disconnected" in
-                let last_failed_connection_point, last_failed_connection_date =
-                  last_connection last_failed_connection in
-                let last_rejected_connection_point, last_rejected_connection_date =
-                  last_connection last_rejected_connection in
-                let last_established_connection_point, last_established_connection_date =
-                  last_connection last_established_connection in
-                let last_disconnection_point, last_disconnection_date =
-                  last_connection last_disconnection in
-                let last_seen_point, last_seen_date = last_connection last_seen in
-                let last_miss_point, last_miss_date = last_connection last_miss in
-                (((peer_id, (fst country, snd country), point_id, trusted, conn_metadata,
-                   score, state),
-                  (stat.total_sent, stat.total_recv, stat.current_inflow, stat.current_outflow)),
-                 ((last_failed_connection_point, last_failed_connection_date,
-                   last_rejected_connection_point, last_rejected_connection_date,
-                   last_established_connection_point, last_established_connection_date),
-                  (last_disconnection_point, last_disconnection_date,
-                   last_seen_point, last_seen_date, last_miss_point, last_miss_date))))
-           (fun (((peer_id, (country_name, country_code), point_id, trusted, conn_metadata,
-                   score, state),
-                  (total_sent, total_recv, current_inflow, current_outflow)),
-                 ((last_failed_connection_point, last_failed_connection_date,
-                   last_rejected_connection_point, last_rejected_connection_date,
-                   last_established_connection_point, last_established_connection_date),
-                  (last_disconnection_point, last_disconnection_date,
-                   last_seen_point, last_seen_date, last_miss_point, last_miss_date)))
+        describe
+          ~title:"Peer"
+          ~description:"Information about peers" @@
+        conv
+          (fun (
+             { peer_id; country; score ; trusted ; conn_metadata ;
+               state ; id_point ; stat ;
+               last_failed_connection ; last_rejected_connection ;
+               last_established_connection ; last_disconnection ;
+               last_seen ; last_miss })
              ->
-               let country = country_name, country_code in
+               let point_id = peer_to_string id_point in
                let state =
                  match state with
-                 | "accepted" -> Accepted
-                 | "running"  -> Running
-                 | "disconnected" -> Disconnected
-                 | _ -> assert false in
+                   Accepted -> "accepted" | Running -> "running" | Disconnected -> "disconnected" in
+               let last_failed_connection_point, last_failed_connection_date =
+                 last_connection last_failed_connection in
+               let last_rejected_connection_point, last_rejected_connection_date =
+                 last_connection last_rejected_connection in
+               let last_established_connection_point, last_established_connection_date =
+                 last_connection last_established_connection in
+               let last_disconnection_point, last_disconnection_date =
+                 last_connection last_disconnection in
+               let last_seen_point, last_seen_date = last_connection last_seen in
+               let last_miss_point, last_miss_date = last_connection last_miss in
+               (peer_id, (fst country, snd country), point_id, trusted, conn_metadata,
+                score, state,
+                stat.total_sent, stat.total_recv, stat.current_inflow, stat.current_outflow,
+                last_failed_connection_point, last_failed_connection_date,
+                last_rejected_connection_point, last_rejected_connection_date,
+                last_established_connection_point, last_established_connection_date,
+                last_disconnection_point, last_disconnection_date,
+                last_seen_point, last_seen_date, last_miss_point, last_miss_date))
+          (fun (peer_id, (country_name, country_code), point_id, trusted, conn_metadata,
+                score, state,
+                total_sent, total_recv, current_inflow, current_outflow,
+                last_failed_connection_point, last_failed_connection_date,
+                last_rejected_connection_point, last_rejected_connection_date,
+                last_established_connection_point, last_established_connection_date,
+                last_disconnection_point, last_disconnection_date,
+                last_seen_point, last_seen_date, last_miss_point, last_miss_date)
+            ->
+              let country = country_name, country_code in
+              let state =
+                match state with
+                | "accepted" -> Accepted
+                | "running"  -> Running
+                | "disconnected" -> Disconnected
+                | _ -> assert false in
                let id_point = Some (to_peer point_id) in
                let last_failed_connection =
                  Some (to_peer last_failed_connection_point, last_failed_connection_date) in
@@ -962,46 +1079,43 @@ module V1 = struct
                  stat = { total_sent; total_recv; current_inflow; current_outflow } ;
                  last_failed_connection ; last_rejected_connection ;
                  last_established_connection ; last_disconnection ;
-                 last_seen; last_miss } ))
-          (merge_objs
-             (merge_objs
-                (obj7
-                   (req "peer_id" string)
-                   (req "country" (tup2 string string))
-                   (req "point_id" string)
-                   (req "trusted" bool)
-                   (opt "conn_metadata" Tezos_encoding.conn_metadata_encoding)
-                   (req "score" float)
-                   (req "state" string))
-                (obj4
-                   (req "total_sent" int64)
-                   (req "total_recv" int64)
-                   (req "current_inflow" int)
-                   (req "current_outflow" int)))
-             (merge_objs
-                (obj6
-                   (req "last_failed_connection_peer" string)
-                   (req "last_failed_connection_date" string)
-                   (req "last_rejected_connection_peer" string)
-                   (req "last_rejected_connection_date" string)
-                   (req "last_established_connection_peer" string)
-                   (req "last_established_connection_date" string))
-                (obj6
-                   (req "last_disconnection_peer" string)
-                   (req "last_disconnection_date" string)
-                   (req "last_seen_peer" string)
-                   (req "last_seen_date" string)
-                   (req "last_miss_peer" string)
-                   (req "last_miss_date" string)))) in
+                 last_seen; last_miss } )
+          (EzEncoding.obj23
+             (req "peer_id" string)
+             (req "country" (tup2 string string))
+             (req "point_id" string)
+             (req "trusted" bool)
+             (opt "conn_metadata" Tezos_encoding.conn_metadata_encoding)
+             (req "score" float)
+             (req "state" string)
+             (req "total_sent" int64)
+             (req "total_recv" int64)
+             (req "current_inflow" int)
+             (req "current_outflow" int)
+             (req "last_failed_connection_peer" string)
+             (req "last_failed_connection_date" string)
+             (req "last_rejected_connection_peer" string)
+             (req "last_rejected_connection_date" string)
+             (req "last_established_connection_peer" string)
+             (req "last_established_connection_date" string)
+             (req "last_disconnection_peer" string)
+             (req "last_disconnection_date" string)
+             (req "last_seen_peer" string)
+             (req "last_seen_date" string)
+             (req "last_miss_peer" string)
+             (req "last_miss_date" string)) in
       (list peer_encoding)
 
     let country_stats_encoding =
       let encoding =
-        (conv
-           (fun ({country_name; country_code; total})
-             -> (country_name, country_code, total))
-           (fun (country_name, country_code, total) ->
-              {country_name; country_code; total}))
+        describe
+          ~title:"Country Stats"
+          ~description:"Information about country peers" @@
+        conv
+          (fun ({country_name; country_code; total})
+            -> (country_name, country_code, total))
+          (fun (country_name, country_code, total) ->
+             {country_name; country_code; total})
           (obj3
              (req "country_name" string)
              (req "country_code" string)
@@ -1011,57 +1125,61 @@ module V1 = struct
 
   module MarketCap = struct
     let encoding =
-      (conv
-         (fun { mc_id; name; symbol; rank; price_usd; price_btc;
-                volume_usd_24; market_cap_usd; available_supply;
-                total_supply; max_supply; percent_change_1;
-                percent_change_24; percent_change_7; last_updated }
-           ->
-             ((mc_id, name, symbol, rank, price_usd, price_btc,
-               volume_usd_24, market_cap_usd, available_supply),
-              (total_supply, max_supply, percent_change_1,
-               percent_change_24, percent_change_7, last_updated)))
-         (fun ((mc_id, name, symbol, rank, price_usd, price_btc,
-                volume_usd_24, market_cap_usd, available_supply),
-               (total_supply, max_supply, percent_change_1,
-                percent_change_24, percent_change_7, last_updated)) ->
-           { mc_id; name; symbol; rank; price_usd; price_btc;
-             volume_usd_24; market_cap_usd; available_supply;
-             total_supply; max_supply; percent_change_1;
-             percent_change_24; percent_change_7; last_updated }))
+      describe
+        ~title:"Market Cap"
+        ~description:"Information about market cap for Tezos" @@
+      conv
+        (fun { mc_id; name; symbol; rank; price_usd; price_btc;
+               volume_usd_24; market_cap_usd; available_supply;
+               total_supply; max_supply; percent_change_1;
+               percent_change_24; percent_change_7; last_updated }
+          ->
+            (mc_id, name, symbol, rank, price_usd, price_btc,
+             volume_usd_24, market_cap_usd, available_supply,
+             total_supply, max_supply, percent_change_1,
+             percent_change_24, percent_change_7, last_updated))
+        (fun (mc_id, name, symbol, rank, price_usd, price_btc,
+              volume_usd_24, market_cap_usd, available_supply,
+              total_supply, max_supply, percent_change_1,
+              percent_change_24, percent_change_7, last_updated) ->
+          { mc_id; name; symbol; rank; price_usd; price_btc;
+            volume_usd_24; market_cap_usd; available_supply;
+            total_supply; max_supply; percent_change_1;
+            percent_change_24; percent_change_7; last_updated })
         (tup1
-           (merge_objs
-              (obj9
-                 (req "id" string)
-                 (req "name" string)
-                 (req "symbol" string)
-                 (req "rank" string)
-                 (req "price_usd" string)
-                 (req "price_btc" string)
-                 (req "24h_volume_usd" (option string))
-                 (req "market_cap_usd" (option string))
-                 (req "available_supply" (option string)))
-              (obj6
-                 (req "total_supply" (option string))
-                 (req "max_supply" (option string))
-                 (req "percent_change_1h" (option string))
-                 (req "percent_change_24h" (option string))
-                 (req "percent_change_7d" (option string))
-                 (req "last_updated" string))))
+           (EzEncoding.obj15
+              (req "id" string)
+              (req "name" string)
+              (req "symbol" string)
+              (req "rank" string)
+              (req "price_usd" string)
+              (req "price_btc" string)
+              (req "24h_volume_usd" (option string))
+              (req "market_cap_usd" (option string))
+              (req "available_supply" (option string))
+              (req "total_supply" (option string))
+              (req "max_supply" (option string))
+              (req "percent_change_1h" (option string))
+              (req "percent_change_24h" (option string))
+              (req "percent_change_7d" (option string))
+              (req "last_updated" string)))
 
   end
 
   module Account = struct
     let encoding =
-      (conv
-         (fun { account_hash; account_manager;
-                account_spendable; account_delegatable}
-           -> ((account_hash, account_manager,
-                account_spendable, account_delegatable)))
-         (fun ( account_hash, account_manager,
-                account_spendable, account_delegatable)
-           -> { account_hash; account_manager;
-                account_spendable; account_delegatable} ))
+      describe
+        ~title:"Account"
+        ~description:"Account information" @@
+      conv
+        (fun { account_hash; account_manager;
+               account_spendable; account_delegatable}
+          -> ((account_hash, account_manager,
+               account_spendable, account_delegatable)))
+        (fun ( account_hash, account_manager,
+               account_spendable, account_delegatable)
+          -> { account_hash; account_manager;
+               account_spendable; account_delegatable} )
         (obj4
            (req "hash" account_name_encoding)
            (req "manager" account_name_encoding)
@@ -1073,19 +1191,22 @@ module V1 = struct
 
   module Account_status = struct
     let encoding =
-      (conv
-         (fun { account_status_hash; account_status_revelation;
-                account_status_origination;}
-           -> ((account_status_hash, account_status_revelation,
-                account_status_origination)))
-         (fun ( account_status_hash, account_status_revelation,
-                account_status_origination)
-           -> { account_status_hash; account_status_revelation;
-                account_status_origination;} ))
+      describe
+        ~title:"Account Status"
+        ~description:"Status of an account" @@
+      conv
+        (fun { account_status_hash; account_status_revelation;
+               account_status_origination;}
+          -> ((account_status_hash, account_status_revelation,
+               account_status_origination)))
+        (fun ( account_status_hash, account_status_revelation,
+               account_status_origination)
+          -> { account_status_hash; account_status_revelation;
+               account_status_origination;} )
         (obj3
            (req "hash" account_name_encoding)
-           (req "revelation" (option string))
-           (req "origination" (option string)))
+           (opt "revelation" string)
+           (opt "origination" string))
   end
 
   module Bonds_rewards = struct
@@ -1095,28 +1216,55 @@ module V1 = struct
          (req "priority" int))
 
     let encoding =
-      (conv
-         (fun { acc_b_rewards; acc_b_deposits; acc_fees;
-                acc_e_rewards; acc_e_deposits }
-           -> ( acc_b_rewards, acc_b_deposits, acc_fees,
-                acc_e_rewards, acc_e_deposits ))
-         (fun ( acc_b_rewards, acc_b_deposits, acc_fees,
-                acc_e_rewards, acc_e_deposits )
-           -> { acc_b_rewards; acc_b_deposits; acc_fees;
-                acc_e_rewards; acc_e_deposits } )
-         (obj5
-            (req "block_rewards" tez)
-            (req "block_deposits" tez)
-            (req "block_acc_fees" tez)
-            (req "endorsements_rewards" tez)
-            (req "endorsement_deposits" tez)))
+      describe
+        ~title:"Frozen Balance"
+        ~description:"Detailed frozen balance" @@
+      conv
+        (fun { acc_b_rewards; acc_b_deposits; acc_fees;
+               acc_e_rewards; acc_e_deposits }
+          -> ( acc_b_rewards, acc_b_deposits, acc_fees,
+               acc_e_rewards, acc_e_deposits ))
+        (fun ( acc_b_rewards, acc_b_deposits, acc_fees,
+               acc_e_rewards, acc_e_deposits )
+          -> { acc_b_rewards; acc_b_deposits; acc_fees;
+               acc_e_rewards; acc_e_deposits } )
+        (obj5
+           (req "block_rewards" tez)
+           (req "block_deposits" tez)
+           (req "block_acc_fees" tez)
+           (req "endorsements_rewards" tez)
+           (req "endorsement_deposits" tez))
 
+    let extra =
+      describe
+        ~title:"Frozen Extras"
+        ~description:"Detailed frozen extras (denounciation, nonce revelation)" @@
+      conv
+        (fun { acc_dn_gain; acc_dn_deposit; acc_dn_rewards; acc_dn_fees;
+               acc_rv_rewards; acc_rv_lost_rewards; acc_rv_lost_fees }
+          -> ( acc_dn_gain, acc_dn_deposit, acc_dn_rewards, acc_dn_fees,
+               acc_rv_rewards, acc_rv_lost_rewards, acc_rv_lost_fees ))
+        (fun ( acc_dn_gain, acc_dn_deposit, acc_dn_rewards, acc_dn_fees,
+               acc_rv_rewards, acc_rv_lost_rewards, acc_rv_lost_fees )
+          -> { acc_dn_gain; acc_dn_deposit; acc_dn_rewards; acc_dn_fees;
+               acc_rv_rewards; acc_rv_lost_rewards; acc_rv_lost_fees })
+        (obj7
+           (req "denouciation_gain" tez)
+           (req "denounciation_deposits_loss" tez)
+           (req "denouciation_rewards_loss" tez)
+           (req "denounciation_fees_loss" tez)
+           (req "revelation_rewards" tez)
+           (req "revelation_rewards_loss" tez)
+           (req "revelation_fees_loss" tez))
   end
 
   module Baker = struct
     type baker = BOk of string list | BError
 
     let encoding =
+      describe
+        ~title:"Baker"
+        ~description:"Baker summary" @@
       conv
         (fun ({ baker_hash; nb_blocks; volume_total; fees_total; nb_endorsements })
           -> (baker_hash, nb_blocks, volume_total, fees_total, nb_endorsements ))
@@ -1137,16 +1285,19 @@ module V1 = struct
     include Op
 
     let encoding =
-      (conv
-         (fun { op_hash; op_block_hash; op_network_hash; op_type }
-           -> ( op_hash, op_block_hash, op_network_hash, op_type ))
-         (fun ( op_hash, op_block_hash, op_network_hash, op_type ) ->
-            { op_hash; op_block_hash; op_network_hash; op_type } )
-         (obj4
-            (req "hash" string)
-            (req "block_hash" string)
-            (req "network_hash" string)
-            (req "type" operation_encoding)))
+      describe
+        ~title:"Operation"
+        ~description:"Operation information" @@
+      conv
+        (fun { op_hash; op_block_hash; op_network_hash; op_type }
+          -> ( op_hash, op_block_hash, op_network_hash, op_type ))
+        (fun ( op_hash, op_block_hash, op_network_hash, op_type ) ->
+           { op_hash; op_block_hash; op_network_hash; op_type } )
+        (obj4
+           (req "hash" string)
+           (req "block_hash" string)
+           (req "network_hash" string)
+           (req "type" operation_encoding))
 
     let operation = encoding
     let operations = list operation
@@ -1169,6 +1320,9 @@ module V1 = struct
         (req "counter" z_encoding)
 
     let encoding =
+      describe
+        ~title:"Account Details"
+        ~description:"Detailled account information" @@
       conv
         (fun {acc_name; acc_manager; acc_balance; acc_spendable; acc_dlgt;
               acc_script; acc_storage; acc_counter; acc_node_timestamp }
@@ -1195,92 +1349,92 @@ module V1 = struct
 
   module Supply = struct
     let h_encoding =
-      (conv
-         (fun { h_activated_balance ; h_unfrozen_rewards ;
-                h_revelation_rewards ; h_missing_revelations ;
-                h_burned_tez_revelation ; h_burned_tez_origination ;
-                h_tez_origination_recv ; h_tez_origination_send ;
-                h_burned_tez_transaction ; h_tez_transaction_recv ;
-                h_tez_transaction_send ; h_burned_tez_double_baking ;
-                h_tez_dbe_rewards ; h_total } ->
-           ( h_activated_balance, h_unfrozen_rewards,
-             h_revelation_rewards, h_missing_revelations,
-             h_burned_tez_revelation, h_burned_tez_origination,
-             h_tez_origination_recv ),
-           ( h_tez_origination_send,
-             h_burned_tez_transaction, h_tez_transaction_recv,
-             h_tez_transaction_send, h_burned_tez_double_baking,
-             h_tez_dbe_rewards, h_total ))
-         (fun (( h_activated_balance, h_unfrozen_rewards,
-                 h_revelation_rewards, h_missing_revelations,
-                 h_burned_tez_revelation, h_burned_tez_origination,
-                 h_tez_origination_recv ),
-               ( h_tez_origination_send,
-                 h_burned_tez_transaction, h_tez_transaction_recv,
-                 h_tez_transaction_send, h_burned_tez_double_baking,
-                 h_tez_dbe_rewards, h_total )) ->
-           { h_activated_balance ; h_unfrozen_rewards ;
-             h_revelation_rewards ; h_missing_revelations ;
-             h_burned_tez_revelation ; h_burned_tez_origination ;
-             h_tez_origination_recv ; h_tez_origination_send ;
-             h_burned_tez_transaction ; h_tez_transaction_recv ;
-             h_tez_transaction_send ; h_burned_tez_double_baking ;
-             h_tez_dbe_rewards ; h_total })
-         (merge_objs
-            (obj7
-               (req "h_activated_balance" int64)
-               (req "h_unfrozen_rewards" int64)
-               (req "h_revelation_rewards" int64)
-               (req "h_missing_revelations" int)
-               (req "h_burned_tez_revelation" int64)
-               (req "h_burned_tez_origination" int64)
-               (req "h_tez_origination_recv" int64))
-            (obj7
-               (req "h_tez_origination_send" int64)
-               (req "h_burned_tez_transaction" int64)
-               (req "h_tez_transaction_recv" int64)
-               (req "h_tez_transaction_send" int64)
-               (req "h_burned_tez_double_baking" int64)
-               (req "h_tez_dbe_rewards" int64)
-               (req "h_total" int64))))
+      describe
+        ~title:"Account supply information"
+        ~description:"Information about the supply used by an account" @@
+      conv
+        (fun { h_activated_balance ; h_unfrozen_rewards ;
+               h_revelation_rewards ; h_missing_revelations ;
+               h_burned_tez_revelation ; h_burned_tez_origination ;
+               h_tez_origination_recv ; h_tez_origination_send ;
+               h_burned_tez_transaction ; h_tez_transaction_recv ;
+               h_tez_transaction_send ; h_burned_tez_double_baking ;
+               h_tez_dbe_rewards ; h_total } ->
+          ( h_activated_balance, h_unfrozen_rewards,
+            h_revelation_rewards, h_missing_revelations,
+            h_burned_tez_revelation, h_burned_tez_origination,
+            h_tez_origination_recv, h_tez_origination_send,
+            h_burned_tez_transaction, h_tez_transaction_recv,
+            h_tez_transaction_send, h_burned_tez_double_baking,
+            h_tez_dbe_rewards, h_total ))
+        (fun ( h_activated_balance, h_unfrozen_rewards,
+               h_revelation_rewards, h_missing_revelations,
+               h_burned_tez_revelation, h_burned_tez_origination,
+               h_tez_origination_recv, h_tez_origination_send,
+               h_burned_tez_transaction, h_tez_transaction_recv,
+               h_tez_transaction_send, h_burned_tez_double_baking,
+               h_tez_dbe_rewards, h_total ) ->
+          { h_activated_balance ; h_unfrozen_rewards ;
+            h_revelation_rewards ; h_missing_revelations ;
+            h_burned_tez_revelation ; h_burned_tez_origination ;
+            h_tez_origination_recv ; h_tez_origination_send ;
+            h_burned_tez_transaction ; h_tez_transaction_recv ;
+            h_tez_transaction_send ; h_burned_tez_double_baking ;
+            h_tez_dbe_rewards ; h_total })
+        (EzEncoding.obj14
+           (req "h_activated_balance" int64)
+           (req "h_unfrozen_rewards" int64)
+           (req "h_revelation_rewards" int64)
+           (req "h_missing_revelations" int)
+           (req "h_burned_tez_revelation" int64)
+           (req "h_burned_tez_origination" int64)
+           (req "h_tez_origination_recv" int64)
+           (req "h_tez_origination_send" int64)
+           (req "h_burned_tez_transaction" int64)
+           (req "h_tez_transaction_recv" int64)
+           (req "h_tez_transaction_send" int64)
+           (req "h_burned_tez_double_baking" int64)
+           (req "h_tez_dbe_rewards" int64)
+           (req "h_total" int64))
 
     let encoding =
-      (conv
-         (fun { dls ; foundation ; early_bakers ; contributors ;
-                unfrozen_rewards ; missing_revelations ;
-                revelation_rewards ; burned_tez_revelation ;
-                burned_tez_origination ; burned_tez_double_baking ;
-                total_supply_ico ; current_circulating_supply } ->
-           ( dls, foundation, early_bakers, contributors),
-           ( unfrozen_rewards, missing_revelations,
-             revelation_rewards, burned_tez_revelation,
-             burned_tez_origination, burned_tez_double_baking,
-             total_supply_ico, current_circulating_supply ))
-         (fun (( dls, foundation, early_bakers, contributors),
-               ( unfrozen_rewards, missing_revelations,
-                 revelation_rewards, burned_tez_revelation,
-                 burned_tez_origination, burned_tez_double_baking,
-                 total_supply_ico, current_circulating_supply )) ->
-           { dls ; foundation ; early_bakers ; contributors
-           ; unfrozen_rewards ; missing_revelations ;
-             revelation_rewards ; burned_tez_revelation ;
-             burned_tez_origination ; burned_tez_double_baking ;
-             total_supply_ico ; current_circulating_supply }))
-        (merge_objs
-           (obj4
-              (req "dls" int64)
-              (req "foundation" int64)
-              (req "early_bakers" int64)
-              (req "contributors" int64))
-           (obj8
-              (req "unfrozen_rewards" int64)
-              (req "missing_revelation" int)
-              (req "revelation_rewards" int64)
-              (req "burned_tez_revelation" int64)
-              (req "burned_tez_origination" int64)
-              (req "burned_tez_double_baking" int64)
-              (req "total_supply_ico" int64)
-              (req "circulating_supply" int64)))
+      describe
+        ~title:"Supply"
+        ~description:"Global supply information" @@
+      conv
+        (fun { dls ; foundation ; early_bakers ; contributors ;
+               unfrozen_rewards ; missing_revelations ;
+               revelation_rewards ; burned_tez_revelation ;
+               burned_tez_origination ; burned_tez_double_baking ;
+               total_supply_ico ; current_circulating_supply } ->
+          ( dls, foundation, early_bakers, contributors,
+            unfrozen_rewards, missing_revelations,
+            revelation_rewards, burned_tez_revelation,
+            burned_tez_origination, burned_tez_double_baking,
+            total_supply_ico, current_circulating_supply ))
+        (fun ( dls, foundation, early_bakers, contributors,
+               unfrozen_rewards, missing_revelations,
+               revelation_rewards, burned_tez_revelation,
+               burned_tez_origination, burned_tez_double_baking,
+               total_supply_ico, current_circulating_supply ) ->
+          { dls ; foundation ; early_bakers ; contributors
+          ; unfrozen_rewards ; missing_revelations ;
+            revelation_rewards ; burned_tez_revelation ;
+            burned_tez_origination ; burned_tez_double_baking ;
+            total_supply_ico ; current_circulating_supply })
+        (EzEncoding.obj12
+           (req "dls" int64)
+           (req "foundation" int64)
+           (req "early_bakers" int64)
+           (req "contributors" int64)
+           (req "unfrozen_rewards" int64)
+           (req "missing_revelation" int)
+           (req "revelation_rewards" int64)
+           (req "burned_tez_revelation" int64)
+           (req "burned_tez_origination" int64)
+           (req "burned_tez_double_baking" int64)
+           (req "total_supply_ico" int64)
+           (req "circulating_supply" int64))
   end
 
   module Rolls_distribution = struct
@@ -1289,72 +1443,79 @@ module V1 = struct
 
   module Rewards_split = struct
     let encoding =
-      (conv
-         (fun { rs_delegate_staking_balance ; rs_delegators_nb ;
-                rs_delegators_balance ; rs_block_rewards ;
-                rs_endorsement_rewards ; rs_fees ;
-                rs_baking_rights_rewards ; rs_endorsing_rights_rewards ;
-                rs_gain_from_denounciation ; rs_lost_deposit ;
-                rs_lost_rewards ; rs_lost_fees;
-                rs_rv_rewards; rs_rv_lost_rewards; rs_rv_lost_fees } ->
-           (( rs_delegate_staking_balance, rs_delegators_nb,
-              rs_delegators_balance, rs_block_rewards,
-              rs_endorsement_rewards, rs_fees, rs_baking_rights_rewards,
-              rs_endorsing_rights_rewards ),
-            ( rs_gain_from_denounciation, rs_lost_deposit,
-              rs_lost_rewards, rs_lost_fees,
-              rs_rv_rewards, rs_rv_lost_rewards, rs_rv_lost_fees)))
-         (fun (( rs_delegate_staking_balance, rs_delegators_nb,
-                 rs_delegators_balance, rs_block_rewards,
-                 rs_endorsement_rewards, rs_fees, rs_baking_rights_rewards,
-                 rs_endorsing_rights_rewards ),
-               ( rs_gain_from_denounciation, rs_lost_deposit,
-                 rs_lost_rewards, rs_lost_fees,
-                 rs_rv_rewards, rs_rv_lost_rewards, rs_rv_lost_fees)) ->
-           { rs_delegate_staking_balance ; rs_delegators_nb ;
-             rs_delegators_balance ; rs_block_rewards ;
-             rs_endorsement_rewards ; rs_fees ;
-             rs_baking_rights_rewards ; rs_endorsing_rights_rewards ;
-             rs_gain_from_denounciation ; rs_lost_deposit ;
-             rs_lost_rewards ; rs_lost_fees;
-             rs_rv_rewards; rs_rv_lost_rewards; rs_rv_lost_fees}))
-        (merge_objs
-           (obj8
-              (req "delegate_staking_balance" int64)
-              (req "delegators_nb" int)
-              (req "delegators_balance"
-                 (list (tup2 account_name_encoding int64)))
-              (req "blocks_rewards" int64)
-              (req "endorsements_rewards" int64)
-              (req "fees" int64)
-              (req "future_blocks_rewards" int64)
-              (req "future_endorsements_rewards" int64))
-           (obj7
-              (req "gain_from_denounciation" int64)
-              (req "lost_deposit_from_denounciation" int64)
-              (req "lost_rewards_denounciation" int64)
-              (req "lost_fees_denounciation" int64)
-              (req "revelation_rewards" tez)
-              (req "lost_revelation_rewards" tez)
-              (req "lost_revelation_fees" tez)))
+      describe
+        ~title:"Delegate Rewards"
+        ~description:"Information about delegate rewards" @@
+      conv
+        (fun { rs_delegate_staking_balance ; rs_delegators_nb ;
+               rs_delegators_balance ; rs_block_rewards ;
+               rs_endorsement_rewards ; rs_fees ;
+               rs_baking_rights_rewards ; rs_endorsing_rights_rewards ;
+               rs_gain_from_denounciation ; rs_lost_deposit ;
+               rs_lost_rewards ; rs_lost_fees;
+               rs_rv_rewards; rs_rv_lost_rewards; rs_rv_lost_fees } ->
+          ( rs_delegate_staking_balance, rs_delegators_nb,
+            rs_delegators_balance, rs_block_rewards,
+            rs_endorsement_rewards, rs_fees, rs_baking_rights_rewards,
+            rs_endorsing_rights_rewards,
+            rs_gain_from_denounciation, rs_lost_deposit,
+            rs_lost_rewards, rs_lost_fees,
+            rs_rv_rewards, rs_rv_lost_rewards, rs_rv_lost_fees))
+        (fun ( rs_delegate_staking_balance, rs_delegators_nb,
+               rs_delegators_balance, rs_block_rewards,
+               rs_endorsement_rewards, rs_fees, rs_baking_rights_rewards,
+               rs_endorsing_rights_rewards,
+               rs_gain_from_denounciation, rs_lost_deposit,
+               rs_lost_rewards, rs_lost_fees,
+               rs_rv_rewards, rs_rv_lost_rewards, rs_rv_lost_fees) ->
+          { rs_delegate_staking_balance ; rs_delegators_nb ;
+            rs_delegators_balance ; rs_block_rewards ;
+            rs_endorsement_rewards ; rs_fees ;
+            rs_baking_rights_rewards ; rs_endorsing_rights_rewards ;
+            rs_gain_from_denounciation ; rs_lost_deposit ;
+            rs_lost_rewards ; rs_lost_fees;
+            rs_rv_rewards; rs_rv_lost_rewards; rs_rv_lost_fees})
+        (EzEncoding.obj15
+           (req "delegate_staking_balance" int64)
+           (req "delegators_nb" int)
+           (req "delegators_balance"
+              (list (tup2 account_name_encoding int64)))
+           (req "blocks_rewards" int64)
+           (req "endorsements_rewards" int64)
+           (req "fees" int64)
+           (req "future_blocks_rewards" int64)
+           (req "future_endorsements_rewards" int64)
+           (req "gain_from_denounciation" int64)
+           (req "lost_deposit_from_denounciation" int64)
+           (req "lost_rewards_denounciation" int64)
+           (req "lost_fees_denounciation" int64)
+           (req "revelation_rewards" tez)
+           (req "lost_revelation_rewards" tez)
+           (req "lost_revelation_fees" tez))
 
     let status_encoding =
-      (conv
-         (function
-           | Cycle_in_progress -> "cycle_in_progress"
-           | Cycle_pending -> "cycle_pending"
-           | Rewards_pending -> "rewards_pending"
-           | Rewards_delivered -> "rewards_delivered")
-         (function
-           | "cycle_in_progress" -> Cycle_in_progress
-           | "cycle_pending" -> Cycle_pending
-           | "rewards_pending" -> Rewards_pending
-           | "rewards_delivered" -> Rewards_delivered
-           | _ -> assert false))
+      describe
+        ~title:"Reward Status"
+        ~description:"Reward status" @@
+      conv
+        (function
+          | Cycle_in_progress -> "cycle_in_progress"
+          | Cycle_pending -> "cycle_pending"
+          | Rewards_pending -> "rewards_pending"
+          | Rewards_delivered -> "rewards_delivered")
+        (function
+          | "cycle_in_progress" -> Cycle_in_progress
+          | "cycle_pending" -> Cycle_pending
+          | "rewards_pending" -> Rewards_pending
+          | "rewards_delivered" -> Rewards_delivered
+          | _ -> assert false)
         (obj1
            (req "status" string))
 
     let all_encoding =
+      describe
+        ~title:"Cycle Delegate Rewards"
+        ~description:"Summary of delegate rewards for a cycle" @@
       conv
         (fun { ars_cycle ; ars_delegate_staking_balance ;
                ars_delegators_nb ; ars_delegate_delegated_balance ;
@@ -1364,24 +1525,24 @@ module V1 = struct
                ars_status ; ars_gain_from_denounciation ;
                ars_lost_deposit ; ars_lost_rewards ; ars_lost_fees;
                ars_rv_rewards; ars_rv_lost_rewards; ars_rv_lost_fees } ->
-          ( (ars_cycle, ars_delegate_staking_balance,
-             ars_delegators_nb, ars_delegate_delegated_balance,
-             ars_block_rewards,
-             ars_endorsement_rewards, ars_fees,
-             ars_baking_rights_rewards, ars_endorsing_rights_rewards,
-             ars_status),
-            (ars_gain_from_denounciation,
-             ars_lost_deposit, ars_lost_rewards, ars_lost_fees,
-             ars_rv_rewards, ars_rv_lost_rewards, ars_rv_lost_fees)))
-        (fun ( (ars_cycle, ars_delegate_staking_balance,
-                ars_delegators_nb, ars_delegate_delegated_balance,
-                ars_block_rewards,
-                ars_endorsement_rewards, ars_fees,
-                ars_baking_rights_rewards, ars_endorsing_rights_rewards,
-                ars_status),
-               (ars_gain_from_denounciation,
-                ars_lost_deposit, ars_lost_rewards, ars_lost_fees,
-                ars_rv_rewards, ars_rv_lost_rewards, ars_rv_lost_fees)) ->
+          ( ars_cycle, ars_delegate_staking_balance,
+            ars_delegators_nb, ars_delegate_delegated_balance,
+            ars_block_rewards,
+            ars_endorsement_rewards, ars_fees,
+            ars_baking_rights_rewards, ars_endorsing_rights_rewards,
+            ars_status,
+            ars_gain_from_denounciation,
+            ars_lost_deposit, ars_lost_rewards, ars_lost_fees,
+            ars_rv_rewards, ars_rv_lost_rewards, ars_rv_lost_fees))
+        (fun ( ars_cycle, ars_delegate_staking_balance,
+               ars_delegators_nb, ars_delegate_delegated_balance,
+               ars_block_rewards,
+               ars_endorsement_rewards, ars_fees,
+               ars_baking_rights_rewards, ars_endorsing_rights_rewards,
+               ars_status,
+               ars_gain_from_denounciation,
+               ars_lost_deposit, ars_lost_rewards, ars_lost_fees,
+               ars_rv_rewards, ars_rv_lost_rewards, ars_rv_lost_fees) ->
           { ars_cycle ; ars_delegate_staking_balance;
             ars_delegators_nb ; ars_delegate_delegated_balance ;
             ars_block_rewards ;
@@ -1390,29 +1551,30 @@ module V1 = struct
             ars_status ; ars_gain_from_denounciation ;
             ars_lost_deposit ; ars_lost_rewards ; ars_lost_fees;
             ars_rv_rewards; ars_rv_lost_rewards; ars_rv_lost_fees})
-        (merge_objs
-           (obj10
-              (req "cycle" int)
-              (req "delegate_staking_balance" int64)
-              (req "delegators_nb" int)
-              (req "delegated_balance" int64)
-              (req "blocks_rewards" int64)
-              (req "endorsements_rewards" int64)
-              (req "fees" int64)
-              (req "future_baking_rewards" int64)
-              (req "future_endorsing_rewards" int64)
-              (req "status" status_encoding))
-           (obj7
-              (req "gain_from_denounciation" int64)
-              (req "lost_deposit_from_denounciation" int64)
-              (req "lost_rewards_denounciation" int64)
-              (req "lost_fees_denounciation" int64)
-              (req "revelation_rewards" tez)
-              (req "lost_revelation_rewards" tez)
-              (req "lost_revelation_fees" tez)
-           ))
+        (EzEncoding.obj17
+           (req "cycle" int)
+           (req "delegate_staking_balance" int64)
+           (req "delegators_nb" int)
+           (req "delegated_balance" int64)
+           (req "blocks_rewards" int64)
+           (req "endorsements_rewards" int64)
+           (req "fees" int64)
+           (req "future_baking_rewards" int64)
+           (req "future_endorsing_rewards" int64)
+           (req "status" status_encoding)
+           (req "gain_from_denounciation" int64)
+           (req "lost_deposit_from_denounciation" int64)
+           (req "lost_rewards_denounciation" int64)
+           (req "lost_fees_denounciation" int64)
+           (req "revelation_rewards" tez)
+           (req "lost_revelation_rewards" tez)
+           (req "lost_revelation_fees" tez)
+           )
 
     let delegator_encoding =
+      describe
+        ~title:"Delegator Rewards"
+        ~description:"Delegator rewards for a cycle" @@
       conv
         (fun {dor_cycle; dor_delegate; dor_staking_balance; dor_balance;
               dor_rewards; dor_extra_rewards; dor_losses; dor_status}
@@ -1432,26 +1594,67 @@ module V1 = struct
            (req "losses" int64)
            (req "status" status_encoding))
     let delegator_encodings = list delegator_encoding
+
+    let delegator_rewards_details =
+      describe
+        ~title:"Delegator Rewards Details"
+        ~description:"Delegator rewards details for a cycle" @@
+      conv
+        (fun {dor_block_rewards; dor_end_rewards; dor_fees; dor_rv_rewards;
+              dor_dn_gain; dor_rv_lost_rewards; dor_rv_lost_fees;
+              dor_dn_lost_deposit; dor_dn_lost_rewards; dor_dn_lost_fees}
+          -> (dor_block_rewards, dor_end_rewards, dor_fees, dor_rv_rewards,
+              dor_dn_gain, dor_rv_lost_rewards, dor_rv_lost_fees,
+              dor_dn_lost_deposit, dor_dn_lost_rewards, dor_dn_lost_fees))
+        (fun (dor_block_rewards, dor_end_rewards, dor_fees, dor_rv_rewards,
+              dor_dn_gain, dor_rv_lost_rewards, dor_rv_lost_fees,
+              dor_dn_lost_deposit, dor_dn_lost_rewards, dor_dn_lost_fees)
+          -> {dor_block_rewards; dor_end_rewards; dor_fees; dor_rv_rewards;
+              dor_dn_gain; dor_rv_lost_rewards; dor_rv_lost_fees;
+              dor_dn_lost_deposit; dor_dn_lost_rewards; dor_dn_lost_fees})
+        (obj10
+           (req "block_rewards" tez)
+           (req "endorsement_rewards" tez)
+           (req "fees" tez)
+           (req "revelation_rewards" tez)
+           (req "denounciation_gain" tez)
+           (req "revelation_lost_rewards" tez)
+           (req "revelation_lost_fees" tez)
+           (req "denounciation_lost_deposit" tez)
+           (req "denounciation_lost_rewards" tez)
+           (req "denounciation_lost_fees" tez))
+
+    let delegator_rewards_all =
+      describe
+        ~title:"Delegator Rewards All"
+        ~description:"Delegator rewards with details included for a cycle" @@
+      (merge_objs delegator_encoding delegator_rewards_details)
   end
 
   module Snapshot = struct
     let snapshot_encoding =
-      (conv
-         (fun { snap_cycle ; snap_index ; snap_level ; snap_rolls } ->
-            ( snap_cycle, snap_index, snap_level, snap_rolls ))
-         (fun ( snap_cycle, snap_index, snap_level, snap_rolls ) ->
-            { snap_cycle ; snap_index ; snap_level ; snap_rolls })
-         (obj4
-            (req "snapshot_cycle" int)
-            (req "snapshot_index" int)
-            (req "snapshot_level" int)
-            (req "snapshot_rolls" int)))
+      describe
+        ~title:"Snapshot"
+        ~description:"Snapshot information" @@
+      conv
+        (fun { snap_cycle ; snap_index ; snap_level ; snap_rolls } ->
+           ( snap_cycle, snap_index, snap_level, snap_rolls ))
+        (fun ( snap_cycle, snap_index, snap_level, snap_rolls ) ->
+           { snap_cycle ; snap_index ; snap_level ; snap_rolls })
+        (obj4
+           (req "snapshot_cycle" int)
+           (req "snapshot_index" int)
+           (req "snapshot_level" int)
+           (req "snapshot_rolls" int))
 
     let encoding = list snapshot_encoding
   end
 
   module Proto_details = struct
     let proto_encoding =
+      describe
+        ~title:"Protocol"
+        ~description:"Protocol details" @@
       conv
         (fun {prt_index; prt_hash; prt_name; prt_start; prt_end}
           -> (prt_index, prt_hash, prt_name, prt_start, prt_end))
@@ -1477,47 +1680,18 @@ module V1 = struct
 
   module Balance_update_info = struct
     let bu_encoding =
+      describe
+        ~title:"Balance Update"
+        ~description:"Balance update information" @@
       conv
-        (fun {bu_account;
-              bu_block_hash;
-              bu_diff;
-              bu_date;
-              bu_update_type;
-              bu_op_type;
-              bu_internal;
-              bu_frozen;
-              bu_level;
-              bu_burn}
-         -> (bu_account,
-             bu_block_hash,
-             bu_diff,
-             bu_date,
-             bu_update_type,
-             bu_op_type,
-             bu_internal,
-             bu_frozen,
-             bu_level,
-             bu_burn))
-        (fun (bu_account,
-              bu_block_hash,
-              bu_diff,
-              bu_date,
-              bu_update_type,
-              bu_op_type,
-              bu_internal,
-              bu_frozen,
-              bu_level,
-              bu_burn)
-         ->  {bu_account;
-              bu_block_hash;
-              bu_diff;
-              bu_date;
-              bu_update_type;
-              bu_op_type;
-              bu_internal;
-              bu_frozen;
-              bu_level;
-              bu_burn})
+        (fun {bu_account; bu_block_hash; bu_diff; bu_date; bu_update_type;
+              bu_op_type; bu_internal; bu_frozen; bu_level; bu_burn}
+         -> (bu_account, bu_block_hash, bu_diff, bu_date, bu_update_type,
+             bu_op_type, bu_internal, bu_frozen, bu_level, bu_burn))
+        (fun (bu_account, bu_block_hash, bu_diff, bu_date, bu_update_type,
+             bu_op_type, bu_internal, bu_frozen, bu_level, bu_burn)
+         ->  {bu_account; bu_block_hash; bu_diff; bu_date; bu_update_type;
+              bu_op_type; bu_internal; bu_frozen; bu_level; bu_burn})
         (obj10
            (req "account" string)
            (req "block" string)
@@ -1534,6 +1708,9 @@ module V1 = struct
 
   module Balance = struct
     let encoding =
+      describe
+        ~title:"Balance"
+        ~description:"Balance details" @@
       conv
         (fun {b_spendable; b_frozen; b_rewards; b_fees; b_deposits} ->
           (b_spendable, b_frozen, b_rewards, b_fees, b_deposits) )
@@ -1549,23 +1726,26 @@ module V1 = struct
 
   module H24_stats = struct
     let encoding =
-      (conv
-         (fun { h24_end_rate ; h24_block_0_rate ;
-                h24_transactions ; h24_originations ;
-                h24_delegations ; h24_activations ;
-                h24_baking_rate ; h24_active_baker } ->
-           ( h24_end_rate, h24_block_0_rate,
-             h24_transactions, h24_originations,
-             h24_delegations, h24_activations,
-             h24_baking_rate, h24_active_baker))
-         (fun ( h24_end_rate, h24_block_0_rate,
-                h24_transactions, h24_originations,
-                h24_delegations, h24_activations,
-                h24_baking_rate, h24_active_baker ) ->
-           { h24_end_rate ; h24_block_0_rate ;
-             h24_transactions ; h24_originations ;
-             h24_delegations ; h24_activations ;
-             h24_baking_rate ; h24_active_baker}))
+      describe
+        ~title:"24h Stats"
+        ~description:"Statistics on the last 24h" @@
+      conv
+        (fun { h24_end_rate ; h24_block_0_rate ;
+               h24_transactions ; h24_originations ;
+               h24_delegations ; h24_activations ;
+               h24_baking_rate ; h24_active_baker } ->
+          ( h24_end_rate, h24_block_0_rate,
+            h24_transactions, h24_originations,
+            h24_delegations, h24_activations,
+            h24_baking_rate, h24_active_baker))
+        (fun ( h24_end_rate, h24_block_0_rate,
+               h24_transactions, h24_originations,
+               h24_delegations, h24_activations,
+               h24_baking_rate, h24_active_baker ) ->
+          { h24_end_rate ; h24_block_0_rate ;
+            h24_transactions ; h24_originations ;
+            h24_delegations ; h24_activations ;
+            h24_baking_rate ; h24_active_baker})
         (obj8
            (req "h24_endorsements_rate" float)
            (req "h24_block_0_rate" float)
@@ -1580,6 +1760,9 @@ module V1 = struct
   module Server = struct
 
     let versions =
+      describe
+        ~title:"Server"
+        ~description:"Server information" @@
       conv
         (fun { server_version; server_build; server_commit } ->
            ( server_version, server_build, server_commit ) )
@@ -1592,6 +1775,9 @@ module V1 = struct
 
 
     let ico_constants =
+      describe
+        ~title:"ICO Constants"
+        ~description:"ICO constants" @@
       conv
         (fun
           {
@@ -1636,6 +1822,9 @@ module V1 = struct
         )
 
     let api_server_config =
+      describe
+        ~title:"Configuration Constants"
+        ~description:"Constants and information about configuration" @@
       conv
         (fun
           {
@@ -1725,11 +1914,93 @@ module V1 = struct
 
   end
 
+  module Voting_period_status_repr = struct
+    let status_encoding =
+      union  [
+        case
+          (constant "voting_period_passed")
+          (function VPS_passed -> Some () | _ -> None)
+          (fun () -> VPS_passed) ;
+        case
+          (constant "voting_period_waiting")
+          (function VPS_wait -> Some () | _ -> None)
+          (fun () -> VPS_wait) ;
+        case
+          (constant "voting_period_current")
+          (function VPS_current -> Some () | _ -> None)
+          (fun () -> VPS_current) ;
+        case
+          (constant "voting_period_ignored")
+          (function VPS_ignored -> Some () | _ -> None)
+          (fun () -> VPS_ignored) ;
+      ]
+  end
+
+  module Proposal = struct
+
+    let encoding =
+      describe
+        ~title:"Proposal"
+        ~description:"Proposal with (up)votes" @@
+      conv
+        (fun {prop_period; prop_period_kind; prop_hash; prop_count; prop_votes;
+              prop_source; prop_op; prop_ballot}
+          -> let prop_ballot = Misc.convopt Tezos_utils.string_of_ballot_vote prop_ballot in
+            (prop_period, prop_period_kind, prop_hash, prop_count, prop_votes,
+             prop_source, prop_op, prop_ballot))
+        (fun (prop_period, prop_period_kind, prop_hash, prop_count, prop_votes,
+              prop_source, prop_op, prop_ballot)
+          -> let prop_ballot = Misc.convopt Tezos_utils.ballot_of_string prop_ballot in
+            {prop_period; prop_period_kind; prop_hash; prop_count; prop_votes;
+             prop_source; prop_op; prop_ballot})
+        (obj8
+           (req "voting_period" int)
+           (req "period_kind" Tezos_encoding.Encoding.Voting_period_repr.kind_encoding)
+           (req "proposal_hash" string)
+           (req "count" int)
+           (req "votes" int)
+           (req "source" account_name_encoding)
+           (opt "operation" string)
+           (opt "ballot" string)
+        )
+
+    let encodings = list encoding
+
+    let voting_info =
+      obj7
+        (req "period" int)
+        (req "kind" Tezos_encoding.Encoding.Voting_period_repr.kind_encoding)
+        (req "cycle" int)
+        (req "level" int)
+        (req "max_period" bool)
+        (req "period_status" (list Voting_period_status_repr.status_encoding))
+        (req "quorum" int)
+
+    let ballot_encoding =
+      obj7
+        (req "proposal" string)
+        (req "nb_yay" int)
+        (req "nb_nay" int)
+        (req "nb_pass" int)
+        (req "vote_yay" int)
+        (req "vote_nay" int)
+        (req "vote_pass" int)
+
+    let vote_graphs_encoding =
+      let graph = list (obj3 (req "period" int) (req "count" int) (req "rolls" int)) in
+      obj2
+        (req "proposals" graph)
+        (req "ballots" graph)
+  end
+
 end
 
 module Context_stats = struct
 
   let context_with_diff_encoding =
+    describe
+      ~title:"Context"
+      ~description:"Context information" @@
     conv
       (fun
         { context_level ;
@@ -1754,48 +2025,47 @@ module Context_stats = struct
         (( context_level,
            context_addresses, context_addresses_diff,
            context_keys, context_keys_diff, context_revealed,
-           context_revealed_diff, context_originated ),
-         ((context_originated_diff,
+           context_revealed_diff, context_originated,
+           context_originated_diff,
            context_contracts, context_contracts_diff, context_roll_owners,
            context_roll_owners_diff, context_rolls, context_rolls_diff,
-           context_delegated, context_delegated_diff, context_delegators),
-          ((context_delegators_diff, context_deleguees, context_deleguees_diff,
-            context_self_delegates, context_self_delegates_diff,
-            context_multi_deleguees, context_multi_deleguees_diff,
-            context_current_balances, context_current_balances_diff,
-            context_full_balances),
-           ((context_full_balances_diff,
-             context_staking_balances, context_staking_balances_diff,
-             context_frozen_balances, context_frozen_balances_diff,
-             context_frozen_deposits, context_frozen_deposits_diff,
-             context_frozen_rewards, context_frozen_rewards_diff,
-             context_frozen_fees),
-            (context_frozen_fees_diff, context_paid_bytes,
-             context_paid_bytes_diff, context_used_bytes,
-             context_used_bytes_diff) )))))
+           context_delegated, context_delegated_diff, context_delegators,
+           context_delegators_diff, context_deleguees, context_deleguees_diff,
+           context_self_delegates, context_self_delegates_diff,
+           context_multi_deleguees),
+         (context_multi_deleguees_diff,
+          context_current_balances, context_current_balances_diff,
+          context_full_balances, context_full_balances_diff,
+          context_staking_balances, context_staking_balances_diff,
+          context_frozen_balances, context_frozen_balances_diff,
+          context_frozen_deposits, context_frozen_deposits_diff,
+          context_frozen_rewards, context_frozen_rewards_diff,
+          context_frozen_fees,
+          context_frozen_fees_diff, context_paid_bytes,
+          context_paid_bytes_diff, context_used_bytes,
+          context_used_bytes_diff)))
       (fun
         (( context_level,
            context_addresses, context_addresses_diff,
            context_keys, context_keys_diff, context_revealed,
-           context_revealed_diff, context_originated ),
-         ((context_originated_diff,
+           context_revealed_diff, context_originated, context_originated_diff,
            context_contracts, context_contracts_diff, context_roll_owners,
            context_roll_owners_diff, context_rolls, context_rolls_diff,
-           context_delegated, context_delegated_diff, context_delegators),
-          ((context_delegators_diff, context_deleguees, context_deleguees_diff,
-            context_self_delegates, context_self_delegates_diff,
-            context_multi_deleguees, context_multi_deleguees_diff,
-            context_current_balances, context_current_balances_diff,
-            context_full_balances),
-           ((context_full_balances_diff,
-             context_staking_balances, context_staking_balances_diff,
-             context_frozen_balances, context_frozen_balances_diff,
-             context_frozen_deposits, context_frozen_deposits_diff,
-             context_frozen_rewards, context_frozen_rewards_diff,
-             context_frozen_fees),
-            (context_frozen_fees_diff, context_paid_bytes,
-             context_paid_bytes_diff, context_used_bytes,
-             context_used_bytes_diff) )))) ->
+           context_delegated, context_delegated_diff, context_delegators,
+           context_delegators_diff, context_deleguees, context_deleguees_diff,
+           context_self_delegates, context_self_delegates_diff,
+           context_multi_deleguees),
+         ( context_multi_deleguees_diff,
+           context_current_balances, context_current_balances_diff,
+           context_full_balances, context_full_balances_diff,
+           context_staking_balances, context_staking_balances_diff,
+           context_frozen_balances, context_frozen_balances_diff,
+           context_frozen_deposits, context_frozen_deposits_diff,
+           context_frozen_rewards, context_frozen_rewards_diff,
+           context_frozen_fees,
+           context_frozen_fees_diff, context_paid_bytes,
+           context_paid_bytes_diff, context_used_bytes,
+           context_used_bytes_diff) ) ->
         { context_level ;
           context_addresses ; context_addresses_diff ;
           context_keys ; context_keys_diff ; context_revealed ;
@@ -1816,7 +2086,7 @@ module Context_stats = struct
           context_paid_bytes_diff ; context_used_bytes ;
           context_used_bytes_diff })
       (merge_objs
-         (obj8
+         (EzEncoding.obj24
             (opt "level" V1.Level.encoding )
             (req "addresses"  int )
             (req "addresses_diff" float )
@@ -1824,55 +2094,52 @@ module Context_stats = struct
             (req "keys_diff" float )
             (req "revealed"  int  )
             (req "revealed_diff" float )
-            (req "originated"  int  ))
-         (merge_objs
-            (obj10
-               (req "originated_diff" float )
-               (req "contracts"  int  )
-               (req "contracts_diff" float )
-               (req "roll_owners"  int  )
-               (req "roll_owners_diff" float )
-               (req "rolls"  int  )
-               (req "rolls_diff" float )
-               (req "delegated"  int64  )
-               (req "delegated_diff" float )
-               (req "delegators"  int  ))
-            (merge_objs
-               (obj10
-                  (req "delegators_diff" float )
-                  (req "deleguees"  int  )
-                  (req "deleguees_diff" float )
-                  (req "self_delegates"  int  )
-                  (req "self_delegates_diff" float )
-                  (req "multi_deleguees"  int  )
-                  (req "multi_deleguees_diff" float )
-                  (req "current_balances" int64)
-                  (req "current_balances_diff" float )
-                  (req "full_balances" int64))
-               (merge_objs
-                  (obj10
-                     (req "full_balances_diff" float )
-                     (req "staking_balances"  int64  )
-                     (req "staking_balances_diff" float )
-                     (req "frozen_balances"  int64  )
-                     (req "frozen_balances_diff" float )
-                     (req "frozen_deposits"  int64  )
-                     (req "frozen_deposits_diff" float )
-                     (req "frozen_rewards"  int64  )
-                     (req "frozen_rewards_diff" float )
-                     (req "frozen_fees"  int64  ))
-                  (obj5
-                     (req "frozen_fees_diff" float )
-                     (req "paid_bytes"  int64  )
-                     (req "paid_bytes_diff" float )
-                     (req "used_bytes"  int64  )
-                     (req "used_bytes_diff" float ))))))
+            (req "originated"  int  )
+            (req "originated_diff" float )
+            (req "contracts"  int  )
+            (req "contracts_diff" float )
+            (req "roll_owners"  int  )
+            (req "roll_owners_diff" float )
+            (req "rolls"  int  )
+            (req "rolls_diff" float )
+            (req "delegated"  int64  )
+            (req "delegated_diff" float )
+            (req "delegators"  int  )
+            (req "delegators_diff" float )
+            (req "deleguees"  int  )
+            (req "deleguees_diff" float )
+            (req "self_delegates"  int  )
+            (req "self_delegates_diff" float )
+            (req "multi_deleguees"  int  ))
+         (EzEncoding.obj19
+            (req "multi_deleguees_diff" float )
+            (req "current_balances" int64)
+            (req "current_balances_diff" float )
+            (req "full_balances" int64)
+            (req "full_balances_diff" float )
+            (req "staking_balances"  int64  )
+            (req "staking_balances_diff" float )
+            (req "frozen_balances"  int64  )
+            (req "frozen_balances_diff" float )
+            (req "frozen_deposits"  int64  )
+            (req "frozen_deposits_diff" float )
+            (req "frozen_rewards"  int64  )
+            (req "frozen_rewards_diff" float )
+            (req "frozen_fees"  int64  )
+            (req "frozen_fees_diff" float )
+            (req "paid_bytes"  int64  )
+            (req "paid_bytes_diff" float )
+            (req "used_bytes"  int64  )
+            (req "used_bytes_diff" float )))
 
 end
 
 module Tops = struct
 
   let context_top_accounts_encoding =
+    describe
+      ~title:"Context Top Accounts"
+      ~description:"Top accounts from the context" @@
     conv
       (fun
         { context_top_period ; context_top_kind ;
@@ -1895,6 +2162,9 @@ module Tops = struct
       )
 
   let top_accounts_encoding =
+    describe
+      ~title:"Top Accounts"
+      ~description:"Top accounts" @@
     conv
       (fun
         { top_period ; top_kind ; top_hash ; top_list }
@@ -1994,21 +2264,21 @@ module WWW = struct
     conv
       (fun
         { www_currency_name ; www_currency_short ; www_currency_symbol ;
-          www_languages ; www_apis ; www_auth ;
-          www_logo ; www_footer ; www_networks } ->
+          www_languages ; www_apis ; www_auth ; www_logo ; www_footer ;
+          www_networks; www_themes ; www_recaptcha_key ; www_csv_server } ->
         ( www_currency_name , www_currency_short , www_currency_symbol ,
-          www_languages , www_apis , www_auth ,
-          www_logo , www_footer , www_networks )
+          www_languages , www_apis , www_auth , www_logo , www_footer ,
+          www_networks, www_themes , www_recaptcha_key, www_csv_server )
       )
       (fun
         ( www_currency_name , www_currency_short , www_currency_symbol ,
-          www_languages , www_apis , www_auth ,
-          www_logo , www_footer , www_networks ) ->
+          www_languages , www_apis , www_auth , www_logo , www_footer ,
+          www_networks, www_themes , www_recaptcha_key , www_csv_server) ->
         { www_currency_name ; www_currency_short ; www_currency_symbol ;
-          www_languages ; www_apis ; www_auth ;
-          www_logo ; www_footer ; www_networks }
+          www_languages ; www_apis ; www_auth ; www_logo ; www_footer ;
+          www_networks ; www_themes ; www_recaptcha_key ; www_csv_server }
       )
-      (obj9
+      (EzEncoding.obj12
          (dft "currency" string "Tezos")
          (dft "currency_short" string "XTZ")
          (dft "currency_symbol" string "#xa729")
@@ -2018,6 +2288,9 @@ module WWW = struct
          (dft "logo" string "tzscan-logo.png")
          (dft "footer" string "footer.html")
          (dft "networks" (list (tup2 string string)) [])
+         (dft "themes" (list (tup2 string string)) [ "Light", "default" ])
+         (opt "recaptcha_key" string)
+         (opt "csv_server" (tup2 string string))
       )
 
 end
@@ -2026,6 +2299,9 @@ module Coingecko = struct
   let none = Json_encoding.any_value
   let rq s = opt s none
   let coin_encoding =
+    describe
+      ~title:"Coins Value"
+      ~description:"Value of some coins" @@
     conv
       (fun {gk_usd; gk_btc}
         -> ((gk_usd, gk_btc, None, None, None),
@@ -2067,6 +2343,9 @@ module Coingecko = struct
             (rq "eth"))
 
   let market_data_encoding =
+    describe
+      ~title:"Market Data"
+      ~description:"Market information from Coingecko" @@
     conv
       (fun {gk_price; gk_market_volume; gk_1h; gk_24h; gk_7d}
         -> ((gk_price, gk_market_volume, gk_1h, gk_24h, gk_7d, None, None, None, None,
@@ -2123,6 +2402,9 @@ module Coingecko = struct
          (opt "identifier" none)
          (opt "has_trading_incentive" none))
   let ticker_encoding =
+    describe
+      ~title:"Ticker"
+      ~description:"Ticker information from Coingecko" @@
     conv
       (fun {gk_last; gk_target; gk_tsp; gk_anomaly; gk_converted_last; gk_volume;
             gk_stale; gk_base; gk_converted_volume; gk_market}
@@ -2146,6 +2428,9 @@ module Coingecko = struct
          (opt "coin_id" string))
   let tickers_encoding = list ticker_encoding
   let encoding =
+    describe
+      ~title:"Coingecko Tezos Information"
+      ~description:"Tezos information from Coingecko" @@
     conv
       (fun gk_tickers -> (gk_tickers, None))
       (fun (gk_tickers, _) -> gk_tickers)
@@ -2190,4 +2475,150 @@ module Coingecko = struct
             (opt "country_origin" none)
             (opt "coingecko_rank" none)
             (opt "developer_score" none)))
+
+end
+
+module V3 = struct
+
+  let nb_all_rights =
+      (obj2
+         (req "nb_bakings" int)
+         (req "nb_endorsements" int))
+
+  let account_search =
+    let encoding =
+        (obj2
+           (req "search_result" account_name_encoding)
+           (req "search_kind" string)) in
+    list encoding
+
+  let balance_history =
+    let encoding =
+        (obj2
+           (req "index" int32)
+           (req "balance" V1.Balance.encoding)) in
+    list encoding
+
+  let rolls_history =
+    let encoding =
+        (obj3
+           (req "cycle" int64)
+           (req "roll_count" int32)
+           (req "roll_total" int32)) in
+    list encoding
+
+  let bakings_history =
+      (obj3
+         (req "total" V1.CycleBakeOp.bakings)
+         (req "rights" V1.CycleRights.rights)
+         (req "passed" V1.CycleBakeOp.bakings))
+
+  let endorsements_history =
+      (obj3
+         (req "total" V1.CycleEndorsementOp.bakings)
+         (req "rights" V1.CycleRights.rights)
+         (req "passed" V1.CycleEndorsementOp.bakings))
+
+  let balance_ranking =
+    let encoding =
+        (obj3
+           (req "rank" int)
+           (req "account" account_name_encoding)
+           (req "balance" tez)) in
+    list encoding
+
+  let last_baking =
+      (obj4
+         (req "last_baking" V1.BakeOp.bakings)
+         (req "last_endorsement" V1.BakeEndorsementOp.bakings)
+         (req "last_baking_right" int)
+         (req "last_endorsement_right" int))
+
+  let next_baking =
+      (obj5
+         (req "cycle" int)
+         (req "head_level" int)
+         (req "next_baking" int)
+         (req "next_endorsement" int)
+         (req "head_timestamp" string))
+
+  let required_balance =
+    let encoding =
+        (obj6
+           (req "cycle" int)
+           (req "required_deposit" tez)
+           (req "unfrozen_back" tez)
+           (req "cumulated" tez)
+           (req "roll_count" int)
+           (req "roll_total" int)) in
+    list encoding
+
+  let rights =
+    let encoding =
+      describe
+        ~title:"Baking/Endorsing Rights"
+        ~description:"Baking and endorsing rights for a level" @@
+      conv
+        (fun ({ r_level; r_bakers; r_endorsers ; r_bakers_priority; r_baked})
+          -> (r_level, r_bakers, r_endorsers, r_bakers_priority, r_baked))
+        (fun (r_level, r_bakers, r_endorsers, r_bakers_priority, r_baked)
+          -> ({ r_level; r_bakers; r_endorsers; r_bakers_priority; r_baked}))
+        (obj5
+           (req "level" int)
+           (req "bakers" (list account_name_encoding))
+           (req "endorsers" (list account_name_encoding))
+           (req "bakers_priority" (list int))
+           (opt "baked" (obj2 (req "account" account_name_encoding) (req "priority" int))))
+    in list encoding
+
+  let rewards_split =
+    describe
+      ~title:"Delegate Rewards"
+      ~description:"Information about delegate rewards" @@
+    conv
+      (fun { rs_delegate_staking_balance ; rs_delegators_nb ;
+             rs_delegators_balance ; rs_block_rewards ;
+             rs_endorsement_rewards ; rs_fees ;
+             rs_baking_rights_rewards ; rs_endorsing_rights_rewards ;
+             rs_gain_from_denounciation ; rs_lost_deposit ;
+             rs_lost_rewards ; rs_lost_fees;
+             rs_rv_rewards; rs_rv_lost_rewards; rs_rv_lost_fees } ->
+        ( rs_delegate_staking_balance, rs_delegators_nb,
+          rs_delegators_balance, rs_block_rewards,
+          rs_endorsement_rewards, rs_fees, rs_baking_rights_rewards,
+          rs_endorsing_rights_rewards,
+          rs_gain_from_denounciation, rs_lost_deposit,
+          rs_lost_rewards, rs_lost_fees,
+          rs_rv_rewards, rs_rv_lost_rewards, rs_rv_lost_fees))
+      (fun ( rs_delegate_staking_balance, rs_delegators_nb,
+             rs_delegators_balance, rs_block_rewards,
+             rs_endorsement_rewards, rs_fees, rs_baking_rights_rewards,
+             rs_endorsing_rights_rewards,
+             rs_gain_from_denounciation, rs_lost_deposit,
+             rs_lost_rewards, rs_lost_fees,
+             rs_rv_rewards, rs_rv_lost_rewards, rs_rv_lost_fees) ->
+        { rs_delegate_staking_balance ; rs_delegators_nb ;
+          rs_delegators_balance ; rs_block_rewards ;
+          rs_endorsement_rewards ; rs_fees ;
+          rs_baking_rights_rewards ; rs_endorsing_rights_rewards ;
+          rs_gain_from_denounciation ; rs_lost_deposit ;
+          rs_lost_rewards ; rs_lost_fees;
+          rs_rv_rewards; rs_rv_lost_rewards; rs_rv_lost_fees})
+      (EzEncoding.obj15
+         (req "delegate_staking_balance" int64)
+         (req "delegators_nb" int)
+         (req "delegators_balance"
+            (list (obj2 (req "account" account_name_encoding) (req "balance" tez))))
+         (req "blocks_rewards" int64)
+         (req "endorsements_rewards" int64)
+         (req "fees" int64)
+         (req "future_blocks_rewards" int64)
+         (req "future_endorsements_rewards" int64)
+         (req "gain_from_denounciation" int64)
+         (req "lost_deposit_from_denounciation" int64)
+         (req "lost_rewards_denounciation" int64)
+         (req "lost_fees_denounciation" int64)
+         (req "revelation_rewards" tez)
+         (req "lost_revelation_rewards" tez)
+         (req "lost_revelation_fees" tez))
 end

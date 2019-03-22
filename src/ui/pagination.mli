@@ -14,6 +14,8 @@
 (*                                                                      *)
 (************************************************************************)
 
+open Ocp_js
+
 type request = EzAPI.url * (string -> unit)
 
 val pagination :
@@ -22,15 +24,15 @@ val pagination :
            int ->
            int ->
            string ->
-           string Tyxml_js.Html5.wrap Tyxml_js.Html5.wrap Tyxml_js.Html5.wrap ->
-           'a Tyxml_js.Html5.elt ->
+           string Html.wrap Html.wrap Html.wrap ->
+           'a elt ->
            (string -> 'b) ->
            (int -> int -> 'b -> unit) ->
            ?update_timestamp:('b -> unit) option ->
            ?update_level:('b -> unit) option ->
            ?show_in_url:bool ->
            'c list ->
-           [< Html_types.span_content_fun > `PCDATA ] Tyxml_js.Html5.elt ->
+           [< Html_types.span_content_fun > `PCDATA ] elt ->
            unit
 
  val pagination_ops :
@@ -41,13 +43,13 @@ val pagination :
    int ->
    int ->
    string ->
-   string Tyxml_js.Html5.wrap Tyxml_js.Html5.wrap Tyxml_js.Html5.wrap ->
-   'a Tyxml_js.Html5.elt ->
+   string Html.wrap Html.wrap Html.wrap ->
+   'a elt ->
    (string -> Data_types.operation list) ->
    (int -> int -> Data_types.operation list -> unit) ->
    ?show_in_url:bool ->
    'b list ->
-   [< Html_types.span_content_fun > `PCDATA ] Tyxml_js.Html5.elt ->
+   [< Html_types.span_content_fun > `PCDATA ] elt ->
    unit
 
  val pagination_xhr :

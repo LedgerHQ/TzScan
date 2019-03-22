@@ -15,3 +15,5 @@
 (************************************************************************)
 
 val server : EzAPI.request EzAPIServer.directory -> unit
+
+val encoding_hook : Data_types.service list Json_encoding.encoding -> unit

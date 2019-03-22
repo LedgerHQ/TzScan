@@ -94,6 +94,7 @@ module type Constants = sig
 
   val ramp_up_cycles : int64
   val start_reward_cycle : int64
+  val blocks_per_voting_period : int
 end
 
 module Alphanet = struct
@@ -103,7 +104,7 @@ module Alphanet = struct
   let block_per_cycle = 2048     (* 2048 *)
   let tokens_per_roll = 10_000_000_000L
 
-  let allowed_fork = 2          (* 6h = ~3 cycles *)
+  let allowed_fork = 3          (* 6h = ~3 cycles *)
   let block_security_deposit = Int64.mul 512L  tez_units (* mutez *)
   let endorsement_security_deposit = Int64.mul 64L  tez_units (* mutez *)
 
@@ -128,6 +129,7 @@ module Alphanet = struct
 
   let ramp_up_cycles = 0L (* IN BLOCK GENESIS *)
   let start_reward_cycle = 0L (* IN BLOCK GENESIS *)
+  let blocks_per_voting_period = 8192
 end
 
 module Betanet = struct
@@ -166,6 +168,7 @@ module Betanet = struct
 
   let ramp_up_cycles = 64L (* IN BLOCK GENESIS *)
   let start_reward_cycle = 7L (* IN BLOCK GENESIS *)
+  let blocks_per_voting_period = 32768
 end
 
 module Zeronet = struct
@@ -199,6 +202,7 @@ module Zeronet = struct
 
   let ramp_up_cycles = 0L (* IN BLOCK GENESIS *)
   let start_reward_cycle = 0L (* IN BLOCK GENESIS *)
+  let blocks_per_voting_period = 9216
 end
 
 module Constants = (val (match net with

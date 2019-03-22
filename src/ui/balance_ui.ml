@@ -1,20 +1,36 @@
-open Tyxml_js.Html5
+(************************************************************************)
+(*                                TzScan                                *)
+(*                                                                      *)
+(*  Copyright 2017-2018 OCamlPro                                        *)
+(*                                                                      *)
+(*  This file is distributed under the terms of the GNU General Public  *)
+(*  License as published by the Free Software Foundation; either        *)
+(*  version 3 of the License, or (at your option) any later version.    *)
+(*                                                                      *)
+(*  TzScan is distributed in the hope that it will be useful,           *)
+(*  but WITHOUT ANY WARRANTY; without even the implied warranty of      *)
+(*  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the       *)
+(*  GNU General Public License for more details.                        *)
+(*                                                                      *)
+(************************************************************************)
+
+open Ocp_js.Html
 open Js_utils
 open Bootstrap_helpers.Grid
 open Bootstrap_helpers.Panel
-open Data_types
-open Tezos_types
-open Text
-open Lang
 open Bootstrap_helpers.Color
 open Bootstrap_helpers.Icon
+open Tezos_types
+open Data_types
+open Lang
+open Text
 open Common
 
 let chart_id = "balance-chart-id"
 
-let charts_div_id hash = Common.make_id "balance-charts-div-id" hash
-let prediction_div_id hash = Common.make_id "balance-prediction-div-id" hash
-let snapshot_div_id hash = Common.make_id "balance-snapshot-div-id" hash
+let charts_div_id hash = make_id "balance-charts-div-id" hash
+let prediction_div_id hash = make_id "balance-prediction-div-id" hash
+let snapshot_div_id hash = make_id "balance-snapshot-div-id" hash
 
 let predict_diff
       (bal_list : (int32 * balance) list)
@@ -169,7 +185,7 @@ let rec update_chart_div ~splitted hash rev_balances predictions =
           a_id "splitted-button";
           a_onclick splitted_button_action
          ]
-      [Bootstrap_helpers.Icon.chart_up ();pcdata " / "; Bootstrap_helpers.Icon.chart_down ()]
+      [Bootstrap_helpers.Icon.chart_up ();txt " / "; Bootstrap_helpers.Icon.chart_down ()]
   in
   let merged_button =
     button
@@ -177,17 +193,17 @@ let rec update_chart_div ~splitted hash rev_balances predictions =
           a_id "merged-button";
           a_onclick merged_button_action
          ]
-      [Bootstrap_helpers.Icon.chart_up ();pcdata "+"; Bootstrap_helpers.Icon.chart_down ()]
+      [Bootstrap_helpers.Icon.chart_up ();txt "+"; Bootstrap_helpers.Icon.chart_down ()]
   in
   let container = find_component @@ charts_div_id hash in
   let chart_buttons =
-       div ~a:[a_class [row; "bal_currency_merge_button_div"]]
+       div ~a:[a_class [row; "bal-currency-merge-button-div"]]
          [div ~a:[a_class [clgoffset4;clg2;cmdoffset4;cmd2;csmoffset4;csm2;cxsoffset3;cxs3;"center"]]
-            [span ~a:[a_class ["clear-float"; "center"]] [pcdata @@ Lang.t_ s_merged_charts];
+            [span ~a:[a_class ["clear-float"; "center"]] [txt @@ Lang.t_ s_merged_charts];
              br () ;
              merged_button];
           div ~a:[a_class [clg2;cmd2;csm2;cxs3;"center"]]
-            [span ~a:[a_class ["clear-float";"center"]] [pcdata @@ Lang.t_ s_splitted_charts];
+            [span ~a:[a_class ["clear-float";"center"]] [txt @@ Lang.t_ s_splitted_charts];
              br () ;
              splitted_button]]
   in
@@ -199,7 +215,7 @@ let rec update_chart_div ~splitted hash rev_balances predictions =
       if splitted
       then
         div ~a:[ a_class [ panel_body ] ] [
-          h3 [pcdata @@ Lang.t_ s_balance_evolution];
+          h3 [txt @@ Lang.t_ s_balance_evolution];
           div ~a:[ a_class [ row ] ] [
             div ~a:[ a_id (chart_id^"-spendable"); a_class [ "balance-charts" ] ] [ ]
           ];
@@ -210,7 +226,7 @@ let rec update_chart_div ~splitted hash rev_balances predictions =
         ]
       else
         div ~a:[ a_class [ panel_body ] ] [
-          h3 [pcdata @@ Lang.t_ s_balance_evolution];
+          h3 [txt @@ Lang.t_ s_balance_evolution];
           div ~a:[ a_class [ row ] ] [
             div ~a:[ a_id chart_id; a_class [ "balance-charts" ] ] [ ]
           ];
@@ -290,17 +306,17 @@ let update_cycle_snapshot ?price_usd hash rev_balances predictions =
       in
       let tz_div =
         (if diff <> Int64.zero then h4 else div)
-          ~a:[a_class [color; "bal_snapshot_main_diff"; "bal-tz"]]
-          [pcdata @@ arrow; Tez.pp_amount ~precision:3 ~icon:Tez.icon diff];
+          ~a:[a_class [color; "bal-snapshot-main-diff"; "bal-tz"]]
+          [txt @@ arrow; Tez.pp_amount ~precision:3 ~icon:Tez.icon diff];
       in
       match vals_for_diff with
         None -> [tz_div]
       | Some dollar_val ->
         ((if diff <> Int64.zero then h4 else div)
-          ~a:[a_class [color; "bal_snapshot_main_diff"; "bal-dollar"]]
-          [pcdata @@ arrow; Tez.pp_amount ~precision:3 ~icon:Tez.dollar dollar_val]) :: [tz_div]
+          ~a:[a_class [color; "bal-snapshot-main-diff"; "bal-dollar"]]
+          [txt @@ arrow; Tez.pp_amount ~precision:3 ~icon:Tez.dollar dollar_val]) :: [tz_div]
     and div_transition =
-      div [pcdata ((Lang.t_ s_estimated_at_the_end_of_cycle) ^ " " ^ Int32.to_string curr_cycle)]
+      div [txt ((Lang.t_ s_estimated_at_the_end_of_cycle) ^ " " ^ Int32.to_string curr_cycle)]
 
     and divs_prediction =
       let vals_for_pred = dollar_val (Int64.add last_bal prediction) in
@@ -321,17 +337,17 @@ let update_cycle_snapshot ?price_usd hash rev_balances predictions =
       in
       let div_tz =
        div ~a:[a_class [color_predict;"bal-tz"]]
-         [pcdata @@ arrow_predict; Tez.pp_amount ~precision:3 ~icon:Tez.icon prediction];
+         [txt @@ arrow_predict; Tez.pp_amount ~precision:3 ~icon:Tez.icon prediction];
       in
       match vals_for_pred_diff with
         None -> [div_tz]
       | Some dollar_val ->
        (div ~a:[a_class [color_predict;"bal-dollar"]]
-         [pcdata @@ arrow_predict; Tez.pp_amount ~precision:3 ~icon:Tez.dollar dollar_val]) ::
+         [txt @@ arrow_predict; Tez.pp_amount ~precision:3 ~icon:Tez.dollar dollar_val]) ::
        [div_tz] in
 
     div ~a:[a_class (classes @ ["center";panel_body])]
-      ([h3 ([pcdata title])]
+      ([h3 ([txt title])]
     @ divs_abs_val
     @ divs_diff
     @ [div_transition]
@@ -350,7 +366,7 @@ let update_cycle_snapshot ?price_usd hash rev_balances predictions =
 
   let help =
     span
-      ~a:[a_class [clg1;cmd1;csm1;cxs1;"bal_snapshot_main_diff"]]
+      ~a:[a_class [clg1;cmd1;csm1;cxs1;"bal-snapshot-main-diff"]]
       [Glossary_doc.help Glossary_doc.HBalance_Snapshot] in
   let compo_row bal diff =
     [
@@ -448,8 +464,8 @@ let make_snapshot hash =
   let buttons_div =
     let tezos_button,dollar_button = currency_buttons hash in
       div ~a:[a_class [row]]
-         [div ~a:[a_class [clg12;cmd12;csm12;cxs12;"center";"bal_snapshot_main_diff"]]
-            [pcdata @@ Lang.t_ s_currency];
+         [div ~a:[a_class [clg12;cmd12;csm12;cxs12;"center";"bal-snapshot-main-diff"]]
+            [txt @@ Lang.t_ s_currency];
           div ~a:[a_class [clgoffset5;clg1;cmdoffset5;cmd1;csmoffset5;csm1;cxsoffset4;cxs2;"center"]]
             [tezos_button];
           div ~a:[a_class [clg1;cmd1;csm1;cxs2;"center"]] [dollar_button]
@@ -466,17 +482,17 @@ let frozen itis =
   if itis
   then
     [(span ~a:[a_class [blue]; a_title @@ t_ s_frozen]
-        [Bootstrap_helpers.Icon.snowflake (); pcdata " "])]
+        [Bootstrap_helpers.Icon.snowflake (); txt " "])]
   else []
 
 let endorsement itis =
   if itis
   then [(span ~a:[a_title @@ t_ s_endorsements]
-           [Bootstrap_helpers.Icon.thumb_up (); pcdata " "])] else []
+           [Bootstrap_helpers.Icon.thumb_up (); txt " "])] else []
 (* Yes, the logo has a translation *)
-let bake itis = if itis then [(span ~a:[a_title @@ t_ s_bakes] [entity @@ t_ s_icon_bake; pcdata " "])] else []
+let bake itis = if itis then [(span ~a:[a_title @@ t_ s_bakes] [entity @@ t_ s_icon_bake; txt " "])] else []
 let transaction itis =
-  if itis then [(span ~a:[a_class [red]; a_title @@ t_ s_transactions] [Tez.icon (); pcdata " "])] else []
+  if itis then [(span ~a:[a_class [red]; a_title @@ t_ s_transactions] [Tez.icon (); txt " "])] else []
 
 module BalancePanel =
   struct
@@ -486,24 +502,24 @@ module BalancePanel =
             let title_span =
               Panel.title_nb s_balance_updates_last
                 ~help:Glossary_doc.HBalance_Updates
-            let table_class = "transactions-table"
+            let table_class = "default-table"
             let page_size = 20
             let name = "balance_updates_metadata"
             let theads () =
               tr [
-                  th ~a:[ a_class [ cxs1 ] ] @@ [span [pcdata @@ t_ s_cycle]];
+                  th ~a:[ a_class [ cxs1 ] ] @@ [span [txt @@ t_ s_cycle]];
                   th ~a:[ a_class [ cxs1 ] ] @@ cl_icon cube_icon (t_ s_level);
                   th ~a:[ a_class [ cxs1 ] ] @@ cl_icon clock_icon (t_ s_date);
                   th ~a:[ a_class [ cxs1 ] ] @@ cl_icon Tez.icon (t_ s_diff);
                   th ~a:[ a_class [ cxs1 ] ] @@ cl_icon exchange_icon (t_ s_type_of_update);
-                  th ~a:[ a_class [ cxs1 ] ] @@ [span [pcdata @@ s_ ""]];
+                  th ~a:[ a_class [ cxs1 ] ] @@ [span [txt @@ s_ ""]];
                 ]
           end)
     let make_legend () =
-      div [p ((frozen true) @ [pcdata @@ Printf.sprintf ": %s" @@ t_ s_frozen_balance_updates]);
-           p ((endorsement true) @ [pcdata @@  Printf.sprintf ": %s" @@ t_ s_endorsements]);
-           p ((bake true) @ [pcdata @@  Printf.sprintf ": %s" @@ t_ s_bakes]);
-           p ((transaction true) @ [pcdata @@  Printf.sprintf ": %s" @@ t_ s_transactions]);]
+      div [p ((frozen true) @ [txt @@ Printf.sprintf ": %s" @@ t_ s_frozen_balance_updates]);
+           p ((endorsement true) @ [txt @@  Printf.sprintf ": %s" @@ t_ s_endorsements]);
+           p ((bake true) @ [txt @@  Printf.sprintf ": %s" @@ t_ s_bakes]);
+           p ((transaction true) @ [txt @@  Printf.sprintf ": %s" @@ t_ s_transactions]);]
   end
 
 let make_balance_updates_table ?price_usd b_list =
@@ -516,20 +532,20 @@ let make_balance_updates_table ?price_usd b_list =
   in
   let cst = Infos.constants ~cycle:0 in
   match List.rev b_list with
-  | [] -> [ tr [ td ~a:[ a_colspan 5 ] [ pcdata_s "No balance updates since 5 cycles." ]]]
+  | [] -> [ tr [ td ~a:[ a_colspan 5 ] [ txt_s "No balance updates since 5 cycles." ]]]
   | _ ->
     List.map
       (fun
         b ->
         tr [
-          td [ pcdata @@ Int32.to_string @@ Int32.(div b.bu_level @@ of_int cst.blocks_per_cycle)];
-          td [ Common.make_link (Int32.to_string b.bu_level)];
+          td [ txt @@ Int32.to_string @@ Int32.(div b.bu_level @@ of_int cst.blocks_per_cycle)];
+          td [ make_link (Int32.to_string b.bu_level)];
           td [
               let date,time =
-                Tezos_types.Date.pretty_date
+                Date.pretty_date
                   b.bu_date in
-              pcdata @@ Printf.sprintf "%s (%s)" date time];
+              txt @@ Printf.sprintf "%s (%s)" date time];
           td (Tez.with_usd price_usd b.bu_diff) ;
-          td [ pcdata (s_ b.bu_update_type) ];
+          td [ txt (s_ b.bu_update_type) ];
           td [ div (extra_info b)]
         ]) b_list

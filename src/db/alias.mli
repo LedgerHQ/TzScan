@@ -14,8 +14,13 @@
 (*                                                                      *)
 (************************************************************************)
 
-val change_alias : Tezos_types.account_hash -> string -> unit
+val add_alias : Data_types.account_name -> unit
 
 val reset : unit -> unit
 
 val to_name : ?alias:string -> Tezos_types.account_hash -> Data_types.account_name
+
+val change_aliases_from_json :
+  ?with_table:bool ->
+  ?update_db:(bool -> Data_types.account_name -> unit) ->
+  Data_types.service list Json_encoding.encoding -> Json_repr.ezjsonm -> unit

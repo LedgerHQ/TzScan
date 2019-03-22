@@ -14,7 +14,8 @@
 (*                                                                      *)
 (************************************************************************)
 
-open Tyxml_js.Html5
+open Ocp_js
+open Html
 open Bootstrap_helpers.Grid
 open Lang
 open Text
@@ -38,7 +39,7 @@ module Rolls_distribution =
             s_percent, 1;
           ]
         let title_span = Panel.title_nb s_rolls_distribution
-        let table_class = "blocks-table"
+        let table_class = "default-table"
         let page_size = 20
       end)
 
@@ -75,8 +76,8 @@ let update_rolls_distrib cycle rolls =
       and nb_rolls = snd r in
       tr [
         Common.account_w_blockies owner_hash;
-        td [ pcdata @@ spf "%i" nb_rolls ];
-        td [ pcdata @@ spf "%.2f %%" (
+        td [ txt @@ spf "%i" nb_rolls ];
+        td [ txt @@ spf "%.2f %%" (
             (float nb_rolls) /. (float total) *. 100. )];
       ]) (Array.of_list rolls) in
   Rolls_distribution.paginate_all rows;
@@ -104,6 +105,7 @@ let update_rolls_distrib cycle rolls =
       pie##outlineColor <- Js.string "#FFFFFF";
       pie##balloonText <- Js.string balloon;
       pie##titles <- Js.array [| title; subtitle |] ;
+      pie##addClassNames <- true;
       if Dom_html.window##screen##width <= 600 then
         begin
           pie##labelsEnabled <- false;

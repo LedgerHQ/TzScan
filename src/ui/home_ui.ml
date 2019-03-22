@@ -14,19 +14,19 @@
 (*                                                                      *)
 (************************************************************************)
 
-open Tyxml_js.Html5
-open Data_types
+open Ocp_js
+open Html
 open Js_utils
 open Bootstrap_helpers.Icon
 open Bootstrap_helpers.Grid
 open Bootstrap_helpers.Table
 open Bootstrap_helpers.Color
 open Bootstrap_helpers.Panel
-open Common
-open Js
-open Lang (* s_ *)
 open Tezos_types
+open Data_types
+open Lang
 open Text
+open Common
 
 (* cut float at 2 digits after dot *)
 let simplify_float f =
@@ -70,34 +70,37 @@ let color ?(limit=0.) v =
       [ a_class [blue]; a_title (Printf.sprintf "value between -%.2g%% and %.2g%%" limit limit) ]
 
 let additional_divs = ref
-    (div [] : (Html_types.div_content_fun Tyxml_js.Html5.elt))
+    (div [] : (Html_types.div_content_fun elt))
 
 let make_stats_loading () =
+  let clear = div ~a:[ a_class [ "clearfix" ] ][] in
   let last_block_value =
-    tablex ~a:[ a_class [ btable ] ]
-      [ tbody
-          [ tr [
-                th [ pcdata_t s_txns ] ;
-                th [ pcdata_t s_volume ] ;
-                th [ pcdata_t s_age ] ;
-                th [ pcdata_t s_baker ]
-              ] ;
-            tr [
-              td [ span ~a:[ a_id leftbox_nb_transactions_id ] [ Common.pcdata_ () ] ] ;
-              td [ span ~a:[ a_id leftbox_volume_id ]  [ Common.pcdata_ () ] ] ;
-              td [ span ~a:[ a_id leftbox_timestamp_id ] [ Common.pcdata_ () ] ] ;
-              td [ span ~a:[ a_id leftbox_baker_id ; a_class ["no-overflow"] ]
-                     [ Common.pcdata_ () ] ]
+    div ~a:[ a_class [ btable_responsive ] ] [
+      tablex ~a:[ a_class [ btable ] ]
+        [ tbody
+            [ tr [
+                  th [ txt_t s_txns ] ;
+                  th [ txt_t s_volume ] ;
+                  th [ txt_t s_age ] ;
+                  th [ txt_t s_baker ]
+                ] ;
+              tr [
+                td [ span ~a:[ a_id leftbox_nb_transactions_id ] [ txt_ () ] ] ;
+                td [ span ~a:[ a_id leftbox_volume_id ]  [ txt_ () ] ] ;
+                td [ span ~a:[ a_id leftbox_timestamp_id ] [ txt_ () ] ] ;
+                td [ span ~a:[ a_id leftbox_baker_id ; a_class ["no-overflow"] ]
+                       [ txt_ () ] ]
+              ]
             ]
-          ]
-      ]
+        ]
+    ]
   in
 
   let progress_title =
     div ~a:[ a_class [row; clg5; cxs12]; a_id progress_title_id ] [
       div ~a:[ a_class [ "title" ]; a_id "progress-title" ] [
         cube_icon () ; space_icon () ;
-        pcdata_t s_block ] ] in
+        txt_t s_block ] ] in
   let start_block = div ~a:[a_class [clg2;cxs3]; a_id "start-block"] [] in
   let cycle_container =
     div ~a:[ a_class ([clg4; cxs6] @ [ "no-overflow" ]); a_id cycle_container_id ] [
@@ -109,40 +112,41 @@ let make_stats_loading () =
   let marketcap_container =
     if Infos.api.api_config.conf_has_marketcap then
       let marketcap_info =
-        div ~a:[ a_class [ row ] ] [
-          div ~a:[ a_class [ clg4; csm6; cxs12 ] ] [
-            pcdata (t_ s_ico_ratio ^ ": --") ];
-          div ~a:[ a_class [ clg4; csm6; cxs12 ] ]
-            [ pcdata (t_ s_total_supply ^ ": --") ] ;
-          (* div ~a:[ a_class [ clg4; csm6; cxs12 ] ]
-           *   [ pcdata_s "Circulating supply: --" ] *) ] in
+        div ~a:[ a_class [ row ] ]
+          (if Tezos_constants.net <> Tezos_constants.Betanet then []
+          else
+            [ div ~a:[ a_class [ cxs12 ] ]
+                [ txt (t_ s_circulating_supply ^ ": --") ];
+              div ~a:[ a_class [ cxs12 ] ] [
+                txt (t_ s_market_cap ^ ": --") ] ])
+      in
       let marketcap_title =
         div ~a:[ a_class [ row ] ] [
           p ~a:[ a_class [ clg11; csm10; cxs6; "title" ] ] [
             chart_line_icon () ; space_icon () ;
             a ~a:[ a_href "https://coinmarketcap.com/currencies/tezos/" ]
-              [ pcdata_t s_market_cap ];
+              [ txt_t s_market_cap ];
           ];
-          Common.make_loading_gif [ "loading-heading"; clg1; csm2; cxs6 ]
+          make_loading_gif [ "loading-heading"; clg1; csm2; cxs6 ]
         ] in
       let marketcap_table =
         tablex ~a:[ a_class [ btable ] ] [
           tbody [
             tr [
-              th [ pcdata_t s_price_usd ] ;
-              th [ pcdata_t s_price_btc ] ;
-              th [ pcdata_t s_volume_24h ] ;
-              th [ pcdata_t s_change_1h ] ;
-              th [ pcdata_t s_change_24h ] ;
-              th [ pcdata_t s_change_7d ] ;
+              th [ txt_t s_price_usd ] ;
+              th [ txt_t s_price_btc ] ;
+              th [ txt_t s_volume_24h ] ;
+              th [ txt_t s_change_1h ] ;
+              th [ txt_t s_change_24h ] ;
+              th [ txt_t s_change_7d ] ;
             ] ;
             tr [
-              td [ Common.pcdata_ () ] ;
-              td [ Common.pcdata_ () ] ;
-              td [ Common.pcdata_ () ] ;
-              td [ Common.pcdata_ () ] ;
-              td [ Common.pcdata_ () ] ;
-              td [ Common.pcdata_ () ]
+              td [ txt_ () ] ;
+              td [ txt_ () ] ;
+              td [ txt_ () ] ;
+              td [ txt_ () ] ;
+              td [ txt_ () ] ;
+              td [ txt_ () ]
             ]
           ]
         ]
@@ -158,7 +162,7 @@ let make_stats_loading () =
   in
   let last_block_container =
     div ~a:[ a_class ["no-overflow" ]; a_id "last-block-container" ]
-      [ progress_title; start_block ; cycle_container; end_block; last_block_value ] in
+      [ progress_title; start_block ; cycle_container; end_block; clear; last_block_value ] in
   let left_container =
     make_panel
       ~panel_class:[ "front-content" ]
@@ -177,17 +181,17 @@ let make_stats_loading () =
       left_container ] in
   let state_div =
     div ~a:[ a_class [ row ] ] [
-      span ~a:[ a_class [ clg3; csm3 ] ] [ pcdata_t s_tzscan_node_chain ] ;
-      span ~a:[ a_class [ clg3; csm3 ] ] [ pcdata_t s_tzscan_node_balances ] ] in
+      span ~a:[ a_class [ clg3; csm3 ] ] [ txt_t s_tzscan_node_chain ] ;
+      span ~a:[ a_class [ clg3; csm3 ] ] [ txt_t s_tzscan_node_balances ] ] in
   let state_title =
     div ~a:[ a_class [ row ] ] [
       p ~a:[ a_class [ clg11; csm11; cxs9; "title"; "hidden-xs" ] ] [
         signal_icon () ; space_icon () ;
-        pcdata_t s_tzscan_tezos_nodes ];
+        txt_t s_tzscan_tezos_nodes ];
       p ~a:[ a_class [ clg11; csm11; cxs9; "title"; "visible-xs" ] ] [
         signal_icon () ; space_icon () ;
-        pcdata_t s_tzscan_tezos_nodes_xs ];
-      Common.make_loading_gif [ "loading-heading"; clg1; csm1; cxs3 ]
+        txt_t s_tzscan_tezos_nodes_xs ];
+      make_loading_gif [ "loading-heading"; clg1; csm1; cxs3 ]
     ] in
   let state_container =
     div ~a:[ a_class [ "no-overflow" ]; a_id state_container_id ] [
@@ -196,8 +200,8 @@ let make_stats_loading () =
     div ~a:[ a_class [ row ] ] [
       p ~a:[ a_class [ clg11; csm11; cxs9; "title" ] ] [
         chart_pie_icon () ; space_icon () ;
-        pcdata_t s_chain_stats ];
-      Common.make_loading_gif [ "loading-heading"; clg1; csm1; cxs3 ]
+        txt_t s_chain_stats ];
+      make_loading_gif [ "loading-heading"; clg1; csm1; cxs3 ]
     ] in
   let stats_container =
     div ~a:[ a_class [ "no-overflow" ]; a_id stats_container_id ] [
@@ -247,13 +251,13 @@ let make_home_blocks blocks =
           (Format_date.auto_updating_timespan timestamp_str);
         tr [
           td_timestamp ;
-          td [ Common.make_link @@ string_of_int block.level ] ;
-          Common.account_w_blockies
-            ~aclass:["hidden-xs" ]
+          td [ make_link @@ string_of_int block.level ] ;
+          account_w_blockies
+            ~aclass:["hidden-xs"; "no-overflow"]
             ~crop_len:15
             block.baker ;
           td ~a:[ a_class [ "hidden-xs" ] ]
-            [ pcdata @@ string_of_int block.nb_operations ] ;
+            [ txt @@ string_of_int block.nb_operations ] ;
           td [ Tez.pp_amount ~width:3 block.volume ] ;
           td ~a:[ a_class [ "hidden-xl" ] ] [
             Tez.pp_amount ~width:3 block.fees] ;
@@ -278,7 +282,7 @@ let update_progress level =
   let to_update =
     div ~a:[ a_class [ "title" ] ] [
       cube_icon () ; space_icon () ;
-      pcdata @@
+      txt @@
       t_subst s_subst_block_cycle
         (function
             "level" -> string_of_int level.lvl_level
@@ -312,7 +316,7 @@ let update_state_row node_timestamps =
       (List.map (fun (kind, timestamp) ->
            div ~a:[ a_class [ clg3 ; csm2; cxs12 ] ] [
              Node_state_ui.node_state_icon timestamp ;
-             pcdata kind ] ) node_timestamps)
+             txt kind ] ) node_timestamps)
   in
   let state_title =
     div ~a:[ a_class [ row ] ] [
@@ -320,7 +324,7 @@ let update_state_row node_timestamps =
         div ~a:[ a_class [ row ] ] [
           p ~a:[ a_class [ clg12; csm12; cxs12; "title" ] ] [
             signal_icon () ; space_icon () ;
-            pcdata_t s_tzscan_tezos_nodes ] ;
+            txt_t s_tzscan_tezos_nodes ] ;
           div ~a:[a_class [ clg12; csm12; cxs12; ] ] [ state_div ] ] ] ;
     ] in
   Manip.removeChildren container ;
@@ -344,10 +348,10 @@ let update_leftbox_timestamp ts =
 
 let update_leftbox_baker baker =
   let component = find_component leftbox_baker_id in
-  Manip.replaceChildren component [Common.make_link_account baker]
+  Manip.replaceChildren component [make_link_account baker]
 
 let update_leftbox_marketcap price_usd price_btc volume
-    change_1 change_24 change_7 last_updated (* total_supply _circu_supply *) =
+    change_1 change_24 change_7 last_updated supply_info =
   let unopt ~default = function None -> default | Some v -> v in
   let container = find_component marketcap_container_id in
   let price_usd = float_of_string price_usd in
@@ -355,33 +359,31 @@ let update_leftbox_marketcap price_usd price_btc volume
   let change_1 = unopt ~default:"- " change_1 in
   let change_24 = unopt ~default:"- " change_24 in
   let change_7 = unopt ~default:"- " change_7 in
-  let ico_returns =
-    Printf.sprintf "%s: x%.2f" (t_ s_ico_ratio) (price_usd /. 0.47)
-  in
   let last_updated =
-    (jsnew date_fromTimeValue(float_of_string last_updated *. 1000.))##toString() in
+    (jsnew Js.date_fromTimeValue(float_of_string last_updated *. 1000.))##toString() in
   let ts_span =
     span ~a:[ a_id marketcap_timestamp_id; a_class [ clg2; csm2; cxs6 ] ] [
       Format_date.auto_updating_timespan (Js.to_string last_updated)
     ] in
+  let current_marketcap =
+    Int64.(of_float @@ ((to_float supply_info.current_circulating_supply) *. price_usd)) in
   let marketcap_info =
-    div ~a:[ a_class [ row ] ] [
-      div ~a:[ a_class [ clg6; csm6; cxs12 ] ]
-        [ pcdata (t_ s_total_ico_supply ^ ": ") ;
-          Tez.approx_amount
-            (Ico_constants.total_supply_ico
-               Infos.api.api_config.conf_ico) ] ;
-      (* div ~a:[ a_class [ clg6; csm6; cxs12 ] ]
-       *   [ pcdata_t "Circulating supply: " ;
-       *     Tez.amount_float_tez circu_supply ] ; *)
-      div ~a:[ a_class [ clg12; csm12; cxs12 ] ] [
-        pcdata ico_returns ] ] in
+    div ~a:[ a_class [ row ] ]
+      (if Tezos_constants.net <> Tezos_constants.Betanet then []
+       else
+         [ div ~a:[ a_class [ cxs12 ] ]
+             [ txt (t_ s_circulating_supply ^ ": ") ;
+               Tez.pp_amount ~precision:0 supply_info.current_circulating_supply ] ;
+           div ~a:[ a_class [ cxs12 ] ] [
+             txt (t_ s_market_cap ^ ": " ) ;
+             Tez.pp_amount ~precision:0 ~icon:Tez.dollar current_marketcap ] ])
+  in
   let marketcap_title =
     div ~a:[ a_class [ row ] ] [
       p ~a:[ a_class [ clg10; csm10; cxs6; "title" ] ] [
         chart_line_icon () ; space_icon () ;
         a ~a:[ a_href "https://coinmarketcap.com/currencies/tezos/" ]
-          [ pcdata_t s_market_cap ] ;
+          [ txt_t s_market_cap ] ;
       ];
       ts_span
     ] in
@@ -390,20 +392,20 @@ let update_leftbox_marketcap price_usd price_btc volume
       tablex ~a:[ a_class [ btable ] ] [
         tbody [
           tr [
-            th [ pcdata_t s_price_usd ] ;
-            th [ pcdata_t s_price_btc ] ;
-            th [ pcdata_t s_volume_24h ] ;
-            th [ pcdata_t s_change_1h ] ;
-            th [ pcdata_t s_change_24h ] ;
-            th [ pcdata_t s_change_7d ] ;
+            th [ txt_t s_price_usd ] ;
+            th [ txt_t s_price_btc ] ;
+            th [ txt_t s_volume_24h ] ;
+            th [ txt_t s_change_1h ] ;
+            th [ txt_t s_change_24h ] ;
+            th [ txt_t s_change_7d ] ;
           ] ;
           tr [
-            td [ pcdata @@ Printf.sprintf "$%.2f" price_usd ] ;
-            td [ pcdata price_btc ] ;
-            td [ pcdata @@ "$" ^ volume ] ;
-            td ~a:(color ~limit:0.25 change_1) [ pcdata @@ change_1 ^ "%" ] ;
-            td ~a:(color ~limit:1. change_24) [ pcdata @@ change_24 ^ "%" ] ;
-            td ~a:(color ~limit:1. change_7) [ pcdata @@ change_7 ^ "%" ]
+            td [ txt @@ Printf.sprintf "$%.2f" price_usd ] ;
+            td [ txt price_btc ] ;
+            td [ txt @@ "$" ^ volume ] ;
+            td ~a:(color ~limit:0.25 change_1) [ txt @@ change_1 ^ "%" ] ;
+            td ~a:(color ~limit:1. change_24) [ txt @@ change_24 ^ "%" ] ;
+            td ~a:(color ~limit:1. change_7) [ txt @@ change_7 ^ "%" ]
           ]
         ]
       ]
@@ -423,17 +425,17 @@ let update_stats ms =
 
   let title = p ~a:[ a_class [ "title" ] ] [
       chart_pie_icon () ; space_icon () ;
-      pcdata_t s_chain_stats ]
+      txt_t s_chain_stats ]
   in
   let theads =
     tr (
-        (th [pcdata ""]) ::
+        (th [txt ""]) ::
         Array.to_list (Array.map (fun s ->
-            th ~a:[ a_class [ white ]] [Jslang.pcdata_s s]) ms.ms_period))
+            th ~a:[ a_class [ white ]] [Jslang.txt_s s]) ms.ms_period))
   in
   let row to_string times title min_per_hour table =
     tr (
-        th ~a:[ a_class [ white ] ]  [pcdata_t title] ::
+        th ~a:[ a_class [ white ] ]  [txt_t title] ::
           Array.to_list
             (Array.mapi
                (fun i nb ->
@@ -447,7 +449,7 @@ let update_stats ms =
   in
   let row64 to_string times title min_per_hour table =
     tr (
-        th ~a:[ a_class [ white ] ]  [pcdata_t title] ::
+        th ~a:[ a_class [ white ] ]  [txt_t title] ::
           Array.to_list
             (Array.mapi
                (fun i nb ->
@@ -461,7 +463,7 @@ let update_stats ms =
   in
   let rowi title min_per_hour table =
     row (fun i ->
-        [pcdata (string_of_int i)]
+        [txt (string_of_int i)]
       ) ( * ) title min_per_hour table
   in
   let rowxtz ?(width=5)title min_per_hour table =
@@ -515,7 +517,7 @@ let init_fan () =
 
 let make_fan percent fan_init_class =
   let set_fan bar =
-    let barjs = Tyxml_js.To_dom.of_element bar in
+    let barjs = To_dom.of_element bar in
     barjs##setAttribute(Js.string "data-value",
                         Js.string @@ string_of_int percent) ;
     barjs##setAttribute(Js.string "data-preset",
@@ -539,11 +541,11 @@ let update_odometer h24 =
   Manip.setInnerHtml od5 @@ string_of_int h24.h24_active_baker
 
 let init_odometer () =
-  let od1 = Tyxml_js.To_dom.of_element @@ find_component odometer_transac_id in
-  let od2 = Tyxml_js.To_dom.of_element @@ find_component odometer_orig_id in
-  let od3 = Tyxml_js.To_dom.of_element @@ find_component odometer_del_id in
-  let od4 = Tyxml_js.To_dom.of_element @@ find_component odometer_act_id in
-  let od5 = Tyxml_js.To_dom.of_element @@ find_component odometer_active_baker_rate_id in
+  let od1 = To_dom.of_element @@ find_component odometer_transac_id in
+  let od2 = To_dom.of_element @@ find_component odometer_orig_id in
+  let od3 = To_dom.of_element @@ find_component odometer_del_id in
+  let od4 = To_dom.of_element @@ find_component odometer_act_id in
+  let od5 = To_dom.of_element @@ find_component odometer_active_baker_rate_id in
   ignore @@ Odometer.odometer od1 ;
   ignore @@ Odometer.odometer od2 ;
   ignore @@ Odometer.odometer od3 ;
@@ -571,12 +573,12 @@ let make_page () =
       div ~a:[ a_class [ row ] ] [
         div ~a:[ a_class [ clg11; "section-title" ] ]
           [ cubes_icon () ; space_icon () ;
-            pcdata_t s_blocks ; Glossary_doc.(help HBlock);
-            span [a ~a:(Common.a_link ~aclass:[ "paginate"; "ntm" ] "/blocks")
-                    [ pcdata_t s_view_all ]
+            txt_t s_blocks ; Glossary_doc.(help HBlock);
+            span [a ~a:(a_link ~aclass:[ "paginate"; "ntm" ] "/blocks")
+                    [ txt_t s_view_all ]
                  ]
           ] ;
-        Common.make_home_loading_gif blocks_loading_id [ cxs12 ];
+        make_home_loading_gif blocks_loading_id [ cxs12 ];
         block_div;
       ]
     ] ;
@@ -585,63 +587,63 @@ let make_page () =
 
         div ~a:[ a_class [ cxs12; "section-title" ] ]
           [ chart_line_icon () ; space_icon () ;
-            pcdata_t s_last_24h ;
+            txt_t s_last_24h ;
           ] ;
 
         div ~a:[ a_class [ cxs6; "stat-item" ] ] [
-          div [ h4 [ pcdata_t s_endorsement_rate ] ] ;
+          div [ h4 [ txt_t s_endorsement_rate ] ] ;
           make_fan 0 fan_end_id ] ;
         div ~a:[ a_class [ cxs6; "stat-item" ] ] [
-          div [ h4 [ pcdata_t s_block_prio_0_baked ] ] ;
+          div [ h4 [ txt_t s_block_prio_0_baked ] ] ;
           make_fan 0 fan_block_id ] ;
 
-        div ~a:[ a_class [ cmd4 ; cxs8; "stat-item" ] ] [
-          a ~a:(Common.a_link "transactions") [
-            div [ h4 [ pcdata_t s_transactions] ] ;
+        div ~a:[ a_class [ cmd3 ; cxs6; "stat-item"; "odometer-item" ] ] [
+          a ~a:(a_link "transactions") [
+            div [ h4 [ txt_t s_transactions] ] ;
             div ~a:[ a_id odometer_transac_id ;
                      a_class [ "odometer"; "odometer-theme-train-station" ] ] [
-              pcdata "0"] ;
+              txt "0"] ;
           ]
         ] ;
-        div ~a:[ a_class [ cmd2 ; cxs4; "stat-item" ] ] [
-          a ~a:(Common.a_link "originations") [
-            div [ h4 [ pcdata_t s_originations] ] ;
+        div ~a:[ a_class [ cmd3 ; cxs6; "stat-item"; "odometer-item" ] ] [
+          a ~a:(a_link "originations") [
+            div [ h4 [ txt_t s_originations] ] ;
             div ~a:[ a_id odometer_orig_id ;
                      a_class [ "odometer"; "odometer-theme-train-station" ] ] [
-              pcdata "0"] ;
+              txt "0"] ;
           ]
         ] ;
-        div ~a:[ a_class [ cmd4; cxs8; "stat-item" ] ] [
-          a ~a:(Common.a_link "delegations") [
-            div [ h4 [ pcdata_t s_delegations ] ] ;
+        div ~a:[ a_class [ cmd3; cxs6; "stat-item"; "odometer-item" ] ] [
+          a ~a:(a_link "delegations") [
+            div [ h4 [ txt_t s_delegations ] ] ;
             div ~a:[ a_id odometer_del_id ;
                      a_class [ "odometer"; "odometer-theme-train-station" ] ] [
-              pcdata "0"] ;
+              txt "0"] ;
           ]
         ] ;
-        div ~a:[ a_class [ cmd2; cxs4 ; "stat-item" ] ] [
-          a ~a:(Common.a_link "activations") [
-            div [ h4 [ pcdata_t s_activations ] ] ;
+        div ~a:[ a_class [ cmd3; cxs6 ; "stat-item"; "odometer-item" ] ] [
+          a ~a:(a_link "activations") [
+            div [ h4 [ txt_t s_activations ] ] ;
             div ~a:[ a_id odometer_act_id ;
                      a_class [ "odometer"; "odometer-theme-train-station" ] ] [
-              pcdata "0"] ;
+              txt "0"] ;
           ]
         ] ;
         div ~a:[ a_class [ cxs12; "section-title" ] ]
           [ chart_line_icon () ; space_icon () ;
-            pcdata_t s_last_snapshot ] ;
+            txt_t s_last_snapshot ] ;
 
         div ~a:[ a_class [ cxs6; "stat-item" ] ] [
-          div [ h4 [ pcdata_t s_staking_ratio ] ] ;
+          div [ h4 [ txt_t s_staking_ratio ] ] ;
           make_fan 0 fan_baking_rate_id
         ] ;
 
         div ~a:[ a_class [ cxs6; "stat-item" ] ] [
-          a ~a:(Common.a_link "rolls-distribution") [
-            div [ h4 [ pcdata_t s_roll_owners ] ] ;
+          a ~a:(a_link "rolls-distribution") [
+            div [ h4 [ txt_t s_roll_owners ] ] ;
             div ~a:[ a_id odometer_active_baker_rate_id ;
                      a_class [ "odometer"; "odometer-theme-train-station" ] ] [
-              pcdata "0"] ;
+              txt "0"] ;
           ]
         ] ;
 

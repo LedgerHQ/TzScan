@@ -84,6 +84,8 @@ module type READER = sig
     ?page_size:int ->
     ?level:int ->
     unit -> block list Monad.t
+  val heads_with_pred_fitness:  ?page:int -> ?page_size:int -> ?level:int ->
+    unit -> (block * string) list Monad.t
 
   val nb_heads : unit -> int Monad.t
 
@@ -107,6 +109,8 @@ module type READER = sig
     ?operations:bool ->
     unit ->
     block list Monad.t
+  val blocks_with_pred_fitness:  ?page:int -> ?page_size:int -> unit ->
+    (block * string) list Monad.t
 
   val nb_snapshot_blocks: unit -> int Monad.t
   val snapshot_blocks: ?page:int -> ?page_size:int -> unit -> snapshot list Monad.t
@@ -143,6 +147,12 @@ module type READER = sig
     -> account_hash -> int Monad.t
   val bakings_endorsement : ?page:int -> ?page_size:int -> ?cycle:int ->
     account_hash -> baking_endorsement list Monad.t
+  val nb_cycle_bakings : account_hash -> int Monad.t
+  val cycle_bakings_sv : ?page:int -> ?page_size:int -> account_hash
+    -> cycle_baking list Monad.t
+  val nb_cycle_endorsements : account_hash -> int Monad.t
+  val cycle_endorsements_sv : ?page:int -> ?page_size:int -> account_hash
+    -> cycle_endorsement list Monad.t
   val nb_bakings_history : account_hash -> int Monad.t
   val bakings_history : ?page:int -> ?page_size:int -> account_hash ->
     (cycle_baking list * cycle_rights list * cycle_baking list) Monad.t
@@ -203,6 +213,7 @@ module type READER = sig
   val tops : ?page:int -> ?page_size:int -> ?kind:string -> unit -> top_accounts Monad.t
 
   val account_bonds_rewards : account_hash -> account_bonds_rewards Monad.t
+  val extra_bonds_rewards : account_hash -> account_extra_rewards Monad.t
 
   val max_roll_cycle : unit -> int Monad.t
   val rolls_distribution : int -> (account_name * int) list Monad.t
@@ -236,8 +247,8 @@ module type READER = sig
     unit ->
     (int64 * int64) list Monad.t
 
-  val nb_delegators : account_hash -> int -> int Monad.t
-  val nb_cycle_rewards : account_hash -> int Monad.t
+  val nb_delegators : ?cycle:int -> account_hash -> int Monad.t
+  val nb_cycle_rewards : ?only_future:bool -> account_hash -> int Monad.t
 
   val delegate_rewards_split_cycles :
     ?page:int ->
@@ -247,17 +258,21 @@ module type READER = sig
   val delegate_rewards_split :
     ?page:int ->
     ?page_size:int ->
+    ?cycle:int ->
     account_hash ->
-    int -> rewards_split Monad.t
+    rewards_split Monad.t
   val delegate_rewards_split_fast :
     ?page:int ->
     ?page_size:int ->
+    ?cycle:int ->
     account_hash ->
-    int -> (account_name * int64) list Monad.t
+    (account_name * int64) list Monad.t
 
   val nb_cycle_delegator_rewards : account_hash -> int Monad.t
   val delegator_rewards : ?page:int -> ?page_size:int ->
     account_hash -> delegator_reward list Monad.t
+  val delegator_rewards_with_details : ?page:int -> ?page_size:int ->
+    account_hash -> (delegator_reward * delegator_reward_details) list Monad.t
 
   val search_block : ?limit:int -> string -> string list Monad.t
   val search_operation : ?limit:int -> string -> string list Monad.t
@@ -319,6 +334,28 @@ module type READER = sig
 
   val nb_exchange: unit -> int Monad.t
   val exchange_info: ?page:int -> ?page_size:int -> unit -> exchange_info list Monad.t
+
+  val voting_period_info: ?period:int -> unit ->
+    (int * voting_period_kind * int * int * bool * voting_period_status list * int) Monad.t
+  val nb_proposals: ?period:int -> unit -> int Monad.t
+  val proposals: ?period:int -> ?page:int -> ?page_size:int -> unit ->
+    proposal list Monad.t
+  val testing_proposal: int -> voting_period_kind -> proposal_hash Monad.t
+  val ballots: int -> voting_period_kind
+    -> (string * int * int * int * int * int * int) Monad.t
+  val votes_account: ?page:int -> ?page_size:int -> account_hash -> proposal list Monad.t
+  val vote_graphs_account: account_hash ->
+    ((int * int * int) list * (int * int * int) list) Monad.t
+  val nb_proposal_votes: ?period:int -> proposal_hash -> (int * int) Monad.t
+  val proposal_votes: ?period:int -> ?page:int -> ?page_size:int ->
+    proposal_hash -> proposal list Monad.t
+  val total_proposal_votes: int -> (int * int * int * int * int * int * int) Monad.t
+  val nb_ballot_votes: ?period:int -> ?ballot:string -> proposal_hash
+    -> (int * int) Monad.t
+  val ballot_votes: ?page:int -> ?page_size:int -> ?period:int -> ?ballot:string
+    -> proposal_hash -> proposal list Monad.t
+  val total_voters: int -> (int * int) Monad.t
+  val quorum : int -> int Monad.t
 end
 
 module type READER_GENERIC = functor (M : MONAD) -> READER

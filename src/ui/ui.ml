@@ -14,7 +14,8 @@
 (*                                                                      *)
 (************************************************************************)
 
-open Tyxml_js.Html5
+open Ocp_js
+open Html
 open Data_types
 open Lang
 open Text
@@ -38,19 +39,16 @@ let block_hash hash args =
 let operations hash =
   let content = Operation_ui.make_page hash in
   Common.update_main_content content;
-  Common.do_and_update_every 10
-    (fun () -> Api_request.Operation.request hash (Jsloc.args ()))
+  Api_request.Operation.request hash (Jsloc.args ())
 
 let account_hook = ref (fun _hash -> ())
 
 let account hash args =
-  let content = Account_ui.make_page hash args in
+  let content = Account_ui.make_page hash args
+      ~csv_xhr:(Api_request.CSV.transactions hash) in
   Common.update_main_content content;
   Api_request.Account.request hash (Jsloc.args ());
   !account_hook hash
-
-let api () =
-  Api_doc.make_doc ~base_url:(Common.api "make-doc") ()
 
 let glossary () = Glossary_doc.make_doc ()
 
@@ -98,7 +96,8 @@ let transactions ~refresh ~pending =
     refresh (fun () -> Api_request.Operations.Transactions.request ~pending)
 
 let activations ~refresh ~pending =
-  let content = Tyxml_js.Html5.div [
+  let content =
+    div [
       Operations_ui.make_activation_alert () ;
       Operations_ui.Activations.make ~pending () ] in
   Common.update_main_content content;
@@ -219,18 +218,57 @@ let not_found hash =
         let content = Search.not_found hash in
         Common.update_main_content content)
     (fun res ->
-       (Common.get_div_by_id "content")##innerHTML <- Js.string res
+       let content_div = Js_utils.Manip.by_id "content" in
+       match content_div with
+       | None -> Js_utils.log "no content div found"
+       | Some content_div -> Js_utils.Manip.setInnerHtml content_div res
     )
 
 let protocols () =
   let content = Protocols_ui.make () in
   Common.update_main_content content;
-  Api_request.Protocols.request ()
+  Api_request.Protocols.protocols_request ()
 
 let market_prices () =
   let content = Charts_ui.make_chart_panel () in
   Common.update_main_content content;
   Api_request.Charts.request_market_prices ()
+
+let redoc () =
+  let doc = Dom_html.document in
+  let s = doc##createElement(Js.string "script") in
+  s##setAttribute(Js.string "src", Js.string "https://cdn.jsdelivr.net/npm/redoc@next/bundles/redoc.standalone.js");
+  Dom.addEventListener s
+    (Dom.Event.make "load")
+    (Dom.handler (fun _e ->
+         let redoc_div = div ~a:[ a_id "redoc-div" ] [] in
+         Common.update_main_content redoc_div;
+         Redoc.init "tzscan_openapi.json" redoc_div |> ignore;
+         Js._true))
+    Js._true |> ignore;
+  Js_utils.Manip.appendChild
+    (Of_dom.of_body Dom_html.document##body)
+    (Of_dom.of_element s)
+
+
+let apps () =
+  let content = Apps_ui.make () in
+  Common.update_main_content content
+
+let proposals () =
+  let content = Proposals_ui.make (Jsloc.args ()) in
+  Common.update_main_content content;
+  Api_request.Protocols.proposals_request (Jsloc.args ())
+
+let all_proposals () =
+  let content = Proposals_ui.make_all_proposals () in
+  Common.update_main_content content;
+  Api_request.Protocols.all_proposals_request ()
+
+let votes () =
+  let content = Proposals_ui.make_votes () in
+  Common.update_main_content content;
+  Api_request.Protocols.votes_request ()
 
 (* try path functions *)
 let try_level path =
@@ -249,7 +287,7 @@ let dispatch path =
       match path with
       | "" -> home ()
       | "workers-status"
-      | "api" -> api ()
+      | "api" -> redoc ()
       | "glossary" -> glossary ()
       | "blocks" -> blocks ()
       | "baking-rights" -> baking_rights ()
@@ -289,6 +327,10 @@ let dispatch path =
       | "snapshot-blocks" -> snapshot_blocks ()
       | "protocols" -> protocols ()
       | "market_prices" -> market_prices ()
+      | "apps" -> apps ()
+      | "proposals" -> proposals ()
+      | "all-proposals" -> all_proposals ()
+      | "votes" -> votes ()
       | _ ->
         (* Specific hashes *)
         match String.get path 0 with
@@ -304,8 +346,7 @@ let dispatch path =
     end
   | _ -> not_found (Jsloc.path_string ())
 
-let () =
-  Common.link_dispatcher := dispatch
+let () = Common.link_dispatcher := dispatch
 
 
 let switch_button () =
@@ -327,7 +368,7 @@ let setup_page () =
   (* begin translations *)
   begin
     let span = Js_utils.find_component "search-go" in
-    Js_utils.Manip.replaceChildren span [ pcdata_t s_go ]
+    Js_utils.Manip.replaceChildren span [ txt_t s_go ]
   end;
   begin
     let input = Js_utils.find_component "search" in
@@ -344,7 +385,7 @@ let setup_page () =
     List.iter (fun (network, link) ->
         let ele = a ~a:[ a_class ["btn"; "btn-default"; "btn-network"];
                          a_id (network ^ "-button");
-                         a_href link] [pcdata network]
+                         a_href link] [txt network]
         in
         Js_utils.Manip.appendChild span ele ;
       ) Infos.www.www_networks;
@@ -358,11 +399,10 @@ let setup_page () =
         match Common.shuffle donation_keys with
         | [] -> "tz1gE3rqbA6aKooeoWHw3KTwQ622FZHA2CWc"
         | hd :: _ -> hd in
-      let open Tyxml_js.Html5 in
       let to_add =
         span [
-          pcdata "Support us : " ;
-          a ~a:[ a_href tz1 ] [ pcdata tz1 ]
+          txt "Support us : " ;
+          a ~a:[ a_href tz1 ] [ txt tz1 ]
         ] in
       Js_utils.Manip.appendChild container to_add ;
     );
@@ -405,6 +445,9 @@ let init () =
             Infos.www.www_footer <- info.www_footer ;
             Infos.www.www_logo <- info.www_logo ;
             Infos.www.www_networks <- info.www_networks ;
+            Infos.www.www_themes <- info.www_themes ;
+            Infos.www.www_recaptcha_key <- info.www_recaptcha_key ;
+            Infos.www.www_csv_server <- info.www_csv_server ;
             begin
               match Infos.www.www_auth with
               | Some _ -> ()
@@ -419,5 +462,5 @@ let init () =
                 Common.set_api_node () ;
             end;
             Api_request.Server.info Common.initial_redraw
-        );
+        )
     )

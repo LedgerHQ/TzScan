@@ -15,23 +15,21 @@
 (************************************************************************)
 
 module TEXT : sig
-
   val s_day : Lang.text
   val s_days : Lang.text
-
 end
 
 val auto_updating_timespan :
   ?refresh:(float -> unit) -> (* called with the diff at every refresh *)
   ?future:bool ->
   string ->
-  [> Html_types.span ] Tyxml_js.Html5.elt
+  [> Html_types.span ] Ocp_js.elt
 
 val auto_updating_timespan_float :
   ?refresh:(float -> unit) -> (* called with the diff at every refresh *)
   ?future:bool ->
   float ->
-  [> Html_types.span ] Tyxml_js.Html5.elt
+  [> Html_types.span ] Ocp_js.elt
 
 val set_server_date : float -> unit
 val time_before_level : cst:Tezos_types.constants -> int -> string

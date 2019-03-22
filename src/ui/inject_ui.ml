@@ -14,13 +14,14 @@
 (*                                                                      *)
 (************************************************************************)
 
-open Tyxml_js.Html5
+open Ocp_js
+open Html
 open Js_utils
 open Bootstrap_helpers.Grid
-open Lang (* s_ *)
-open Common
-open Data_types
 open Tezos_types
+open Data_types
+open Lang
+open Common
 
 let s_injection_failed = ss_ "Operation injection failed"
 let s_injection_succeeded_at_address =
@@ -62,15 +63,15 @@ module Signed = struct
         a_id "inject-op-content";
         a_placeholder (s_ "Insert a hexadecimal signed operation here")
       ]
-      (pcdata "")
+      (txt "")
 
   let inject_button handler =
     let b =
       button
         ~a:[ a_class ["btn" ;"btn-default"] ; a_id "inject-op-button"]
-        [ pcdata_t s_inject_operation ]
+        [ txt_t s_inject_operation ]
     in
-    (Tyxml_js.To_dom.of_button b)##onclick <-
+    (To_dom.of_button b)##onclick <-
       Dom_html.handler handler;
     b
 
@@ -93,8 +94,8 @@ module Signed = struct
     hide_all ();
     show request_ko;
     Manip.replaceChildren request_ko
-      [ div [ h3 [ pcdata_t s_injection_failed ];
-              h4 [ pcdata_t s_rpc_error ; pcdata @@ Printf.sprintf " %d" status ]
+      [ div [ h3 [ txt_t s_injection_failed ];
+              h4 [ txt_t s_rpc_error ; txt @@ Printf.sprintf " %d" status ]
             ] ]
 
 
@@ -106,7 +107,7 @@ module Signed = struct
     | Inj_ok op  ->
       show answer_ok;
       Manip.replaceChildren answer_ok
-        [ div [ h3 [ pcdata_t s_injection_succeeded_at_address ];
+        [ div [ h3 [ txt_t s_injection_succeeded_at_address ];
                 h4 ~a:[ a_class [ "no-overflow" ] ] [
                   Common.make_link op ];
               ] ]
@@ -116,24 +117,24 @@ module Signed = struct
         List.fold_left
           (fun acc e -> if acc < e then e else acc) Inj_other l in
       let msg_failure = match most_precise with
-        | Inj_illformed -> pcdata_t s_illformed_operation
-        | Inj_outdated  -> pcdata_t s_outdated_operation
-        | Inj_other     -> pcdata_t s_generic_failure
-        | Inj_generic _ -> pcdata_t s_generic_failure
+        | Inj_illformed -> txt_t s_illformed_operation
+        | Inj_outdated  -> txt_t s_outdated_operation
+        | Inj_other     -> txt_t s_generic_failure
+        | Inj_generic _ -> txt_t s_generic_failure
       in
       show answer_ko;
       Manip.replaceChildren answer_ko
-        [ div [ h3 [ pcdata_t s_injection_failed ]; h4 [ msg_failure ] ] ]
+        [ div [ h3 [ txt_t s_injection_failed ]; h4 [ msg_failure ] ] ]
 
   let xhr_inject signed_op =
     let url = EzAPI.forge0 (api "inject") Service.V1.head [] in
-    Xhr.get "Inject_ui.head" url (fun res ->
+    EzXhr.get "Inject_ui.head" url (fun res ->
         let head = EzEncoding.destruct Api_encoding.V1.Block.encoding res in
         let data =
           EzEncoding.construct Tezos_encoding.Encoding.Injection.injection_encoding
             (signed_op, head.network, false) in
         let url = EzAPI.printf (api "inject")  "inject_operation" in
-        Xhr.post
+        EzXhr.post
           ?content_type:(Some "application/json")
           ~content:data
           "Inject_ui.inject_signed_op" url
@@ -145,7 +146,7 @@ module Signed = struct
   let inject_button_handler e =
     Dom.preventDefault e;
     let inject_input = find_component "inject-op-content" in
-    let signed_op = Js.to_string (Tyxml_js.To_dom.of_input
+    let signed_op = Js.to_string (To_dom.of_input
                                     inject_input)##value in
     let signed_op = String.trim signed_op in
     hide_all ();
@@ -159,7 +160,7 @@ module Signed = struct
 
   let make () =
     Bootstrap_helpers.Panel.make_panel
-      ~panel_title_content:(div [ pcdata_t s_inject_signed_operation ;
+      ~panel_title_content:(div [ txt_t s_inject_signed_operation ;
                                   Glossary_doc.(help HInject) ])
       ~panel_body_content:[
         textarea ;

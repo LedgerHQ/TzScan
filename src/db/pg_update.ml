@@ -22,6 +22,10 @@ let downgrade_1_to_0 = [
 module Constants = struct
   let last_endorsements = 100L
   let last_transactions = 1000L
+  let last_originations = 1000L
+  let last_delegations = 1000L
+  let last_activations = 1000L
+  let last_reveals = 1000L
 end
 
 let update_0_to_1 dbh version =
@@ -1990,6 +1994,7 @@ let update_36_to_37 dbh version =
       volume float NOT NULL,
       conversion float NOT NULL,
       price_usd float NOT NULL);|}
+
   ]
 
 let downgrade_38_to_37 = [
@@ -2075,6 +2080,259 @@ let update_37_to_38 dbh version =
       $$ LANGUAGE plpgsql;|};
   ]
 
+let downgrade_39_to_38 = [
+  {|ALTER TABLE snapshot_rolls DROP COLUMN ready;|};
+  {|ALTER TABLE level_rights DROP COLUMN ready;|}
+]
+
+let update_38_to_39 dbh version =
+  EzPG.upgrade ~dbh ~version ~downgrade:downgrade_39_to_38 [
+    {|ALTER TABLE snapshot_rolls ADD COLUMN ready bool NOT NULL DEFAULT false;|};
+    {|ALTER TABLE level_rights ADD COLUMN ready bool NOT NULL DEFAULT false;|};
+  ]
+
+let downgrade_40_to_39 = [
+  {|DROP INDEX IF EXISTS tezos_user_index_hash;|};
+  {|DROP INDEX IF EXISTS balances_index_spendable;|};
+  {|DROP INDEX IF EXISTS balances_index_hash;|};
+  {|DROP INDEX IF EXISTS balances_index_cycle;|}
+]
+
+let update_39_to_40 dbh version =
+  EzPG.upgrade ~dbh ~version ~downgrade:downgrade_40_to_39 [
+    {|CREATE INDEX tezos_user_index_hash ON tezos_user(hash);|};
+    {|CREATE INDEX balances_index_spendable ON balance_from_balance_updates(spendable_balance);|};
+    {|CREATE INDEX balances_index_hash ON balance_from_balance_updates(hash);|};
+    {|CREATE INDEX balances_index_cycle ON balance_from_balance_updates(cycle);|}
+  ]
+
+let downgrade_41_to_40 = [
+  {|DROP TABLE origination_all;|};
+  {|DROP TABLE origination_last;|};
+  {|DROP TABLE delegation_all;|};
+  {|DROP TABLE delegation_last;|};
+  {|DROP TABLE activation_all;|};
+  {|DROP TABLE activation_last;|}
+]
+
+let update_40_to_41 dbh version =
+  EzPG.upgrade ~dbh ~version ~downgrade:downgrade_41_to_40 [
+    {|CREATE TABLE origination_all (
+      hash varchar NOT NULL,
+      source varchar NOT NULL,
+      tz1 varchar NOT NULL,
+      fee bigint NOT NULL,
+      counter bigint NOT NULL,
+      manager varchar NOT NULL,
+      delegate varchar,
+      script_code bytea,
+      script_storage_type varchar,
+      spendable boolean NOT NULL,
+      delegatable boolean NOT NULL,
+      balance bigint NOT NULL,
+      gas_limit bigint,
+      storage_limit bigint,
+      failed boolean NOT NULL,
+      internal boolean NOT NULL,
+      burn_tez bigint NOT NULL DEFAULT 0,
+      timestamp_op timestamp NOT NULL,
+      op_level bigint,
+      op_block_hash varchar,
+      distance_level int,
+      network varchar,
+      timestamp_block timestamp); |};
+    {|CREATE TABLE origination_last (
+      id bigserial NOT NULL,
+      hash varchar NOT NULL,
+      source varchar NOT NULL,
+      tz1 varchar NOT NULL,
+      fee bigint NOT NULL,
+      counter bigint NOT NULL,
+      manager varchar NOT NULL,
+      delegate varchar,
+      script_code bytea,
+      script_storage_type varchar,
+      spendable boolean NOT NULL,
+      delegatable boolean NOT NULL,
+      balance bigint NOT NULL,
+      gas_limit bigint,
+      storage_limit bigint,
+      failed boolean NOT NULL,
+      internal boolean NOT NULL,
+      burn_tez bigint NOT NULL DEFAULT 0,
+      timestamp_op timestamp NOT NULL,
+      op_level bigint,
+      op_block_hash varchar,
+      distance_level int,
+      network varchar,
+      timestamp_block timestamp); |};
+    {|CREATE INDEX source_origination_all_index ON origination_all (source) ;|};
+    {|CREATE INDEX tz1_origination_all_index ON origination_all (tz1) ;|};
+    {|CREATE INDEX manager_origination_all_index ON origination_all (manager) ;|};
+    {|CREATE INDEX delegate_origination_all_index ON origination_all (delegate) ;|};
+    {|CREATE INDEX op_level_origination_all_index ON origination_all (op_level) ;|};
+    {|CREATE INDEX op_block_hash_origination_all_index ON origination_all (op_block_hash) ;|};
+    {|CREATE INDEX distance_level_origination_all_index ON origination_all (distance_level) ;|};
+    {|CREATE INDEX timestamp_origination_all_index ON origination_all (timestamp_op) ;|};
+    {|CREATE INDEX source_origination_last_index ON origination_last (source) ;|};
+    {|CREATE INDEX tz1_origination_last_index ON origination_last (tz1) ;|};
+    {|CREATE INDEX manager_origination_last_index ON origination_last (manager) ;|};
+    {|CREATE INDEX delegate_origination_last_index ON origination_last (delegate) ;|};
+    {|CREATE INDEX op_level_origination_last_index ON origination_last (op_level) ;|};
+    {|CREATE INDEX op_block_hash_origination_last_index ON origination_last (op_block_hash) ;|};
+    {|CREATE INDEX distance_level_origination_last_index ON origination_last (distance_level) ;|};
+    {|CREATE INDEX timestamp_origination_last_index ON origination_last (timestamp_op) ;|};
+    {|CREATE TABLE delegation_all (
+      hash varchar NOT NULL,
+      source varchar NOT NULL,
+      fee bigint NOT NULL,
+      counter bigint NOT NULL,
+      delegate varchar,
+      gas_limit bigint,
+      storage_limit bigint,
+      failed boolean NOT NULL,
+      internal boolean NOT NULL,
+      timestamp_op timestamp NOT NULL,
+      op_level bigint,
+      op_block_hash varchar,
+      distance_level int,
+      network varchar,
+      timestamp_block timestamp); |};
+    {|CREATE TABLE delegation_last (
+      id bigserial NOT NULL,
+      hash varchar NOT NULL,
+      source varchar NOT NULL,
+      fee bigint NOT NULL,
+      counter bigint NOT NULL,
+      delegate varchar,
+      gas_limit bigint,
+      storage_limit bigint,
+      failed boolean NOT NULL,
+      internal boolean NOT NULL,
+      timestamp_op timestamp NOT NULL,
+      op_level bigint,
+      op_block_hash varchar,
+      distance_level int,
+      network varchar,
+      timestamp_block timestamp); |};
+    {|CREATE INDEX source_delegation_all_index ON delegation_all (source) ;|};
+    {|CREATE INDEX delegate_delegation_all_index ON delegation_all (delegate) ;|};
+    {|CREATE INDEX op_level_delegation_all_index ON delegation_all (op_level) ;|};
+    {|CREATE INDEX op_block_hash_delegation_all_index ON delegation_all (op_block_hash) ;|};
+    {|CREATE INDEX distance_level_delegation_all_index ON delegation_all (distance_level) ;|};
+    {|CREATE INDEX timestamp_delegation_all_index ON delegation_all (timestamp_op) ;|};
+    {|CREATE INDEX source_delegation_last_index ON delegation_last (source) ;|};
+    {|CREATE INDEX delegate_delegation_last_index ON delegation_last (delegate) ;|};
+    {|CREATE INDEX op_level_delegation_last_index ON delegation_last (op_level) ;|};
+    {|CREATE INDEX op_block_hash_delegation_last_index ON delegation_last (op_block_hash) ;|};
+    {|CREATE INDEX distance_level_delegation_last_index ON delegation_last (distance_level) ;|};
+    {|CREATE INDEX timestamp_delegation_last_index ON delegation_last (timestamp_op) ;|};
+    {|CREATE TABLE activation_all (
+      hash varchar NOT NULL,
+      pkh varchar NOT NULL,
+      secret varchar NOT NULL,
+      balance bigint DEFAULT 0,
+      timestamp_op timestamp NOT NULL,
+      op_level bigint,
+      op_block_hash varchar,
+      distance_level int,
+      network varchar,
+      timestamp_block timestamp); |};
+    {|CREATE TABLE activation_last (
+      id bigserial NOT NULL,
+      hash varchar NOT NULL,
+      pkh varchar NOT NULL,
+      secret varchar NOT NULL,
+      balance bigint DEFAULT 0,
+      timestamp_op timestamp NOT NULL,
+      op_level bigint,
+      op_block_hash varchar,
+      distance_level int,
+      network varchar,
+      timestamp_block timestamp); |};
+    {|CREATE INDEX pkh_activation_all_index ON activation_all (pkh) ;|};
+    {|CREATE INDEX op_level_activation_all_index ON activation_all (op_level) ;|};
+    {|CREATE INDEX op_block_hash_activation_all_index ON activation_all (op_block_hash) ;|};
+    {|CREATE INDEX distance_level_activation_all_index ON activation_all (distance_level) ;|};
+    {|CREATE INDEX timestamp_activation_all_index ON activation_all (timestamp_op) ;|};
+    {|CREATE INDEX pkh_activation_last_index ON activation_last (pkh) ;|};
+    {|CREATE INDEX op_level_activation_last_index ON activation_last (op_level) ;|};
+    {|CREATE INDEX op_block_hash_activation_last_index ON activation_last (op_block_hash) ;|};
+    {|CREATE INDEX distance_level_activation_last_index ON activation_last (distance_level) ;|};
+    {|CREATE INDEX timestamp_activation_last_index ON activation_last (timestamp_op) ;|};
+    {|CREATE TABLE reveal_all (
+      hash varchar NOT NULL,
+      source varchar NOT NULL,
+      fee bigint NOT NULL,
+      counter bigint NOT NULL,
+      pubkey varchar,
+      gas_limit bigint,
+      storage_limit bigint,
+      failed boolean NOT NULL,
+      internal boolean NOT NULL,
+      timestamp_op timestamp NOT NULL,
+      op_level bigint,
+      op_block_hash varchar,
+      distance_level int,
+      network varchar,
+      timestamp_block timestamp); |};
+    {|CREATE TABLE reveal_last (
+      id bigserial NOT NULL,
+      hash varchar NOT NULL,
+      source varchar NOT NULL,
+      fee bigint NOT NULL,
+      counter bigint NOT NULL,
+      pubkey varchar,
+      gas_limit bigint,
+      storage_limit bigint,
+      failed boolean NOT NULL,
+      internal boolean NOT NULL,
+      timestamp_op timestamp NOT NULL,
+      op_level bigint,
+      op_block_hash varchar,
+      distance_level int,
+      network varchar,
+      timestamp_block timestamp); |};
+    {|CREATE INDEX source_reveal_all_index ON reveal_all (source) ;|};
+    {|CREATE INDEX pubkey_reveal_all_index ON reveal_all (pubkey) ;|};
+    {|CREATE INDEX op_level_reveal_all_index ON reveal_all (op_level) ;|};
+    {|CREATE INDEX op_block_hash_reveal_all_index ON reveal_all (op_block_hash) ;|};
+    {|CREATE INDEX distance_level_reveal_all_index ON reveal_all (distance_level) ;|};
+    {|CREATE INDEX timestamp_reveal_all_index ON reveal_all (timestamp_op) ;|};
+    {|CREATE INDEX source_reveal_last_index ON reveal_last (source) ;|};
+    {|CREATE INDEX pubkey_reveal_last_index ON reveal_last (pubkey) ;|};
+    {|CREATE INDEX op_level_reveal_last_index ON reveal_last (op_level) ;|};
+    {|CREATE INDEX op_block_hash_reveal_last_index ON reveal_last (op_block_hash) ;|};
+    {|CREATE INDEX distance_level_reveal_last_index ON reveal_last (distance_level) ;|};
+    {|CREATE INDEX timestamp_reveal_last_index ON reveal_last (timestamp_op) ;|};
+  ]
+
+let downgrade_42_to_41 = [
+  {|ALTER TABLE block DROP COLUMN voting_period_kind|};
+  {|DROP TABLE snapshot_voting_rolls|};
+]
+
+let update_41_to_42 dbh version =
+  EzPG.upgrade ~dbh ~version ~downgrade:downgrade_42_to_41 [
+    {|ALTER TABLE block ADD COLUMN voting_period_kind varchar NOT NULL DEFAULT 'proposal'|};
+    {|CREATE TABLE snapshot_voting_rolls (
+      voting_period int NOT NULL,
+      delegate varchar NOT NULL,
+      rolls int NOT NULL,
+      ready bool NOT NULL DEFAULT false,
+      PRIMARY KEY (voting_period, delegate))|};
+  ]
+
+let downgrade_43_to_42 = [
+  {|DROP TABLE quorum|};
+]
+
+let update_42_to_43 dbh version =
+  EzPG.upgrade ~dbh ~version ~downgrade:downgrade_43_to_42 [
+    {|CREATE TABLE quorum (
+      voting_period int PRIMARY KEY,
+      value int NOT NULL);|}
+  ]
 
 let upgrades = [
     0, update_0_to_1;
@@ -2114,10 +2372,20 @@ let upgrades = [
     34, update_34_to_35;
     35, update_35_to_36;
     36, update_36_to_37;
-    37, update_37_to_38
+    37, update_37_to_38;
+    38, update_38_to_39;
+    39, update_39_to_40;
+    40, update_40_to_41;
+    41, update_41_to_42;
+    42, update_42_to_43;
   ]
 
 let downgrades = [
+  43, downgrade_43_to_42;
+  42, downgrade_42_to_41;
+  41, downgrade_41_to_40;
+  40, downgrade_40_to_39;
+  39, downgrade_39_to_38;
   38, downgrade_38_to_37;
   37, downgrade_37_to_36;
   36, downgrade_36_to_35;

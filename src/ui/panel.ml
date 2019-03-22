@@ -14,8 +14,8 @@
 (*                                                                      *)
 (************************************************************************)
 
-open Tyxml_js
-open Html5
+open Ocp_js
+open Html
 open Js_utils
 open Bootstrap_helpers.Grid
 open Bootstrap_helpers.Panel
@@ -23,11 +23,11 @@ open Bootstrap_helpers.Table
 open Bootstrap_helpers.Input
 open Bootstrap_helpers.Button
 open Bootstrap_helpers.Icon
-open Text
 open Lang
+open Text
 
-type theads = Html_types.tr Tyxml_js.Html5.elt
 
+type theads = Html_types.tr elt
 
 module PageInput = struct
 
@@ -58,7 +58,7 @@ module PageInput = struct
       if curr < 11 then 1
       else curr - 10
     in
-    let page_input = Tyxml_js.To_dom.of_input page_input in
+    let page_input = To_dom.of_input page_input in
     if plus then
       page_input##value <- Js.string (string_of_int value)
     else page_input##value <- Js.string (string_of_int value);
@@ -69,12 +69,12 @@ module PageInput = struct
       button ~a:[ a_class [ btn; btn_default ];
                   a_button_type `Button;
                   a_onclick (onclick_accel id plus page page_number); ] [
-        pcdata "+10" ]
+        txt "+10" ]
     else
       button ~a:[ a_class [ btn; btn_default ];
                   a_button_type `Button;
                   a_onclick (onclick_accel id plus page page_number); ] [
-        pcdata "-10" ]
+        txt "-10" ]
 
   let onclick_goto id page page_number goto _ =
     let page = get_page id page page_number in
@@ -92,7 +92,7 @@ module PageInput = struct
       span ~a:[ a_class [ input_group_btn ]; ] [
         mk_accel_button id false page page_number;
       ];
-      Html5.input ~a:[ a_input_type `Text; a_class [ form_control; "page-input" ];
+      input ~a:[ a_input_type `Text; a_class [ form_control; "page-input" ];
                  a_placeholder "Go to"; a_id @@ Common.make_id "input" id;
                ] ();
       span ~a:[ a_class [ input_group_btn ] ] [
@@ -137,7 +137,7 @@ module PageInput = struct
               Bootstrap_helpers.Attributes.a_data_content (template id);
               a_id @@ Common.make_id "link" id;
             ]
-        [ pcdata value ],
+        [ txt value ],
       id
 
 end
@@ -231,24 +231,24 @@ let theads_of_strings columns () =
   tr (List.map (fun (name, width) ->
           if width < 0 then begin
               if id_ name = "->" then
-                th ~a:[ a_class [ "arrow" ] ] [ pcdata "" ]
+                th ~a:[ a_class [ "arrow" ] ] [ txt "" ]
               else
-                th [ pcdata_t name ]
+                th [ txt_t name ]
             end
           else
             th ~a:[ a_class [
                         Printf.sprintf "col-lg-%d" width ] ]
-               [ pcdata_t name ] ;
+               [ txt_t name ] ;
         ) columns)
 
 let title_nb ?help s nb =
   let s = Lang.t_ s in
   let ele =
            (if nb < 0 then
-              [ pcdata s ]
+              [ txt s ]
             else
-              [ pcdata (s^" ");
-                span ~a:[a_class ["badge"]] [ pcdata @@ string_of_int nb ] ]
+              [ txt (s^" ");
+                span ~a:[a_class ["badge"]] [ txt @@ string_of_int nb ] ]
            )
   in
   match help with
@@ -278,12 +278,12 @@ let find_size ?(urlarg="r") current_size =
 (* Simple table, no pagination *)
 module Make(M: sig
 
-                     val name : string
-                     val title_span :  [> Html_types.span ] Tyxml_js.Html5.elt
-                     val columns : (text * int) list
-                     val table_class : string
+    val name : string
+    val title_span :  [> Html_types.span ] elt
+    val columns : (text * int) list
+    val table_class : string
 
-                   end) = struct
+  end) = struct
 
 (* let s_name = ss_ M.name  *)
 
@@ -310,7 +310,7 @@ module Make(M: sig
               (theads() :: [
                   tr [
                     td [
-                      Lang.pcdata_t s_fetching_data ] ] ] )]
+                      Lang.txt_t s_fetching_data ] ] ] )]
         ]
       ] ()
 
@@ -327,7 +327,7 @@ module Make(M: sig
     Manip.removeChildren div;
     let container = find_component table_id in
     let table =
-      tablex ~a:[ a_class [ btable; "blocks-table" ] ] [
+      tablex ~a:[ a_class [ btable; "default-table" ] ] [
                tbody (theads() :: rows) ]
 
     in
@@ -345,21 +345,16 @@ type 'data content =
 `MakePageTable` and `MakePageNoTable`. *)
 module MakePageGen(M: sig
 
-                    type data
+    type data
 
-                    val name : string
-                    val title_span : int ->
-                                     [> Html_types.span ] Tyxml_js.Html5.elt
-                    val page_size : int
+    val name : string
+    val title_span : int -> [> Html_types.span ] elt
+    val page_size : int
+    val content_maker : data content -> [> `Div | `Table ] elt
+    val page_range : int -> int option ->
+      (int option * bool) list
 
-                    val content_maker :
-                      data content ->
-                      [> `Div | `Table ] Tyxml_js.Html5.elt
-
-                    val page_range : int -> int option ->
-                      (int option * bool) list
-
-              end) = struct
+  end) = struct
 
   let s_name = ss_ M.name
   let s_no_name = ss_ ("No " ^ M.name)
@@ -447,7 +442,7 @@ module MakePageGen(M: sig
       let mk_onclick_size new_page_size id =
         (fun _ ->
             let b = find_component id in
-            let elt = Tyxml_js.To_dom.of_select b in
+            let elt = To_dom.of_select b in
             elt##innerHTML <-
               Js.string (Printf.sprintf "%s: %d"
                            (t_ s_rows) page_size);
@@ -462,10 +457,10 @@ module MakePageGen(M: sig
           let items = List.map (function
               | Some p, true ->
                 li ~a:[a_class ["active"]]
-                  [a [ pcdata @@ string_of_int (p+1) ]]
+                  [a [ txt @@ string_of_int (p+1) ]]
               | Some p, false ->
                 li [a ~a:[mk_onclick_page p; a_class ["hidden-xs"; "hidden-sm"]]
-                      [ pcdata @@ string_of_int (p+1) ]]
+                      [ txt @@ string_of_int (p+1) ]]
               | None, _ ->
                 let link, id = PageInput.link_with_input ~prefix "..." in
                 seps := id :: !seps;
@@ -474,16 +469,16 @@ module MakePageGen(M: sig
             ) pages in
           let prev =
             if page = 0 then
-              li ~a:[a_class ["disabled"]] [a [pcdata "«"]]
+              li ~a:[a_class ["disabled"]] [a [txt "«"]]
             else
-              li [a ~a:[mk_onclick_page (page-1)] [pcdata "«"]]
+              li [a ~a:[mk_onclick_page (page-1)] [txt "«"]]
           in
           let next =
             match nb_pages with
             | Some p when p = page+1 ->
-               li ~a:[a_class ["disabled"]] [a [pcdata "»"]]
+               li ~a:[a_class ["disabled"]] [a [txt "»"]]
             | _ ->
-               li [a ~a:[mk_onclick_page (page+1)] [pcdata "»"]]
+               li [a ~a:[mk_onclick_page (page+1)] [txt "»"]]
           in
           let mobile_select =
             let link, id = PageInput.link_with_input ~prefix "..." in
@@ -501,13 +496,13 @@ module MakePageGen(M: sig
           let id = Common.make_id M.name "size-selector" in
 
           let select = List.map (fun p ->
-              Action ([], mk_onclick_size p id, pcdata (string_of_int p)))
+              Action ([], mk_onclick_size p id, txt (string_of_int p)))
               sizes in
           bootstrap_dropdown_button
             ~btn_class:[ btn_default; btn_sm; ]
             ~ctn_class:["hidden-xs"; "page-size"]
             id
-            [ pcdata (Printf.sprintf "%s: %d" (t_ s_rows) page_size) ]
+            [ txt (Printf.sprintf "%s: %d" (t_ s_rows) page_size) ]
             select
       in
 
@@ -555,20 +550,24 @@ module MakePageGen(M: sig
              cont (to_trs v)));
     ()
 
+  let update_title ?(suf_id="") title_elts =
+    let tdiv = find_component (title_id ^ suf_id) in
+    Manip.replaceChildren tdiv title_elts
+
 end
 
 
 let table_maker table_class theads
-                (data : Html_types.tr Tyxml_js.Html5.elt list content) =
+                (data : Html_types.tr elt list content) =
   match data with
   | Loading table_id ->
      div ~a: [ a_class [ btable_responsive ]; a_id table_id] [
        tablex ~a:[ a_class [ btable; table_class ] ] [
          tbody
            ( (theads()) :: [
-                 tr [ td [ Lang.pcdata_t s_fetching_data ] ] ] )] ]
+                 tr [ td [ Lang.txt_t s_fetching_data ] ] ] )] ]
   | Content (_name, _s_name, s_no_name, rows) -> match rows with
-    | [] -> div ~a:[ a_class [ clg12; cxs12 ] ] [ pcdata_t s_no_name ]
+    | [] -> div ~a:[ a_class [ clg12; cxs12 ] ] [ txt_t s_no_name ]
     | _ ->
       tablex ~a:[ a_class [ btable; table_class; btable_striped ] ] [
         tbody ( (theads()) :: rows)]
@@ -576,25 +575,21 @@ let table_maker table_class theads
 
 module MakePageTable(M: sig
 
-                         val name : string
-                         val title_span : int ->
-                                          [> Html_types.span ] Tyxml_js.Html5.elt
-                         val page_size : int
+    val name : string
+    val title_span : int -> [> Html_types.span ] elt
+    val page_size : int
+    val theads : unit -> theads
+    val table_class : string
 
-                         val theads : unit -> theads
-                         val table_class : string
-
-                     end) = struct
+  end) = struct
 
   include MakePageGen(struct
-                    let content_maker = table_maker M.table_class
-                                                    M.theads
-                    include M
-                    type data =
-                      Html_types.tr Tyxml_js.Html5.elt list
+      let content_maker = table_maker M.table_class M.theads
+      include M
+      type data = Html_types.tr elt list
 
-                    let page_range = large_page_range
-                  end)
+      let page_range = large_page_range
+    end)
 
   let paginate_all ?page_sizer ?suf_id ?urlarg_page ?urlarg_size rows =
     let nrows = Array.length rows in
@@ -612,10 +607,10 @@ end
 let div_maker data =
   match data with
   | Loading table_id ->
-     div ~a:[ a_id table_id ] [Lang.pcdata_t s_fetching_data ]
+     div ~a:[ a_id table_id ] [Lang.txt_t s_fetching_data ]
   | Content (_name, _s_name, s_no_name, rows) ->
      match rows with
-     | [] -> div ~a:[ a_class [ clg12; cxs12 ] ] [ pcdata_t s_no_name ]
+     | [] -> div ~a:[ a_class [ clg12; cxs12 ] ] [ txt_t s_no_name ]
      | _ -> div (List.map
                    (fun row ->
                      div ~a:[ a_class [ clg12; cxs12; "no-overflow" ]]
@@ -640,23 +635,20 @@ let _short_page_range page nb_pages =
         else
           [make_page 0; make_page (page-1); make_page (nb_pages-1)]
 
-module MakePageNoTable
-         (M: sig
+module MakePageNoTable (M: sig
 
-              val name : string
-              val title_span : int ->
-                               [> Html_types.span ]
-                               Tyxml_js.Html5.elt
-              val page_size : int
+    val name : string
+    val title_span : int -> [> Html_types.span ] elt
+    val page_size : int
 
-            end) = struct
+  end) = struct
 
   include MakePageGen(struct
-                       include M
-                       type data = Html_types.div Tyxml_js.Html5.elt list
-                       let content_maker = div_maker
-                       let page_range = large_page_range
-                     end)
+      include M
+      type data = Html_types.div elt list
+      let content_maker = div_maker
+      let page_range = large_page_range
+    end)
 
 
   let paginate_all ?page_sizer ?suf_id ?urlarg_page ?urlarg_size rows =
@@ -681,7 +673,7 @@ module MakePageTableList(
     M: sig
       type data
       val name : string
-      val title_span : int -> [> Html_types.span ] Tyxml_js.Html5.elt
+      val title_span : int -> [> Html_types.span ] elt
       val page_size : int
       val theads : unit -> theads
       val table_class : string
@@ -710,21 +702,21 @@ module MakePageTableList(
     else (
       let items = List.map (function
           | Some p, true ->
-            li ~a:[a_class ["active"]] [a [ pcdata @@ string_of_int (p+1) ]]
+            li ~a:[a_class ["active"]] [a [ txt @@ string_of_int (p+1) ]]
           | Some p, false ->
             li [a ~a:[mk_onclick_page p; a_class ["hidden-xs"; "hidden-sm"]]
-                  [ pcdata @@ string_of_int (p+1) ]]
+                  [ txt @@ string_of_int (p+1) ]]
           | None, _ ->
             let link, id = PageInput.link_with_input ~prefix "..." in
             seps := id :: !seps;
             li ~a:[a_class ["hidden-xs"; "hidden-sm"; ]] [ link ]
         ) pages in
       let prev =
-        if page = 0 then li ~a:[a_class ["disabled"]] [a [pcdata "«"]]
-        else li [a ~a:[mk_onclick_page (page-1)] [pcdata "«"]] in
+        if page = 0 then li ~a:[a_class ["disabled"]] [a [txt "«"]]
+        else li [a ~a:[mk_onclick_page (page-1)] [txt "«"]] in
       let next =
-        if nb_pages = page + 1 then li ~a:[a_class ["disabled"]] [a [pcdata "»"]]
-        else li [a ~a:[mk_onclick_page (page+1)] [pcdata "»"]] in
+        if nb_pages = page + 1 then li ~a:[a_class ["disabled"]] [a [txt "»"]]
+        else li [a ~a:[mk_onclick_page (page+1)] [txt "»"]] in
       let mobile_select =
         let link, id = PageInput.link_with_input ~prefix "..." in
         seps := id :: !seps;
@@ -735,7 +727,7 @@ module MakePageTableList(
   let make_page_sizer page_sizer page page_size f =
     let mk_onclick_size new_page_size id _ =
       let b = find_component id in
-      let elt = Tyxml_js.To_dom.of_select b in
+      let elt = To_dom.of_select b in
       elt##innerHTML <- Js.string (Printf.sprintf "%s: %d" (t_ s_rows) page_size);
       let new_page = page * page_size / new_page_size in
       f new_page new_page_size in
@@ -745,13 +737,13 @@ module MakePageTableList(
       let sizes = [ min_size; 10; 20; max_size ] in
       let id = Common.make_id M.name "size-selector" in
       let select = List.map (fun p ->
-          Action ([], mk_onclick_size p id, pcdata (string_of_int p)))
+          Action ([], mk_onclick_size p id, txt (string_of_int p)))
           sizes in
       bootstrap_dropdown_button
         ~btn_class:[ btn_default; btn_sm; ]
         ~ctn_class:["hidden-xs"; "page-size"]
         id
-        [ pcdata (Printf.sprintf "%s: %d" (t_ s_rows) page_size) ]
+        [ txt (Printf.sprintf "%s: %d" (t_ s_rows) page_size) ]
         select
 
   let make

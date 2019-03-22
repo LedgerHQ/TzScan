@@ -33,7 +33,6 @@ let conn_metadata_encoding =
        (req "private_node" bool))
 
 let z_encoding =
-  def "bignum" @@
   describe
     ~title: "Big number"
     ~description: "Decimal representation of a big number" @@
@@ -69,7 +68,7 @@ module Micheline = struct
         (dft "annots" (list string) []) in
     let seq_encoding expr_encoding =
       list expr_encoding in
-    let node_encoding = mu "tezosScriptExpression" (fun expr_encoding ->
+    let node_encoding = mu "tezos_script" (fun expr_encoding ->
         describe
           ~title: "Script expression (data, type or code)" @@
         union
@@ -1670,6 +1669,17 @@ module Base = struct
           (fun errs -> Inj_ko errs) ;
       ]
 
+  end
+
+  module Votes = struct
+    let voting_rolls_encoding =
+      conv
+        (fun {vroll_pkh; vroll_count} -> (vroll_pkh, vroll_count))
+        (fun (vroll_pkh, vroll_count) -> {vroll_pkh; vroll_count})
+        (obj2
+           (req "pkh" string)
+           (req "rolls" int))
+    let voting_rolls_encodings = list voting_rolls_encoding
   end
 
 end

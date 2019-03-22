@@ -14,7 +14,8 @@
 (*                                                                      *)
 (************************************************************************)
 
-open Tyxml_js.Html5
+open Ocp_js
+open Html
 open Js_utils
 open Bootstrap_helpers.Icon
 open Bootstrap_helpers.Grid
@@ -50,13 +51,13 @@ let make_doc () =
             let section_name = Filename.remove_extension file in
             li ~a:[ a_class [ "list-group-item" ] ] [
               a ~a:[ a_href ("#" ^ section_name) ] [
-                pcdata section_title
+                txt section_title
               ]
             ])
           Glossary.files ] in
     let container =
       div ~a:[ a_id "glossary"; a_class [ row ] ] [
-        Tyxml_js.Of_dom.of_div left ;
+        Of_dom.of_div left ;
         right ] in
 
     Common.update_main_content container
@@ -111,7 +112,7 @@ let help t =
   let link =
     let toggle = a_user_data "toggle" modal in
     let target = a_user_data "target" ("#" ^ id) in
-    button ~a:[ a_class [ "glossary-help-icon" ]; toggle; target ] [ pcdata " ?" ] in
+    button ~a:[ a_class [ "glossary-help-icon" ]; toggle; target ] [ txt " ?" ] in
   let container =
     let dismiss = a_user_data "dismiss" modal in
     let aria_hidden = Bootstrap_helpers.Attributes.a_aria "hidden" "true" in
@@ -120,7 +121,7 @@ let help t =
     let main_content =
       let content = Dom_html.createDiv Dom_html.window##document in
       content##innerHTML <- Js.string doc_html ;
-      Tyxml_js.Of_dom.of_div content in
+      Of_dom.of_div content in
 
     div ~a:[ a_class [ modal; "fade" ];
              a_id id; a_tabindex (-1);
@@ -134,13 +135,13 @@ let help t =
                   span ~a:[ aria_hidden ] [ times_icon () ]
                 ] ;
                 h4 ~a:[ a_class [ modal_title ]; a_id id_title ]
-                  [ pcdata section ] ;
+                  [ txt section ] ;
               ] ;
               div ~a:[ a_class [ modal_body ] ] [ main_content ];
               div ~a:[ a_class [ modal_footer ] ] [
                 button ~a:[ a_button_type `Button;
                             a_class [ btn; btn_secondary ]; dismiss ]
-                  [ pcdata "Close" ]
+                  [ txt "Close" ]
               ]
             ]
           ]

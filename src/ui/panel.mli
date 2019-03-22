@@ -14,78 +14,74 @@
 (*                                                                      *)
 (************************************************************************)
 
-type theads = Html_types.tr Tyxml_js.Html5.elt
+type theads = Html_types.tr Ocp_js.elt
 
-val theads : ([< Html_types.th_content_fun ] Tyxml_js.Html5.elt list
+val theads : ([< Html_types.th_content_fun ] Ocp_js.elt list
               * int) list -> theads
 val theads_of_strings : (Lang.text * int) list -> unit -> theads
 
 val title_nb :
   ?help:Glossary_doc.helpers ->
   Lang.text ->
-  int -> [> Html_types.span ] Tyxml_js.Html5.elt
+  int -> [> Html_types.span ] Ocp_js.elt
 
 
 (* Panel without pagination *)
 module Make(M: sig
 
-                     val name : string
-                     val title_span :  [> Html_types.span ] Tyxml_js.Html5.elt
-                     val columns : (Lang.text * int) list
-                     val table_class : string
+    val name : string
+    val title_span :  [> Html_types.span ] Ocp_js.elt
+    val columns : (Lang.text * int) list
+    val table_class : string
 
-                   end) : sig
+  end) : sig
 
   val make :
-    ?panel_class:string list -> unit -> [> Html_types.div ] Tyxml_js.Html5.elt
+    ?panel_class:string list -> unit -> [> Html_types.div ] Ocp_js.elt
 
-  val make_clg12 : unit -> [> Html_types.div ] Tyxml_js.Html5.elt
+  val make_clg12 : unit -> [> Html_types.div ] Ocp_js.elt
 
   val display :
-    Html_types.tr Tyxml_js.Html5.elt list -> unit
+    Html_types.tr Ocp_js.elt list -> unit
 
 end
-
-
 
 
 
 (* Panel with pagination *)
 module MakePageTable(M: sig
 
-                    (* name of kind of values displayed in the table: account *)
-                    val name : string
+    (* name of kind of values displayed in the table: account *)
+    val name : string
 
-                    (* [title_span nb] when nb = -1 means not known,
-                    otherwise, the number of items *)
-                    val title_span : int ->
-                                     [> Html_types.span ] Tyxml_js.Html5.elt
-                    (* The names of the columns *)
-                    val theads : unit -> theads
+    (* [title_span nb] when nb = -1 means not known, otherwise, the number of items *)
+    val title_span : int -> [> Html_types.span ] Ocp_js.elt
+    (* The names of the columns *)
+    val theads : unit -> theads
 
-                    val table_class : string
-                    val page_size : int
+    val table_class : string
+    val page_size : int
 
-                  end) : sig
+  end) : sig
 
   val make :
     ?footer:bool ->
     ?suf_id:string ->
     ?panel_class:string list ->
-    ?before:[ `Div | `Table ] Tyxml_js.Html5.elt list ->
-    ?after:[ `Div | `Table ] Tyxml_js.Html5.elt list ->
-    unit -> [> Html_types.div ] Tyxml_js.Html5.elt
+    ?before:[ `Div | `Table ] Ocp_js.elt list ->
+    ?after:[ `Div | `Table ] Ocp_js.elt list ->
+    unit -> [> Html_types.div ] Ocp_js.elt
   val make_clg12 :
     ?footer:bool ->
     ?suf_id:string ->
-    ?before:[ `Div | `Table ] Tyxml_js.Html5.elt list ->
-    ?after:[ `Div | `Table ] Tyxml_js.Html5.elt list ->
-    unit -> [> Html_types.div ] Tyxml_js.Html5.elt
+    ?before:[ `Div | `Table ] Ocp_js.elt list ->
+    ?after:[ `Div | `Table ] Ocp_js.elt list ->
+    unit -> [> Html_types.div ] Ocp_js.elt
   val make_clg8 :
     ?suf_id:string ->
-    ?before:[ `Div | `Table ] Tyxml_js.Html5.elt list ->
-    ?after:[ `Div | `Table ] Tyxml_js.Html5.elt list ->
-    unit -> [> Html_types.div ] Tyxml_js.Html5.elt
+    ?before:[ `Div | `Table ] Ocp_js.elt list ->
+    ?after:[ `Div | `Table ] Ocp_js.elt list ->
+    unit -> [> Html_types.div ] Ocp_js.elt
 
 
   (* [update nb updater] nb = total number of items,
@@ -98,10 +94,10 @@ module MakePageTable(M: sig
     ?urlarg_page:string ->                          (* "p" by default in the URL *)
     ?urlarg_size:string ->                          (* "r" by default in the URL *)
     ?nrows:int ->                                  (* total number of items *)
-    ?title_span:(int -> Html_types.span Tyxml_js.Html5.elt) ->
+    ?title_span:(int -> Html_types.span Ocp_js.elt) ->
      (int ->                                        (* page to query *)
      int ->                                            (* page size *)
-     (Html_types.tr Tyxml_js.Html5.elt list -> unit) -> (* callback *)
+     (Html_types.tr Ocp_js.elt list -> unit) -> (* callback *)
      unit) ->
     unit
 
@@ -110,7 +106,7 @@ module MakePageTable(M: sig
     ?suf_id:string ->
     ?urlarg_page:string ->                          (* "p" by default in the URL *)
     ?urlarg_size:string ->                          (* "r" by default in the URL *)
-    Html_types.tr Tyxml_js.Html5.elt array ->                   (* all rows *)
+    Html_types.tr Ocp_js.elt array ->                   (* all rows *)
     unit
 
   val paginate_fun :
@@ -118,15 +114,16 @@ module MakePageTable(M: sig
     ?suf_id:string ->
     ?urlarg_page:string ->                          (* "p" by default in the URL *)
     ?urlarg_size:string ->                          (* "r" by default in the URL *)
-    ('data -> Html_types.tr Tyxml_js.Html5.elt list) -> (* conversion to tr *)
+    ('data -> Html_types.tr Ocp_js.elt list) -> (* conversion to tr *)
     ?nrows:int ->                                  (* total number of items *)
-    ?title_span:(int -> Html_types.span Tyxml_js.Html5.elt) ->
+    ?title_span:(int -> Html_types.span Ocp_js.elt) ->
     (int ->                                        (* page to query *)
      int ->                                            (* page size *)
      ('data -> unit) ->                                 (* callback *)
      unit) ->
     unit
 
+  val update_title : ?suf_id:string -> Html_types.span Tyxml_js.Html5.elt list -> unit
 end
 
 
@@ -135,27 +132,25 @@ end
 (* Panel with pagination *)
 module MakePageNoTable(M: sig
 
-                    (* name of kind of values displayed in the table: account *)
-                    val name : string
+    (* name of kind of values displayed in the table: account *)
+    val name : string
 
-                    (* [title_span nb] when nb = -1 means not known,
-                    otherwise, the number of items *)
-                    val title_span : int ->
-                                     [> Html_types.span ] Tyxml_js.Html5.elt
-                    val page_size : int
+    (* [title_span nb] when nb = -1 means not known, otherwise, the number of items *)
+    val title_span : int -> [> Html_types.span ] Ocp_js.elt
+    val page_size : int
 
-                  end) : sig
+  end) : sig
 
   val make :
     ?footer:bool ->
     ?suf_id:string ->
     ?panel_class:string list ->
-    ?before:[ `Div | `Table ] Tyxml_js.Html5.elt list ->
-    ?after:[ `Div | `Table ] Tyxml_js.Html5.elt list ->
-    unit -> [> Html_types.div ] Tyxml_js.Html5.elt
+    ?before:[ `Div | `Table ] Ocp_js.elt list ->
+    ?after:[ `Div | `Table ] Ocp_js.elt list ->
+    unit -> [> Html_types.div ] Ocp_js.elt
   (* val make :
    *   ?suf_id:string ->
-   *   ?panel_class:string list -> unit -> [> Html_types.div ] Tyxml_js.Html5.elt *)
+   *   ?panel_class:string list -> unit -> [> Html_types.div ] Ocp_js.elt *)
 
 
   (* [update nb updater] nb = total number of items,
@@ -168,10 +163,10 @@ module MakePageNoTable(M: sig
     ?urlarg_page:string ->                          (* "p" by default in the URL *)
     ?urlarg_size:string ->                          (* "r" by default in the URL *)
     ?nrows:int ->                                  (* total number of items *)
-    ?title_span:(int ->  Html_types.span Tyxml_js.Html5.elt) ->
+    ?title_span:(int ->  Html_types.span Ocp_js.elt) ->
    (int ->                                        (* page to query *)
      int ->                                            (* page size *)
-     (Html_types.div Tyxml_js.Html5.elt list -> unit) -> (* callback *)
+     (Html_types.div Ocp_js.elt list -> unit) -> (* callback *)
      unit) ->
     unit
 
@@ -180,7 +175,7 @@ module MakePageNoTable(M: sig
     ?suf_id:string ->
     ?urlarg_page:string ->                          (* "p" by default in the URL *)
     ?urlarg_size:string ->                          (* "r" by default in the URL *)
-    Html_types.div Tyxml_js.Html5.elt array ->                   (* all rows *)
+    Html_types.div Ocp_js.elt array ->                   (* all rows *)
     unit
 
   val paginate_fun :
@@ -188,9 +183,9 @@ module MakePageNoTable(M: sig
     ?suf_id:string ->
     ?urlarg_page:string ->                          (* "p" by default in the URL *)
     ?urlarg_size:string ->                          (* "r" by default in the URL *)
-    ('data -> Html_types.div Tyxml_js.Html5.elt list) -> (* conversion to tr *)
+    ('data -> Html_types.div Ocp_js.elt list) -> (* conversion to tr *)
     ?nrows:int ->                                  (* total number of items *)
-    ?title_span:(int ->  Html_types.span Tyxml_js.Html5.elt) ->
+    ?title_span:(int ->  Html_types.span Ocp_js.elt) ->
     (int ->                                        (* page to query *)
      int ->                                            (* page size *)
      ('data -> unit) ->                                 (* callback *)
@@ -200,15 +195,14 @@ module MakePageNoTable(M: sig
 end
 
 
-module MakePageTableList(
-    M: sig
-      type data
-      val name : string
-      val title_span : int -> [> Html_types.span ] Tyxml_js.Html5.elt
-      val page_size : int
-      val theads : unit -> theads
-      val table_class : string
-    end) : sig
+module MakePageTableList(M: sig
+    type data
+    val name : string
+    val title_span : int -> [> Html_types.span ] Ocp_js.elt
+    val page_size : int
+    val theads : unit -> theads
+    val table_class : string
+  end) : sig
 
   val make :
     ?page_sizer:bool ->
@@ -217,9 +211,9 @@ module MakePageTableList(
     ?urlarg_size:string ->
     ?footer:bool ->
     ?panel_class:string list ->
-    ?before:[ `Div | `Table ] Tyxml_js.Html5.elt list ->
-    ?after:[ `Div | `Table ] Tyxml_js.Html5.elt list ->
-    (M.data list ->  Html_types.tr Tyxml_js.Html5.elt list) ->
-    M.data list -> [> Html_types.div ] Tyxml_js.Html5.elt
+    ?before:[ `Div | `Table ] Ocp_js.elt list ->
+    ?after:[ `Div | `Table ] Ocp_js.elt list ->
+    (M.data list ->  Html_types.tr Ocp_js.elt list) ->
+    M.data list -> [> Html_types.div ] Ocp_js.elt
 
 end

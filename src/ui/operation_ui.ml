@@ -14,16 +14,17 @@
 (*                                                                      *)
 (************************************************************************)
 
-open Data_types
-open Tyxml_js.Html5
+open Ocp_js
+open Html
 open Js_utils
 open Bootstrap_helpers.Icon
 open Bootstrap_helpers.Grid
 open Bootstrap_helpers.Panel
 open Bootstrap_helpers.Table
 open Bootstrap_helpers.Color
-open Lang
 open Tezos_types
+open Data_types
+open Lang
 open Text
 
 module TransactionsPanel = Panel.MakePageTable(
@@ -40,7 +41,7 @@ module TransactionsPanel = Panel.MakePageTable(
         ]
     let title_span =
       Panel.title_nb s_transactions ~help:Glossary_doc.HTransaction
-    let table_class = "transactions-table"
+    let table_class = "default-table"
     let page_size = 20
   end)
 
@@ -122,7 +123,7 @@ let make_sub_operation_div title content =
     div ~a:[ a_class [ cxs12 ] ] [
       div ~a:[ a_class [ panel; panel_primary ]] [
         div ~a:[ a_class [ panel_heading ] ] [
-          h3 ~a:[ a_class [ panel_title ] ] [ pcdata title ]
+          h3 ~a:[ a_class [ panel_title ] ] [ txt title ]
         ] ;
         div ~a:[ a_class [ panel_body ] ] content
       ] ;
@@ -130,7 +131,7 @@ let make_sub_operation_div title content =
   ]
 
 let label list = div ~a:[ a_class [ clg2; cxs12; "lbl" ] ] list
-let label_t s = label [ pcdata_t s ]
+let label_t s = label [ txt_t s ]
 let value ?(classes=[]) ?id list =
     let a = [ a_class ([ clg10; cxs12 ; "value" ] @ classes ) ] in
     let a = match id with
@@ -138,17 +139,15 @@ let value ?(classes=[]) ?id list =
       | Some id -> a_id id :: a
     in
     div ~a list
-let value_pcdata ?classes ?id s = value ?classes ?id [ pcdata s ]
-let value_s ?classes ?id s = value ?classes ?id [ pcdata_t s ]
+let value_txt ?classes ?id s = value ?classes ?id [ txt s ]
+let value_s ?classes ?id s = value ?classes ?id [ txt_t s ]
 
 
 let make_seed_nonce_revelation_details index seed =
-
   let row_level_label = label_t s_level in
-  let row_level_value = value_pcdata @@ string_of_int seed.seed_level in
-
+  let row_level_value = value [ Common.make_link (string_of_int seed.seed_level) ] in
   let row_nonce_label = label_t s_nonce in
-  let row_nonce_value = value_pcdata seed.seed_nonce  in
+  let row_nonce_value = value_txt seed.seed_nonce  in
 
   let title = Printf.sprintf "%i: %s" index (t_ s_seed_nonce_revelation) in
   let content =
@@ -162,7 +161,7 @@ let make_activation_details index act =
   let row_tz1_value = value [ Common.make_link_account act.act_pkh ] in
 
   let row_secret_label = label_t s_secret in
-  let row_secret_value = value_pcdata act.act_secret in
+  let row_secret_value = value_txt act.act_secret in
 
   let title = Printf.sprintf "%i: %s" index (t_ s_activation) in
   let content =
@@ -195,7 +194,7 @@ let make_endorsement_details ?endorse_info endorsement =
   let slots = Common.make_slots cst.endorsers_per_block in
   let slots = Common.update_endorsements_slots endorsement.endorse_block_hash slots ops in
   List.iter (fun s ->
-      Js_utils.Manip.addClass (List.nth slots s) "slot-greener") endorsement.endorse_slot  ;
+      Manip.addClass (List.nth slots s) "bg-greener") endorsement.endorse_slot  ;
   let rows = Common.make_endorsements_slots slots in
   [ row_src_label ; row_src_value ;
     row_hash_label ; row_hash_value ;
@@ -209,7 +208,7 @@ let make_proposals_details src prop =
   let row_src_value = value [ Common.make_link_account src ] in
 
   let row_voting_label = label_t s_voting_period in
-  let row_voting_value = value_pcdata
+  let row_voting_value = value_txt
     @@ string_of_int @@ Int32.to_int prop.prop_voting_period  in
 
   [ div ~a:[ a_class [ "operation-div"; row ] ] [
@@ -226,10 +225,10 @@ let make_proposals_details src prop =
 let make_proposals_details_table prop =
   let trs = List.map (fun prop_hash ->
       tr [
-        td [ pcdata prop_hash ];
+        td [ txt prop_hash ];
       ])
       prop.prop_proposals in
-  tablex ~a:[ a_class [ btable; "transactions-table" ] ] [ tbody (List.rev trs) ]
+  tablex ~a:[ a_class [ btable; "default-table" ] ] [ tbody (List.rev trs) ]
 
 let make_ballot_details src ballot =
 
@@ -237,14 +236,14 @@ let make_ballot_details src ballot =
   let row_src_value = value [ Common.make_link_account src ] in
 
   let row_voting_label = label_t s_voting_period in
-  let row_voting_value = value_pcdata
+  let row_voting_value = value_txt
     @@ Int32.to_string ballot.ballot_voting_period  in
 
   let row_hash_label = label_t s_protocol_hash  in
-  let row_hash_value = value_pcdata ballot.ballot_proposal in
+  let row_hash_value = value_txt ballot.ballot_proposal in
 
   let row_vote_label = label_t s_vote in
-  let row_vote_value = value_pcdata
+  let row_vote_value = value_txt
     @@ Tezos_utils.string_of_ballot_vote ballot.ballot_vote in
 
   [ div ~a:[ a_class [ "operation-div"; row ] ] [
@@ -270,9 +269,9 @@ let triplet ?(mc=42) ?fals lbl v1 v2 =
     else if mc = -1 && fals then ["danger"], ["danger"]
     else [],[] in
   if v1 = "" && v2 = "" then [] else
-    [div ~a:[ a_class [csm2; clg2; cxs12; "lbl" ] ] [ pcdata_t lbl ];
-     div ~a:[ a_class (cls1 @ [clg4; cxs12; "value"]) ] [ pcdata v1 ];
-     div ~a:[ a_class ([clg4; cxs12; cxsoffset0; csmoffset1; "value" ] @ cls2) ] [ pcdata v2 ]]
+    [div ~a:[ a_class [csm2; clg2; cxs12; "lbl" ] ] [ txt_t lbl ];
+     div ~a:[ a_class ([clg4; cxs12; "value"] @ cls1) ] [ txt v1 ];
+     div ~a:[ a_class ([clg4; cxs12; cxsoffset0; csmoffset1; "value" ] @ cls2) ] [ txt v2 ]]
 
 let triplet_int ?(mc=42) lbl i1 i2 =
   triplet ~mc ?fals:(Some (i1<>i2)) lbl (string_of_int i1) (string_of_int i2)
@@ -371,22 +370,25 @@ let make_transactions_table ?price_usd ops =
   List.map (function
       | Transaction transaction ->
         let td_src, td_arrow, td_dst =
-          Common.account_w_blockies transaction.tr_src,
+          Common.account_w_blockies ~crop_len:15 ~crop_limit:md_size transaction.tr_src,
           (if transaction.tr_failed then
             td ~a:[ a_title (t_ s_fail) ; a_class [ red ] ]
               [ span ~a:[ a_class ["fa"; "fa-times" ] ] [] ]
           else
             td ~a:[ a_class [ green ] ] [ right_icon () ]),
-          Common.account_w_blockies transaction.tr_dst in
+          Common.account_w_blockies ~crop_len:15 ~crop_limit:md_size transaction.tr_dst in
         let td_amount = td @@ Tez.with_usd price_usd transaction.tr_amount in
-        let td_counter = td [ pcdata @@ Int32.to_string transaction.tr_counter ] in
-        let td_fee = td [ Tez.pp_amount ~precision:2 transaction.tr_fee ] in
-        let td_gas_limit =
-          td [ pcdata @@ Z.to_string transaction.tr_gas_limit ] in
-        let td_storage_limit =
-          td [ pcdata @@ Z.to_string transaction.tr_storage_limit ] in
+        let td_fee, td_counter, td_gas_limit, td_storage_limit =
+          if transaction.tr_internal then
+            td [ Common.txt_ () ], td [ Common.txt_ () ],
+            td [ Common.txt_ () ], td [ Common.txt_ () ]
+          else
+            td [ Tez.pp_amount ~precision:2 transaction.tr_fee ],
+            td [ txt @@ Int32.to_string transaction.tr_counter ],
+            td [ txt @@ Z.to_string transaction.tr_gas_limit ],
+            td [ txt @@ Z.to_string transaction.tr_storage_limit ] in
         let td_param = match transaction.tr_parameters with
-            None -> td [ pcdata_t s_no ]
+            None -> td [ txt_t s_no ]
           | Some p ->
             let template =
               Printf.sprintf "<div class=\"%s\">%s</div>"
@@ -399,15 +401,15 @@ let make_transactions_table ?price_usd ops =
                      Bootstrap_helpers.Attributes.a_data_trigger "focus";
                      Bootstrap_helpers.Attributes.a_role "button";
                      a_tabindex 0;
-                     to_attrib @@ Tyxml_js.Xml.string_attrib "container" "body" ;
+                     to_attrib @@ Xml.string_attrib "container" "body" ;
                      (* Bootstrap_helpers.Attributes.a_data_content hash; *)
                      Bootstrap_helpers.Attributes.a_data_content template;
                    ] [
-                pcdata_t s_yes ]
+                txt_t s_yes ]
             ] in
         let td_internal, cls_internal =
-          if not transaction.tr_internal then td [ pcdata_t s_no ], []
-          else td [ pcdata_t s_yes ], [ "warning" ] in
+          if not transaction.tr_internal then td [ txt_t s_no ], []
+          else td [ txt_t s_yes ], [ "warning" ] in
         tr ~a:[ a_class (Common.failed_class transaction.tr_failed @ cls_internal)] [
           td_src ;
           td_arrow ;
@@ -423,7 +425,7 @@ let make_transactions_table ?price_usd ops =
       | _ -> assert false)
     ops in
   tablex
-    ~a:[ a_class [ btable; "transactions-table"; btable_striped; ] ] [
+    ~a:[ a_class [ btable; "default-table"; btable_striped; ] ] [
     tbody (theads () :: rows) ]
 
 let make_originations_table ?price_usd ops =
@@ -445,20 +447,28 @@ let make_originations_table ?price_usd ops =
   let rows =
     List.map (function
         | Origination ori ->
-          let td_new_account = Common.account_w_blockies ori.or_tz1 in
-          let td_originator = Common.account_w_blockies ori.or_src in
-          let td_manager = Common.account_w_blockies ori.or_manager in
-          let td_delegate = Common.account_w_blockies ori.or_delegate in
-          let td_counter = td [ pcdata @@ Int32.to_string ori.or_counter ] in
-          let td_fee = td [ pcdata @@ Int64.to_string ori.or_fee ] in
-          let td_gas_limit = td [ pcdata @@ Z.to_string ori.or_gas_limit ] in
-          let td_storage_limit =
-            td [ pcdata @@ Z.to_string ori.or_storage_limit ] in
+          let td_new_account = Common.account_w_blockies
+              ~crop_len:12 ori.or_tz1 in
+          let td_originator = Common.account_w_blockies
+              ~crop_len:12 ori.or_src in
+          let td_manager = Common.account_w_blockies
+              ~crop_len:12 ori.or_manager in
+          let td_delegate = Common.account_w_blockies
+              ~crop_len:12 ori.or_delegate in
+          let td_fee, td_counter, td_gas_limit, td_storage_limit =
+            if ori.or_internal then
+              td [Common.txt_ () ], td [Common.txt_ () ],
+              td [Common.txt_ () ], td [Common.txt_ () ]
+            else
+              td [ txt @@ Int64.to_string ori.or_fee ],
+              td [ txt @@ Int32.to_string ori.or_counter ],
+              td [ txt @@ Z.to_string ori.or_gas_limit ],
+              td [ txt @@ Z.to_string ori.or_storage_limit ] in
           let burn = Tez.with_usd price_usd @@ ori.or_burn in
           let code_link = match ori.or_script with
             | Some { sc_code ; sc_storage } when (sc_code <> "{}" || sc_storage <> "{}") ->
               td [ Common.make_link (t_ s_yes) ~path:ori.or_tz1.tz ]
-            | _ -> td [ pcdata_t s_no ] in
+            | _ -> td [ txt_t s_no ] in
           let balance = Tez.with_usd price_usd ori.or_balance in
           tr ~a:[ a_class (Common.failed_class ori.or_failed)] ([
               td_new_account ;
@@ -467,7 +477,7 @@ let make_originations_table ?price_usd ops =
               td_manager ] @
               (if ori.or_delegate.tz <> "" then
                  [ td_delegate ]
-               else ([ td [ pcdata_t s_no_delegate ] ])) @
+               else ([ td [ txt_t s_no_delegate ] ])) @
               [ td_counter ;
                 td_fee ;
                 td_gas_limit ;
@@ -478,7 +488,7 @@ let make_originations_table ?price_usd ops =
         | _ -> assert false)
       ops in
   tablex
-    ~a:[ a_class [ btable; "transactions-table"; btable_striped; ] ] [
+    ~a:[ a_class [ btable; "default-table"; btable_striped; ] ] [
     tbody (theads() :: rows) ]
 
 let make_delegations_table ops =
@@ -498,18 +508,23 @@ let make_delegations_table ops =
         | Delegation del ->
 
           let td_delegate, td_arrow = match del.del_delegate.tz with
-            | "" -> td [ pcdata "unset" ],
+            | "" -> td [ txt "unset" ],
                     td ~a:[ a_class [ blue ; "center" ] ]
                       [ span ~a:[ a_class [ "fa"; "fa-arrow-down" ] ] [] ]
-            | _ -> Common.account_w_blockies del.del_delegate,
+            | _ -> Common.account_w_blockies
+                     ~crop_len:10 ~crop_limit:sm_size del.del_delegate,
                    td ~a:[ a_class [ green ; "center" ] ] [ right_icon () ] in
-          let td_counter = td [ pcdata @@ Int32.to_string del.del_counter ] in
-          let td_fee = td [ pcdata @@ Int64.to_string del.del_fee ] in
-          let td_gas_limit = td [ pcdata @@ Z.to_string del.del_gas_limit ] in
-          let td_storage_limit =
-            td [ pcdata @@ Z.to_string del.del_storage_limit ] in
+          let td_fee, td_counter, td_gas_limit, td_storage_limit =
+            if del.del_internal then
+              td [Common.txt_ () ], td [Common.txt_ () ],
+              td [Common.txt_ () ], td [Common.txt_ () ]
+            else
+              td [ txt @@ Int64.to_string del.del_fee ],
+              td [ txt @@ Int32.to_string del.del_counter ],
+              td [ txt @@ Z.to_string del.del_gas_limit ],
+              td [ txt @@ Z.to_string del.del_storage_limit ] in
           tr ~a:[ a_class (Common.failed_class del.del_failed)] [
-            Common.account_w_blockies del.del_src ;
+            Common.account_w_blockies ~crop_len:10 ~crop_limit:sm_size del.del_src ;
             td_arrow ;
             td_delegate ;
             td_counter ;
@@ -520,7 +535,7 @@ let make_delegations_table ops =
         | _ -> assert false)
       ops in
   tablex
-    ~a:[ a_class [ btable; "transactions-table"; btable_striped; ] ] [
+    ~a:[ a_class [ btable; "default-table"; btable_striped; ] ] [
     tbody (theads() :: rows) ]
 
 let make_reveals_table ops =
@@ -538,19 +553,21 @@ let make_reveals_table ops =
   let rows =
     List.map (function
         | Reveal rvl ->
-          let td_source = Common.account_w_blockies rvl.rvl_src in
+          let td_source = Common.account_w_blockies
+              ~crop_len:10 ~crop_limit:sm_size rvl.rvl_src in
           let td_icon =
             td ~a:[ a_class [ green ; "center" ] ] [ right_icon () ] in
           let td_public_key =
-            Common.account_w_blockies {tz=rvl.rvl_pubkey;alias=None} in
+            Common.account_w_blockies
+              ~crop_len:10 ~crop_limit:sm_size {tz=rvl.rvl_pubkey;alias=None} in
           let td_counter =
-            td [ pcdata @@ Int32.to_string rvl.rvl_counter ] in
+            td [ txt @@ Int32.to_string rvl.rvl_counter ] in
           let td_fee =
-            td [ pcdata @@ Int64.to_string rvl.rvl_fee ] in
+            td [ txt @@ Int64.to_string rvl.rvl_fee ] in
           let td_gas_limit =
-            td [ pcdata @@ Z.to_string rvl.rvl_gas_limit ] in
+            td [ txt @@ Z.to_string rvl.rvl_gas_limit ] in
           let td_storage_limit =
-            td [ pcdata @@ Z.to_string rvl.rvl_gas_limit ] in
+            td [ txt @@ Z.to_string rvl.rvl_gas_limit ] in
           tr ~a:[ a_class (Common.failed_class rvl.rvl_failed)] [
             td_source ;
             td_icon ;
@@ -563,7 +580,7 @@ let make_reveals_table ops =
         | _ -> assert false)
       ops in
   tablex
-    ~a:[ a_class [ btable; "transactions-table"; btable_striped; ] ] [
+    ~a:[ a_class [ btable; "default-table"; btable_striped; ] ] [
     tbody (theads() :: rows) ]
 
 let make_transactions_tab ?price_usd default tab ops =
@@ -573,10 +590,13 @@ let make_transactions_tab ?price_usd default tab ops =
     div ~a:[ a_class [ panel_heading ] ] [
       div ~a:[ a_class [ row] ] [
         h5 ~a:[ a_class [ cxs12; panel_title; "no-overflow" ] ] [
-          pcdata_t s_transactions ]
+          txt_t s_transactions ]
       ]
     ] ;
-    div ~a:[ a_class [ panel_body ] ] [ table ] ]
+    div ~a:[ a_class [ panel_body ] ] [
+      div ~a:[ a_class [ btable_responsive ] ] [ table ]
+    ]
+  ]
 
 let make_delegations_details default tab ops =
   let table = make_delegations_table ops in
@@ -585,7 +605,7 @@ let make_delegations_details default tab ops =
     div ~a:[ a_class [ panel_heading ] ] [
       div ~a:[ a_class [ row] ] [
         h5 ~a:[ a_class [ cxs12; panel_title; "no-overflow" ] ] [
-          pcdata_t s_delegations ]
+          txt_t s_delegations ]
       ]
     ] ;
     div ~a:[ a_class [ panel_body ] ] [ table ]
@@ -598,10 +618,12 @@ let make_originations_details ?price_usd default tab ops =
     div ~a:[ a_class [ panel_heading ] ] [
       div ~a:[ a_class [ row] ] [
         h5 ~a:[ a_class [ cxs12; panel_title; "no-overflow" ] ] [
-          pcdata_t s_originations ]
+          txt_t s_originations ]
       ]
     ] ;
-    div ~a:[ a_class [ panel_body ] ] [ table ]
+    div ~a:[ a_class [ panel_body ] ] [
+      div ~a:[ a_class [ btable_responsive ] ] [ table ]
+    ]
   ]
 
 let make_reveals_details default tab ops =
@@ -611,10 +633,12 @@ let make_reveals_details default tab ops =
     div ~a:[ a_class [ panel_heading ] ] [
       div ~a:[ a_class [ row] ] [
         h5 ~a:[ a_class [ cxs12; panel_title; "no-overflow" ] ] [
-          pcdata_t s_reveals ]
+          txt_t s_reveals ]
       ]
     ] ;
-    div ~a:[ a_class [ panel_body ] ] [ table ]
+    div ~a:[ a_class [ panel_body ] ] [
+      div ~a:[ a_class [ btable_responsive ] ] [ table ]
+    ]
   ]
 
 let make_manager_details ?price_usd default ops =
@@ -652,30 +676,30 @@ let make_manager_details ?price_usd default ops =
      Tabs.update_tab_title rvl_tab (Some reveals_nb))
 
 let make_operation_info_content ?price_usd operation =
-  let row_block_label = label [ pcdata_t s_included_in_block ] in
+  let row_block_label = label [ txt_t s_included_in_block ] in
   let row_block_value = value [ Common.make_link operation.op_block_hash ] in
 
-  let row_hash_label = label [ pcdata_t s_operation_hash ] in
-  let row_hash_value = value [ pcdata operation.op_hash ] in
+  let row_hash_label = label [ txt_t s_operation_hash ] in
+  let row_hash_value = value [ txt operation.op_hash ] in
 
-  let row_level_label = label [ pcdata_t s_level ] in
+  let row_level_label = label [ txt_t s_level ] in
   let row_level_value = value ~id:Common.confirmation_blocks_id
-      [ Common.pcdata_ () ]
+      [ Common.txt_ () ]
   in
 
-  let row_success_label = label [ pcdata_t s_status ] in
+  let row_success_label = label [ txt_t s_status ] in
   let row_success_value =
       if operation.op_block_hash = Utils.pending_block_hash then
-        value ~classes:[grey] [ pcdata_t s_pending ]
+        value ~classes:[grey] [ txt_t s_pending ]
     else if operation.op_block_hash = Utils.orphan_block_hash then
-      value ~classes:[ red ] [ pcdata_t s_failed ]
+      value ~classes:[ red ] [ txt_t s_failed ]
     else
-      value ~classes: [ green ] [ pcdata_t s_success ]
+      value ~classes: [ green ] [ txt_t s_success ]
   in
 
-  let row_timestamp_label = label [ pcdata_t s_timestamp ] in
+  let row_timestamp_label = label [ txt_t s_timestamp ] in
   let row_timestamp_value =
-    value ~id:(timestamp_id operation.op_hash) [ Common.pcdata_ () ] in
+    value ~id:(timestamp_id operation.op_hash) [ Common.txt_ () ] in
 
   let res = [ row_hash_label ; row_hash_value ;
               row_level_label ; row_level_value ;
@@ -686,10 +710,10 @@ let make_operation_info_content ?price_usd operation =
         | Consensus _ | Dictator _ | Amendment _ -> res
         | Manager (_k, _src, ops) ->
           let fees = Common.compute_fees ops in
-          (* let row_counter_label = label [ pcdata_t s_counter ] in
+          (* let row_counter_label = label [ txt_t s_counter ] in
            * let row_counter_value =
-           *   value [ pcdata @@ Int32.to_string transaction.tr_counter ] in *)
-          let row_fee_label = label  [ pcdata_t s_fee ] in
+           *   value [ txt @@ Int32.to_string transaction.tr_counter ] in *)
+          let row_fee_label = label  [ txt_t s_fee ] in
           let row_fee_value = value ( Tez.with_usd price_usd fees ) in
           res @
           [ (* row_counter_label ; row_counter_value ; *)
@@ -705,8 +729,8 @@ let make_operation_info_content ?price_usd operation =
 let update_confirmation bhash level nb_confirm =
   let confirm = find_component @@ Common.confirmation_blocks_id in
   Manip.replaceChildren confirm
-    [ a ~a:( Common.a_link bhash ) [ pcdata @@ string_of_int level ];
-      pcdata @@
+    [ a ~a:( Common.a_link bhash ) [ txt @@ string_of_int level ];
+      txt @@
       Printf.sprintf " (%d %s)" nb_confirm (t_ s_blocks_confirmation)
     ]
 
@@ -721,7 +745,7 @@ let update_operation_summary ?price_usd ?endorse_info operation filters =
   let header, op_info, update =
     match operation.op_type with
     | Anonymous list ->
-      [ pcdata_t s_anonymous_operations; Glossary_doc.(help HTransaction) ],
+      [ txt_t s_anonymous_operations; Glossary_doc.(help HTransaction) ],
       List.mapi (fun i aop ->
           let i = i + 1 in
           match aop with
@@ -738,34 +762,34 @@ let update_operation_summary ?price_usd ?endorse_info operation filters =
     | Sourced sop ->
       begin match sop with
         | Consensus Endorsement e ->
-          [ pcdata_t s_endorsement; Glossary_doc.(help HEndorsement) ],
+          [ txt_t s_endorsement; Glossary_doc.(help HEndorsement) ],
           make_endorsement_details ?endorse_info e,
           (fun () -> ())
         | Amendment (src, aop) ->
           begin match aop with
             | Proposal prop ->
-              [ pcdata_t s_proposals; Glossary_doc.(help HAmendment) ],
+              [ txt_t s_proposals; Glossary_doc.(help HAmendment) ],
               make_proposals_details src prop,
               (fun () -> ())
             | Ballot ballot ->
-              [ pcdata_t s_ballot; Glossary_doc.(help HAmendment) ],
+              [ txt_t s_ballot; Glossary_doc.(help HAmendment) ],
               make_ballot_details src ballot,
               (fun () -> ())
           end
         | Manager (_k, _src, list) ->
           let details, update =
             make_manager_details ?price_usd default list in
-          [ pcdata_t s_manager_operations; Glossary_doc.(help HTransaction) ],
+          [ txt_t s_manager_operations; Glossary_doc.(help HTransaction) ],
           [ details ],
           update
         | Dictator dop ->
           begin match dop with
             | Activate ->
-              [ pcdata_t s_activate ],
+              [ txt_t s_activate ],
               [],
               (fun () -> ())
             | Activate_testnet ->
-              [ pcdata_t s_activate_testnet ],
+              [ txt_t s_activate_testnet ],
               [],
               (fun () -> ())
           end
@@ -793,14 +817,14 @@ let update_operation_summary ?price_usd ?endorse_info operation filters =
 
 
 (* Maker (empty) *)
-let make_block_fetching () =  pcdata_t s_fetching_data
+let make_block_fetching () =  txt_t s_fetching_data
 
 let make_operation_info_panel hash =
   div ~a:[ a_class [ "operation-div"; row ] ; a_id @@ operation_id hash ] [
     div ~a:[ a_class [ cxs12 ] ] [
       div ~a:[ a_class [ panel; panel_primary ]] [
         div ~a:[ a_class [ panel_heading ] ] [
-          h3 ~a:[ a_class [ panel_title ] ] [ pcdata hash ]
+          h3 ~a:[ a_class [ panel_title ] ] [ txt hash ]
         ] ;
         div ~a:[ a_class [ panel_body ] ] [
           make_block_fetching ();

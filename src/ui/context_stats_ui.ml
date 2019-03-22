@@ -14,11 +14,11 @@
 (*                                                                      *)
 (************************************************************************)
 
-open Tyxml_js.Html5
-open Data_types
+open Ocp_js.Html
 open Js_utils
 open Bootstrap_helpers.Grid
 open Bootstrap_helpers.Panel
+open Data_types
 
 let context_content_id = "context-content-id"
 let context_cmd_id = "context-cmd-id"
@@ -37,7 +37,7 @@ let make_panel_info title value value_diff =
         h5 ~a:[ a_class [ "text-center" ] ] [ title ] ;
         h3 ~a:[ a_class @@ color_class :: [ "text-center" ] ] [ value ] ;
         h5 ~a:[ a_class @@ color_class :: [ "text-center" ] ] [
-          pcdata @@ Printf.sprintf "%+.1f%%" value_diff ] ;
+          txt @@ Printf.sprintf "%+.1f%%" value_diff ] ;
       ] ;
     ]
   ]
@@ -63,95 +63,95 @@ let update_context_page context =
 
   let title_content = match context.context_level with
     | None ->
-      span [ pcdata "" ]
+      span [ txt "" ]
     | Some lvl ->
       span [
-        pcdata "Data collected at " ;
+        txt "Data collected at " ;
         Common.make_link @@ string_of_int lvl.Tezos_types.lvl_level ]
   in
 
   let bakings_str = "Bakings" in
-  let rolls_title = pcdata "# rolls" in
-  let rolls_value = pcdata @@ Printf.sprintf "%d" context.context_rolls in
+  let rolls_title = txt "# rolls" in
+  let rolls_value = txt @@ Printf.sprintf "%d" context.context_rolls in
   let rolls_diff = context.context_rolls_diff in
-  let roll_owners_title = pcdata "# roll owners" in
+  let roll_owners_title = txt "# roll owners" in
   let roll_owners_value =
-    pcdata @@ Printf.sprintf "%d" context.context_roll_owners in
+    txt @@ Printf.sprintf "%d" context.context_roll_owners in
   let roll_owners_diff = context.context_roll_owners_diff in
-  let delegated_title = pcdata "Total delegated tz" in
+  let delegated_title = txt "Total delegated tz" in
   let delegated_value = Tez.pp_amount ~width:12 context.context_delegated in
   let delegated_diff = context.context_delegated_diff in
-  let staking_balance_title = pcdata "Total staking balance" in
+  let staking_balance_title = txt "Total staking balance" in
   let staking_balance_value =
     Tez.pp_amount ~width:12 context.context_staking_balances in
   let staking_balance_diff = context.context_staking_balances_diff in
-  let delegates_title = pcdata "# delegates" in
+  let delegates_title = txt "# delegates" in
   let delegates_value =
-    pcdata @@ Printf.sprintf "%d" context.context_deleguees in
+    txt @@ Printf.sprintf "%d" context.context_deleguees in
   let delegates_diff = context.context_deleguees_diff in
-  let multi_delegates_title = pcdata "# multi delegates" in
+  let multi_delegates_title = txt "# multi delegates" in
   let multi_delegates_value =
-    pcdata @@ Printf.sprintf "%d" context.context_multi_deleguees in
+    txt @@ Printf.sprintf "%d" context.context_multi_deleguees in
   let multi_delegates_diff = context.context_multi_deleguees_diff in
-  let self_delegates_title = pcdata "# self delegates" in
+  let self_delegates_title = txt "# self delegates" in
   let self_delegates_value =
-    pcdata @@ Printf.sprintf "%d" context.context_self_delegates in
+    txt @@ Printf.sprintf "%d" context.context_self_delegates in
   let self_delegates_diff = context.context_self_delegates_diff in
-  let delegators_title = pcdata "# delegators" in
+  let delegators_title = txt "# delegators" in
   let delegators_value =
-    pcdata @@ Printf.sprintf "%d" context.context_delegators in
+    txt @@ Printf.sprintf "%d" context.context_delegators in
   let delegators_diff = context.context_delegators_diff in
 
   let balances_str = "Balances" in
-  let current_balances_title = pcdata "Total current balances" in
+  let current_balances_title = txt "Total current balances" in
   let current_balances_value =
     Tez.pp_amount ~width:12 context.context_current_balances in
   let current_balances_diff = context.context_current_balances_diff in
-  let frozen_balances_title = pcdata "Total frozen balances" in
+  let frozen_balances_title = txt "Total frozen balances" in
   let frozen_balances_value =
     Tez.pp_amount ~width:12 context.context_frozen_balances in
   let frozen_balances_diff = context.context_frozen_balances_diff in
-  let full_balances_title = pcdata "Total full balances" in
+  let full_balances_title = txt "Total full balances" in
   let full_balances_value =
     Tez.pp_amount ~width:12 context.context_full_balances in
   let full_balances_diff = context.context_full_balances_diff in
-  let frozen_deposits_title = pcdata "Total frozen deposits" in
+  let frozen_deposits_title = txt "Total frozen deposits" in
   let frozen_deposits_value =
     Tez.pp_amount ~width:12 context.context_frozen_deposits in
   let frozen_deposits_diff = context.context_frozen_deposits_diff in
-  let frozen_rewards_title = pcdata "Total frozen rewards" in
+  let frozen_rewards_title = txt "Total frozen rewards" in
   let frozen_rewards_value =
     Tez.pp_amount ~width:12 context.context_frozen_rewards in
   let frozen_rewards_diff = context.context_frozen_rewards_diff in
-  let frozen_fees_title = pcdata "Total frozen fees" in
+  let frozen_fees_title = txt "Total frozen fees" in
   let frozen_fees_value =
     Tez.pp_amount ~width:12 context.context_frozen_fees in
   let frozen_fees_diff = context.context_frozen_fees_diff in
 
   let accounts_str = "Accounts" in
-  let addresses_title = pcdata "# addresses" in
-  let addresses_value = pcdata @@ Printf.sprintf "%d" context.context_addresses in
-  let revealed_title = pcdata "# revealed addresses" in
+  let addresses_title = txt "# addresses" in
+  let addresses_value = txt @@ Printf.sprintf "%d" context.context_addresses in
+  let revealed_title = txt "# revealed addresses" in
   let addresses_diff = context.context_addresses_diff in
-  let revealed_value = pcdata @@ Printf.sprintf "%d" context.context_revealed in
-  let originated_title = pcdata "# originated addresses" in
+  let revealed_value = txt @@ Printf.sprintf "%d" context.context_revealed in
+  let originated_title = txt "# originated addresses" in
   let revealed_diff = context.context_revealed_diff in
-  let originated_value = pcdata @@ Printf.sprintf "%d" context.context_originated in
-  let contracts_title = pcdata "# smart contracts" in
+  let originated_value = txt @@ Printf.sprintf "%d" context.context_originated in
+  let contracts_title = txt "# smart contracts" in
   let originated_diff = context.context_originated_diff in
   let contracts_value =
-    pcdata @@ Printf.sprintf "%d" context.context_contracts in
+    txt @@ Printf.sprintf "%d" context.context_contracts in
   let contracts_diff = context.context_contracts_diff in
-  let paid_bytes_title = pcdata "Total paid bytes" in
+  let paid_bytes_title = txt "Total paid bytes" in
   let paid_bytes_value = Tez.pp_amount ~width:12 context.context_paid_bytes in
-  let used_bytes_title = pcdata "Total used bytes" in
+  let used_bytes_title = txt "Total used bytes" in
   let paid_bytes_diff = context.context_paid_bytes_diff in
   let used_bytes_value = Tez.pp_amount ~width:12 context.context_used_bytes in
   let used_bytes_diff = context.context_used_bytes_diff in
 
   let summary = div ~a:[ a_class [ "health-summary"; row] ] [
       h1 [ title_content ] ;
-      h2 [ pcdata bakings_str ] ;
+      h2 [ txt bakings_str ] ;
       make_panel_info rolls_title rolls_value rolls_diff ;
       make_panel_info roll_owners_title roll_owners_value roll_owners_diff ;
       make_panel_info delegated_title delegated_value delegated_diff;
@@ -162,7 +162,7 @@ let update_context_page context =
       make_panel_info delegators_title delegators_value delegators_diff ;
       div ~a:[ a_class [ "clearfix" ] ] [] ;
 
-      h2 [ pcdata balances_str ] ;
+      h2 [ txt balances_str ] ;
       make_panel_info current_balances_title current_balances_value current_balances_diff ;
       make_panel_info full_balances_title full_balances_value full_balances_diff ;
       make_panel_info frozen_balances_title frozen_balances_value frozen_balances_diff ;
@@ -171,7 +171,7 @@ let update_context_page context =
       make_panel_info frozen_fees_title frozen_fees_value frozen_fees_diff ;
       div ~a:[ a_class [ "clearfix" ] ] [] ;
 
-      h2 [ pcdata accounts_str ] ;
+      h2 [ txt accounts_str ] ;
       make_panel_info addresses_title addresses_value addresses_diff ;
       make_panel_info revealed_title revealed_value revealed_diff ;
       make_panel_info originated_title originated_value originated_diff ;

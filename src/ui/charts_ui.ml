@@ -14,9 +14,10 @@
 (*                                                                      *)
 (************************************************************************)
 
-open Data_types
-open Tyxml_js.Html5
+open Ocp_js
+open Html
 open Bootstrap_helpers.Grid
+open Data_types
 open Text
 
 let amcharts3_ready = Amcharts3.ready "/amcharts3"
@@ -24,17 +25,6 @@ let amcharts3_ready = Amcharts3.ready "/amcharts3"
 (* cut float at 2 digits after dot *)
 let simplify_float f =
   float_of_int (int_of_float (f *. 100.)) /. 100.
-
-
-let get_div_by_id id =
-  match Js.Opt.to_option
-          (Dom_html.window##document##getElementById (Js.string id))
-  with
-  | None -> failwith "get_div_by_id: id not found"
-  | Some ele ->
-     match Js.Opt.to_option (Dom_html.CoerceTo.div ele) with
-     | None -> failwith "get_div_by_id: id not a div"
-     | Some div -> div
 
 let array_fold f t x =
   let x = ref x in
@@ -62,7 +52,7 @@ module Bakers =
             s_endorsements, 1;
           ]
         let title_span = Panel.title_nb s_bakers ~help:Glossary_doc.HBaker
-        let table_class = "blocks-table"
+        let table_class = "default-table"
         let page_size = 20
       end)
 
@@ -87,10 +77,10 @@ let update_bakers_chart bakers =
     Array.map (fun b ->
         tr [
           Common.account_w_blockies ~args:[ "default", "baking"] b.baker_hash;
-          td [ pcdata @@ string_of_int b.nb_blocks ];
+          td [ txt @@ string_of_int b.nb_blocks ];
           td [ Tez.pp_amount ~precision:2 ~width:6 b.volume_total ];
           td [ Tez.pp_amount ~precision:2 ~width:6 b.fees_total ];
-          td [ pcdata @@ string_of_int b.nb_endorsements ]
+          td [ txt @@ string_of_int b.nb_endorsements ]
         ]) bakers
   in
   Bakers.paginate_all rows;
@@ -141,27 +131,12 @@ let update_bakers_chart bakers =
       pie##export <- Amcharts3.export ();
       pie##write (Js.string chart_id);
 
-      let div = get_div_by_id chart_id in
+      let div = Tyxml_js.To_dom.of_div @@ Js_utils.find_component chart_id in
 
       div##style##width <- Js.string "100%";
       div##style##height <- Js.string "600px";
     );
   ()
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 let make_chart_panel () = div [
     div ~a:[ a_id "export-div"; a_class [cxs12] ] [];
@@ -177,6 +152,7 @@ let chart_value_per_day data ytitle =
       chart##dataProvider <- Amcharts3.Serial.dataProvider data;
       chart##marginLeft <- 10;
       chart##dataDateFormat <- Js.string "YYYY-MM-DD";
+      chart##addClassNames <- true;
 
       let categoryAxis = chart##categoryAxis in
       categoryAxis##parseDates <- true; (* as our data is date-based, we set parseDates to true *)
@@ -219,7 +195,7 @@ let chart_value_per_day data ytitle =
       chart##creditsPosition <- Js.string "bottom-right";
       chart##write (Js.string chart_id);
 
-      let div = get_div_by_id chart_id in
+      let div = Tyxml_js.To_dom.of_div @@ Js_utils.find_component chart_id in
 
       div##style##width <- Js.string "100%";
       div##style##height <- Js.string "600px";
@@ -400,7 +376,7 @@ let update_market_prices data =
       chart##creditsPosition <- Js.string "bottom-right";
       chart##write (Js.string chart_id);
 
-      let div = get_div_by_id chart_id in
+      let div = Tyxml_js.To_dom.of_div @@ Js_utils.find_component chart_id in
       div##style##width <- Js.string "100%";
       div##style##height <- Js.string "600px"
     )

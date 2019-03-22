@@ -14,16 +14,16 @@
 (*                                                                      *)
 (************************************************************************)
 
-open Data_types
-open StringCompat
-open Tyxml_js.Html5
+open Ocp_js.Html
 open Js_utils
 open Bootstrap_helpers.Menu
+open Data_types
+open StringCompat
 
 
-let pcdata s = pcdata (Lang.s_ s)
+let txt s = txt (Lang.s_ s)
 let link2 ?(disabled=false) classes lnk s  =
-  Link2(classes, Common.a_link lnk, pcdata s, disabled)
+  Link2(classes, Common.a_link lnk, txt s, disabled)
 let x__________x = Separator []
 
 
@@ -76,13 +76,13 @@ let create () =
     | None -> "en"
     | Some lang -> lang
   in
-  Js_utils.log "current_lang = %S" current_lang;
+  log "current_lang = %S" current_lang;
   let menu =
     [
       link2 ["active"] "/" "Home";
     ] @
     List.map (fun dd ->
-        Dropdown ([], [pcdata dd.dd_name],
+        Dropdown ([], [txt dd.dd_name],
                   List.map (fun ddi ->
                       if ddi.ddi_name = "" then
                         x__________x
@@ -102,15 +102,21 @@ let create () =
       ) menu_list
     @
     [
-      Dropdown([], [pcdata (Printf.sprintf "Lang(%s)" current_lang)],
-               begin
-                 let args = List.filter (fun (v,_) -> v <> "lang") (Jsloc.args ()) in
-                 List.map (fun (name, lang) ->
+      Dropdown([],  [span ~a:[ a_class ["glyphicon"; "glyphicon-cog"] ] []; txt " "],
+               ((Header ([], "Language")) ::
+                (List.map (fun (name, lang) ->
+                     let args = List.filter (fun (v,_) -> v <> "lang") (Jsloc.args ()) in
                      let args = ("lang",lang):: args in
                      Link([], Common.link ~args (Jsloc.path_string ()),
-                          pcdata name, lang = current_lang)
-                   ) Infos.www.www_languages
-               end,
+                          txt name, lang = current_lang)
+                   ) Infos.www.www_languages)) @
+               ((Header ([], "Theme")) ::
+                (List.map (fun (name, theme) ->
+                     Action([], (fun () ->
+                         Common.change_theme theme;
+                         Cookie.set "theme" theme),
+                          txt name))
+                    Infos.www.www_themes)),
                false
               )
     ]
@@ -159,14 +165,13 @@ let menu_accounts =
 let menu_protocols =
   let dd = add_dropdown "Protocols" in
   add_item dd "/protocols" "All Protocols";
-  add_separator dd;
-  add_item dd ~disabled:true "/current-protocol" "Current Protocol";
-  add_item dd ~disabled:true "/proposals"  "Proposals";
+  add_item dd "/proposals"  "Voting Periods";
+  add_item dd "/all-proposals"  "All Proposals";
   dd
 
 let menu_stats =
   let dd = add_dropdown "Stats" in
-  add_item dd "/rolls-distribution"  "Current Rolls Distribution";
+  add_item dd "/rolls-distribution"  "Rolls Distribution";
   add_item dd "/context"  "Key numbers";
   add_item dd "/network"  "Network";
   add_item dd "/health"  "Health";
@@ -183,7 +188,7 @@ let menu_charts =
   add_item dd "/opsperblock"  "Operations Per Block";
   add_item dd "/feesperday"  "Fees Per Day";
   add_item dd "/volumeperday"  "Volume Per Day";
-  add_item dd "/market_prices" "Market prices";
+  add_item dd "/market_prices" "Market Prices";
   dd
 
 let menu_misc =
@@ -193,4 +198,5 @@ let menu_misc =
   add_item dd "/about" "About Us";
   add_item dd "/api" "API";
   add_item dd "/glossary" "Glossary";
+  add_item dd "/apps" "Apps";
   dd

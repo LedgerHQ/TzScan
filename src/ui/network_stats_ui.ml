@@ -14,12 +14,13 @@
 (*                                                                      *)
 (************************************************************************)
 
-open Data_types
-open Tyxml_js.Html5
+open Ocp_js
+open Html
 open Js_utils
 open Bootstrap_helpers.Grid
 open Bootstrap_helpers.Button
 open Tezos_types
+open Data_types
 open Lang
 open Text
 
@@ -32,7 +33,7 @@ module PeersPanel =
   Panel.MakePageTable(struct
                   let name = "Peer"
                   let title_span nb =
-                    span [ pcdata
+                    span [ txt
                              (if nb < 0 then
                                 t_ s_network_stats
                               else
@@ -54,7 +55,7 @@ module PeersPanel =
                     ]
 
                   let page_size = 20
-                  let table_class = "blocks-table"
+                  let table_class = "default-table"
                 end)
 
 let string_of_state = function
@@ -83,22 +84,22 @@ let update_peers =
             | Some (point, _date) -> point
           in
           tr [
-              td [ pcdata @@ stat.peer_id ] ;
-              td [ pcdata @@ point ] ;
-              td [ stat.country |> fst |> pcdata ] ;
-              td [ pcdata @@ string_of_bool stat.trusted ] ;
-              td [ pcdata @@ string_of_float stat.score ] ;
-              td [ pcdata_t @@ string_of_state stat.state ] ;
-              td [ pcdata @@ Int64.to_string stat.stat.total_sent ] ;
-              td [ pcdata @@ Int64.to_string stat.stat.total_recv ] ;
-              td [ pcdata @@ string_of_int stat.stat.current_inflow ] ;
-              td [ pcdata @@ string_of_int stat.stat.current_outflow ] ;
+              td [ txt @@ stat.peer_id ] ;
+              td [ txt @@ point ] ;
+              td [ stat.country |> fst |> txt ] ;
+              td [ txt @@ string_of_bool stat.trusted ] ;
+              td [ txt @@ string_of_float stat.score ] ;
+              td [ txt_t @@ string_of_state stat.state ] ;
+              td [ txt @@ Int64.to_string stat.stat.total_sent ] ;
+              td [ txt @@ Int64.to_string stat.stat.total_recv ] ;
+              td [ txt @@ string_of_int stat.stat.current_inflow ] ;
+              td [ txt @@ string_of_int stat.stat.current_outflow ] ;
         ]) stats)
 
 
 let make_map map_id countries =
   Ammap3.ready "/ammap3" (fun () ->
-      Js_utils.log "display...";
+      log "display...";
       let dataProvider = Ammap3.dataProvider (Ammap3.amCharts())##maps##worldLow
       in
       dataProvider##zoomLevel <- 1.0;
@@ -179,7 +180,7 @@ let make_panel () =
                                   (if state = current_state then ["disabled"] else []))
              ~args:[ "state", state ] "network"
          )
-      [ pcdata title ] ;
+      [ txt title ] ;
 
   in
   div [
