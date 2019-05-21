@@ -1305,6 +1305,18 @@ module Reader_generic (M : Db_intf.MONAD) = struct
     >>= fun rows ->
     return @@ Pg_helper.transaction_from_db_list rows
 
+  let estimate_gas hash =
+    with_dbh >>> fun dbh ->
+    PGSQL(dbh)
+      "SELECT gas_limit
+       FROM transaction_all WHERE destination = $hash \
+       AND distance_level = 0 \
+       ORDER BY op_level DESC, hash, counter LIMIT 10 OFFSET 0"
+    >>= fun rows ->
+    return @@ List.fold_left (fun acc bk -> match bk with
+                                  | (Some gas) -> acc + (Int64.to_int gas)
+                                  | _ -> 0) 0 rows
+
   let delegation_from_account page page_size hash =
     with_dbh >>> fun dbh ->
     let page_size64 = Int64.of_int page_size in

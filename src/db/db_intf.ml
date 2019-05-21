@@ -131,6 +131,8 @@ module type READER = sig
     hash_selector ->
     operation list Monad.t
 
+  val estimate_gas : string -> int Monad.t
+
   val nb_bakings : ?rights:bool -> ?cycle:int -> account_hash -> int Monad.t
   val bakings : ?page:int -> ?page_size:int -> ?cycle:int ->
     account_hash -> baking list Monad.t

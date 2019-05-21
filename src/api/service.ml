@@ -537,6 +537,15 @@ module V (V : VERSION) = struct
       ~output:(Json_encoding.list Api_encoding.V1.Operation.operation)
       Path.(root // version_v // "operations")
 
+  (* estimate gas *)
+  let estimate_gas : int service0 =
+    service
+      ~params:token_params
+      ~name:"estimate_gas"
+      ~section:section_operations
+      ~output:tup1_int
+      Path.(root // version_v // "estimate_gas")
+
   (* The number of operations *)
   let nb_operations : int service0 =
     service

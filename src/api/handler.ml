@@ -309,6 +309,13 @@ module V1 = struct
       ?page_size
       selector
 
+  (* /estimate_gas/HASH *)
+  let estimate_gas (params:EzAPI.params) () =
+    let token = EzAPI.find_param Service.param_token params in
+    match token with
+    | Some token -> Dbr.estimate_gas token >>= EzAPIServer.return
+    | _ -> Lwt.fail EzAPI.ResultNotfound
+
   (* /operations *)
   let operations (params:EzAPI.params) () =
     make_operations params >>= EzAPIServer.return

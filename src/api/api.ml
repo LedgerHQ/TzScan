@@ -42,6 +42,7 @@ struct
   (* Operation services *)
   |> register S.operation H.operation
   |> register S.operations H.operations
+  |> register S.estimate_gas H.estimate_gas
   |> register S.operations_bh H.operations_bh
   |> register S.nb_bakings H.nb_bakings
   |> register S.bakings H.bakings

@@ -1,9 +1,11 @@
 [
     {
-        "name": "betanet-main",
-        "crawler" : [
-            {"url" : "http://localhost", "port" : 18732}
+        "name": "mainnet-main",
+	"crawler" : [
+            {"url" : "http://tezos-fullnode-manual.dev.aws.ledger.fr", "port" : 8732}
         ],
-        "api" : []
+        "api" : [
+            {"url" : "http://tezos-fullnode-manual.dev.aws.ledger.fr", "port" : 8732}
+        ]
     }
 ]
