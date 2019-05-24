@@ -43,6 +43,9 @@ struct
   |> register S.operation H.operation
   |> register S.operations H.operations
   |> register S.estimate_gas H.estimate_gas
+  |> register S.broadcast_transaction H.broadcast_transaction
+  |> register S.counter H.counter
+  |> register S.estimate_storage H.estimate_storage
   |> register S.operations_bh H.operations_bh
   |> register S.nb_bakings H.nb_bakings
   |> register S.bakings H.bakings

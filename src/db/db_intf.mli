@@ -141,6 +141,7 @@ module type READER = sig
     operation list Monad.t
 
   val estimate_gas : string -> int Monad.t
+  val estimate_storage : string -> int Monad.t
 
   val nb_bakings : ?rights:bool -> ?cycle:int -> account_hash -> int Monad.t
   val bakings : ?page:int -> ?page_size:int -> ?cycle:int ->

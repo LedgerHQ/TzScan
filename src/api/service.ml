@@ -546,6 +546,33 @@ module V (V : VERSION) = struct
       ~output:tup1_int
       Path.(root // version_v // "estimate_gas")
 
+  (* estimate storage *)
+  let estimate_storage : int service0 =
+    service
+      ~name:"estimate_storage"
+      ~section:section_operations
+      ~output:tup1_int
+      Path.(root // version_v // "estimate_storage")
+
+  (* broadcast transaction *)
+  let broadcast_transaction : (string, string) post_service0 =
+    post_service
+      ~name:"broadcast_transaction"
+      ~input:tup1_string
+      ~params:token_params
+      ~section:section_operations
+      ~output:tup1_string
+      Path.(root // version_v // "broadcast_transaction")
+  
+  (* counter *)
+  let counter : int service0 =
+    service
+      ~params:token_params
+      ~name:"counter"
+      ~section:section_operations
+      ~output:tup1_int
+      Path.(root // version_v // "counter")
+
   (* The number of operations *)
   let nb_operations : int service0 =
     service

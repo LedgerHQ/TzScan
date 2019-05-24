@@ -1315,7 +1315,19 @@ module Reader_generic (M : Db_intf.MONAD) = struct
     >>= fun rows ->
     return @@ List.fold_left (fun acc bk -> match bk with
                                   | (Some gas) -> acc + (Int64.to_int gas)
-                                  | _ -> 0) 0 rows
+                                  | _ -> 0) 0 rows / 10
+    
+  let estimate_storage hash =
+    with_dbh >>> fun dbh ->
+    PGSQL(dbh)
+      "SELECT storage_limit
+       FROM transaction_all WHERE destination = $hash \
+       AND distance_level = 0 \
+       ORDER BY op_level DESC, hash, counter LIMIT 10 OFFSET 0"
+    >>= fun rows ->
+    return @@ List.fold_left (fun acc bk -> match bk with
+                                            | (Some storage) -> acc + (Int64.to_int storage)
+                                            | _ -> 0) 0 rows / 10
 
   let delegation_from_account page page_size hash =
     with_dbh >>> fun dbh ->

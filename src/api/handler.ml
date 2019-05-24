@@ -309,11 +309,29 @@ module V1 = struct
       ?page_size
       selector
 
-  (* /estimate_gas/HASH *)
+  (* /estimate_gas?token=? *)
   let estimate_gas (params:EzAPI.params) () =
     let token = EzAPI.find_param Service.param_token params in
     match token with
     | Some token -> Dbr.estimate_gas token >>= EzAPIServer.return
+    | _ -> Lwt.fail EzAPI.ResultNotfound
+
+  (* /broadcast_transaction *)
+  let broadcast_transaction _ transaction =
+    Node_request.broadcast_transaction transaction >>= EzAPIServer.return
+
+  (* /counter?token=? *)
+  let counter (params:EzAPI.params) () =
+    let token = EzAPI.find_param Service.param_token params in
+    match token with
+    | Some token -> Node_request.counter token >>= EzAPIServer.return
+    | _ -> Lwt.fail EzAPI.ResultNotfound
+
+  (* /estimate_storage?token=? *)
+  let estimate_storage (params:EzAPI.params) () =
+    let token = EzAPI.find_param Service.param_token params in
+    match token with
+    | Some token -> Dbr.estimate_storage token >>= EzAPIServer.return
     | _ -> Lwt.fail EzAPI.ResultNotfound
 
   (* /operations *)

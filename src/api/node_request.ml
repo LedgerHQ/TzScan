@@ -26,6 +26,10 @@ let request title url ~error f =
   EzCohttp.get title ~error:(fun code _content -> error code)
     (EzAPI.TYPES.URL url) f
 
+let post title url content ~headers ~error f =
+  EzCohttp.post title ~error:(fun code _content -> error code)
+    (EzAPI.TYPES.URL url) ~content:content ~headers:headers f
+
 let request_enc title url ~error enc f =
   request title url ~error
     (fun json ->
@@ -140,3 +144,26 @@ let to_lwt f arg =
     )
     (fun x -> Lwt.wakeup notifier x);
   waiter
+
+let _counter contract ~error f =
+  let address = Config.get_api_address () in
+  let url =
+    Printf.sprintf
+      "%s/chains/main/blocks/head/context/contracts/%s/counter"
+      address contract in
+  Printf.eprintf "query counter %s\n%!" url ;
+  request "Node.counter" ~error:error url (fun s ->
+      let _counter = int_of_string @@ String.sub s 1 @@ String.length s - 3 in
+      f _counter)
+
+let counter = to_lwt _counter
+
+let _broadcast_transaction hex ~error f =
+  let address = Config.get_api_address () in
+  let url =
+    Printf.sprintf
+      "%s/injection/operation" address in
+  Printf.eprintf "broadcast transction: %s" hex ;
+  post "Node.broadcast" ~error:error ~headers:[("Content-Type","application/octet-stream")] url hex f
+
+let broadcast_transaction = to_lwt _broadcast_transaction

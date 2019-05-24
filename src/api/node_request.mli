@@ -37,3 +37,7 @@ val delegate_details :
 
 val to_lwt :
   ('a -> error:(int -> unit) -> ('b -> unit) -> 'c) -> 'a -> 'b Lwt.t
+
+val counter : string -> int Lwt.t
+val broadcast_transaction : string -> string Lwt.t                 
+
