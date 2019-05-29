@@ -2,10 +2,10 @@
     {
         "name": "mainnet-main",
 	"crawler" : [
-            {"url" : "http://tezos-fullnode-manual.dev.aws.ledger.fr", "port" : 8732}
+            {"url" : "http://1.2.3.4", "port" : 5}
         ],
         "api" : [
-            {"url" : "http://tezos-fullnode-manual.dev.aws.ledger.fr", "port" : 8732}
+            {"url" : "http://1.2.3.4", "port" : 5}
         ]
     }
 ]
