@@ -559,7 +559,6 @@ module V (V : VERSION) = struct
     post_service
       ~name:"broadcast_transaction"
       ~input:tup1_string
-      ~params:token_params
       ~section:section_operations
       ~output:tup1_string
       Path.(root // version_v // "broadcast_transaction")
