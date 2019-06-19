@@ -226,6 +226,16 @@ module Base = struct
           case
             (obj5
                (req "kind" (constant "freezer"))
+               (req "category" (constant "rewards"))
+               (req "delegate" string)
+               (req "cycle" int)
+               (req "change" tez))
+            (function Rewards (d, l, change) ->
+               Some ((), (), d, l, change) | _ -> None)
+            (fun ((), (), d, l, change) -> Rewards (d, l, change)) ;
+          case
+            (obj5
+               (req "kind" (constant "freezer"))
                (req "category" (constant "fees"))
                (req "delegate" string)
                (req "level" int)
@@ -236,9 +246,29 @@ module Base = struct
           case
             (obj5
                (req "kind" (constant "freezer"))
+               (req "category" (constant "fees"))
+               (req "delegate" string)
+               (req "cycle" int)
+               (req "change" tez))
+            (function Fees (d, l, change) ->
+               Some ((), (), d, l, change) | _ -> None)
+            (fun ((), (), d, l, change) -> Fees (d, l, change)) ;
+          case
+            (obj5
+               (req "kind" (constant "freezer"))
                (req "category" (constant "deposits"))
                (req "delegate" string)
                (req "level" int)
+               (req "change" tez))
+            (function Deposits (d, l, change) ->
+               Some ((), (), d, l, change) | _ -> None)
+            (fun ((), (), d, l, change) -> Deposits (d, l, change)) ]
+          case
+            (obj5
+               (req "kind" (constant "freezer"))
+               (req "category" (constant "deposits"))
+               (req "delegate" string)
+               (req "cycle" int)
                (req "change" tez))
             (function Deposits (d, l, change) ->
                Some ((), (), d, l, change) | _ -> None)
