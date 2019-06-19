@@ -262,7 +262,7 @@ module Base = struct
                (req "change" tez))
             (function Deposits (d, l, change) ->
                Some ((), (), d, l, change) | _ -> None)
-            (fun ((), (), d, l, change) -> Deposits (d, l, change)) ]
+            (fun ((), (), d, l, change) -> Deposits (d, l, change)) ;
           case
             (obj5
                (req "kind" (constant "freezer"))
