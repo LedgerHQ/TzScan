@@ -5,7 +5,7 @@ WITH_VERSION:=true
 HAS_PGOCAML:=true
 API_PORT:=
 API_HOST:=
-AUTO_UPGRADE:=true
+AUTO_UPGRADE:=false
 NEED_PARSEXP:=false
 
 # Keep this flag until the ezpg table has been updated
